@@ -11,7 +11,7 @@ export default function TeamsPage() {
     const teams = useAppStore((state) => state.teams)
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-6xl w-full mx-auto">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Teams</h1>
                 <Link href="/">

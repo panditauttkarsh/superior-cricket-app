@@ -25,7 +25,7 @@ export function Sidebar({ className }: { className?: string }) {
                 <div className="px-3 py-2">
                     <div className="mb-2 px-4 text-lg font-semibold tracking-tight flex items-center gap-2 text-sidebar-primary">
                         <Trophy className="h-6 w-6" />
-                        <span>Superior Cricket</span>
+                        <span>CricPlay</span>
                     </div>
                     <div className="space-y-1">
                         {sidebarItems.map((item) => (

@@ -1,8 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Calendar, Trophy, MapPin, Play } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Modal } from '@/components/ui/modal'
+import { Plus, Calendar, Trophy, MapPin, Play, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 import { useAppStore } from '@/lib/store'
 import Link from 'next/link'
@@ -10,22 +14,119 @@ import { cn } from '@/lib/utils'
 
 export default function MatchesPage() {
     const matches = useAppStore((state) => state.matches)
+    const addMatch = useAppStore((state) => state.addMatch)
+    const [isModalOpen, setIsModalOpen] = useState(false)
+    const [isLoading, setIsLoading] = useState(false)
+    const [matchOpponent, setMatchOpponent] = useState('')
+    const [matchDate, setMatchDate] = useState('')
+    const [matchType, setMatchType] = useState<'T20' | 'ODI' | 'Test'>('T20')
 
     const liveMatches = matches.filter(m => m.status === 'live')
     const upcomingMatches = matches.filter(m => m.status === 'upcoming')
     const completedMatches = matches.filter(m => m.status === 'completed')
 
+    const handleCreateMatch = async () => {
+        if (!matchOpponent || !matchDate) {
+            return
+        }
+
+        setIsLoading(true)
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 800))
+
+        addMatch({
+            opponent: matchOpponent,
+            date: matchDate,
+            type: matchType
+        })
+
+        setIsLoading(false)
+        setIsModalOpen(false)
+        setMatchOpponent('')
+        setMatchDate('')
+        setMatchType('T20')
+    }
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-6xl w-full mx-auto">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Matches</h1>
-                <Link href="/">
-                    <Button className="shadow-lg shadow-primary/20">
-                        <Plus className="mr-2 h-4 w-4" />
-                        New Match
-                    </Button>
-                </Link>
+                <Button 
+                    onClick={() => setIsModalOpen(true)}
+                    className="shadow-lg shadow-primary/20"
+                >
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Match
+                </Button>
             </div>
+
+            {/* New Match Modal */}
+            <Modal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                title="Schedule New Match"
+                description="Create a new cricket match fixture."
+            >
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Opponent Team</Label>
+                        <Input
+                            placeholder="Enter opponent team name"
+                            value={matchOpponent}
+                            onChange={(e) => setMatchOpponent(e.target.value)}
+                            disabled={isLoading}
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Match Date</Label>
+                            <Input
+                                type="date"
+                                value={matchDate}
+                                onChange={(e) => setMatchDate(e.target.value)}
+                                disabled={isLoading}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Match Type</Label>
+                            <select
+                                value={matchType}
+                                onChange={(e) => setMatchType(e.target.value as 'T20' | 'ODI' | 'Test')}
+                                disabled={isLoading}
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <option value="T20">T20</option>
+                                <option value="ODI">ODI</option>
+                                <option value="Test">Test</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsModalOpen(false)}
+                            className="flex-1"
+                            disabled={isLoading}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleCreateMatch}
+                            className="flex-1"
+                            disabled={isLoading || !matchOpponent || !matchDate}
+                        >
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Creating...
+                                </>
+                            ) : (
+                                'Create Match'
+                            )}
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
 
             {/* Live Matches Section */}
             {liveMatches.length > 0 && (

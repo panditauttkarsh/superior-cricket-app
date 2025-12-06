@@ -21,13 +21,13 @@ export default function DashboardLayout({
                 <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
             </div>
 
+            {/* Sidebar */}
+            <Sidebar className="fixed left-0 top-0 bottom-0 w-64 h-full bg-sidebar/60 backdrop-blur-md border-r border-sidebar-border/50 z-10 hidden md:block" />
+            
             {/* Content */}
-            <div className="relative z-10 hidden md:block w-64 flex-shrink-0">
-                <Sidebar className="fixed left-0 top-0 bottom-0 w-64 h-full bg-sidebar/60 backdrop-blur-md border-r border-sidebar-border/50" />
-            </div>
-            <div className="relative z-10 flex-1 flex flex-col md:pl-64">
+            <div className="relative z-10 flex-1 flex flex-col md:ml-64">
                 <Header />
-                <main className="flex-1 p-4 md:p-6 lg:p-8 w-full">
+                <main className="flex-1 pt-4 pb-4 pr-4 md:pt-6 md:pb-6 md:pr-6 lg:pt-8 lg:pb-8 lg:pr-8 pl-0 w-full overflow-x-hidden">
                     {children}
                 </main>
             </div>

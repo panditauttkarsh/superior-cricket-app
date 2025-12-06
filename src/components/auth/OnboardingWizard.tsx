@@ -117,19 +117,20 @@ export function OnboardingWizard() {
     }
 
     return (
-        <div className="w-full max-w-lg mx-auto">
-            <div className="mb-8 text-center">
+        <div className="w-full h-full">
+            {/* Mobile Logo - Only show on mobile */}
+            <div className="mb-8 text-center lg:hidden">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4 ring-2 ring-primary/20 animate-pulse">
                     <Trophy className="w-8 h-8 text-primary" />
                 </div>
                 <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">
-                    Superior Cricket
+                    CricPlay
                 </h1>
                 <p className="text-muted-foreground mt-2">The ultimate cricket community</p>
             </div>
 
-            <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-xl overflow-hidden ring-1 ring-white/50">
-                <CardContent className="p-6 sm:p-8">
+            <Card className="border border-white/20 shadow-2xl bg-white/90 backdrop-blur-2xl overflow-hidden hover:shadow-3xl transition-all duration-300 w-full min-h-[600px] flex flex-col">
+                <CardContent className="p-8 sm:p-10 lg:p-12 flex-1 flex flex-col">
                     <AnimatePresence mode="wait" custom={direction}>
                         <motion.div
                             key={step}
@@ -142,65 +143,78 @@ export function OnboardingWizard() {
                         >
                             {/* STEP 1: MOBILE */}
                             {step === 'mobile' && (
-                                <div className="space-y-6">
-                                    <div className="space-y-2">
-                                        <h2 className="text-2xl font-semibold">Get Started</h2>
-                                        <p className="text-sm text-muted-foreground">Enter your mobile number to begin</p>
+                                <div className="space-y-8">
+                                    <div className="space-y-3 text-center">
+                                        <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">Get Started</h2>
+                                        <p className="text-base text-muted-foreground">Enter your mobile number to begin your cricket journey</p>
                                     </div>
                                     <div className="relative">
-                                        <div className="absolute left-3 top-3 border-r pr-3 flex items-center gap-2">
-                                            <span className="text-lg">🇮🇳</span>
-                                            <span className="font-medium">+91</span>
+                                        <Label className="mb-2 block text-sm font-medium">Mobile Number</Label>
+                                        <div className="relative">
+                                            <div className="absolute left-3 top-1/2 -translate-y-1/2 border-r pr-3 flex items-center gap-2 z-10">
+                                                <span className="text-lg">🇮🇳</span>
+                                                <span className="font-medium text-sm">+91</span>
+                                            </div>
+                                            <Input
+                                                type="tel"
+                                                placeholder="98765 43210"
+                                                className="pl-20 h-14 text-lg tracking-wide bg-background/50 border-2 border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                                                value={data.mobile}
+                                                onChange={(e) => updateData('mobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                                autoFocus
+                                            />
                                         </div>
-                                        <Input
-                                            type="tel"
-                                            placeholder="98765 43210"
-                                            className="pl-24 h-12 text-lg tracking-wide bg-secondary/50 border-0 focus:ring-2 ring-primary/20"
-                                            value={data.mobile}
-                                            onChange={(e) => updateData('mobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                                            autoFocus
-                                        />
                                     </div>
                                     <Button
                                         onClick={handleNext}
-                                        className="w-full h-12 text-lg shadow-lg shadow-primary/20"
-                                        disabled={data.mobile.length !== 10}
+                                        className="w-full h-14 text-lg shadow-lg shadow-primary/20 hover:shadow-xl hover:scale-[1.02] transition-all font-semibold"
+                                        disabled={data.mobile.length !== 10 || isLoading}
                                     >
-                                        {isLoading ? <Loader2 className="animate-spin" /> : 'Continue'}
+                                        {isLoading ? (
+                                            <>
+                                                <Loader2 className="animate-spin mr-2" />
+                                                Sending OTP...
+                                            </>
+                                        ) : (
+                                            'Continue'
+                                        )}
                                     </Button>
                                 </div>
                             )}
 
                             {/* STEP 2: OTP */}
                             {step === 'otp' && (
-                                <div className="space-y-6">
-                                    <div className="space-y-2">
-                                        <h2 className="text-2xl font-semibold">Verification</h2>
-                                        <p className="text-sm text-muted-foreground">Enter the OTP sent to +91 {data.mobile}</p>
+                                <div className="space-y-8">
+                                    <div className="space-y-3 text-center">
+                                        <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">Verification</h2>
+                                        <p className="text-base text-muted-foreground">Enter the OTP sent to +91 {data.mobile}</p>
                                     </div>
-                                    <div className="flex justify-center gap-3">
-                                        {[0, 1, 2, 3].map((i) => (
-                                            <Input
-                                                key={i}
-                                                type="text"
-                                                maxLength={1}
-                                                className="w-14 h-14 text-center text-2xl font-bold bg-secondary/50 border-0 focus:ring-2 ring-primary/20 rounded-xl"
-                                                value={data.otp[i] || ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.value
-                                                    const newOtp = data.otp.split('')
-                                                    newOtp[i] = val
-                                                    updateData('otp', newOtp.join('').slice(0, 4))
-                                                    // Auto focus next
-                                                    if (val && i < 3) {
-                                                        const nextInput = document.querySelector(`input[name=otp-${i + 1}]`) as HTMLInputElement
-                                                        nextInput?.focus()
-                                                    }
-                                                }}
-                                                name={`otp-${i}`}
-                                                autoFocus={i === 0 && data.otp.length === 0}
-                                            />
-                                        ))}
+                                    <div className="space-y-3">
+                                        <Label className="text-sm font-medium">Enter OTP</Label>
+                                        <div className="flex justify-center gap-3">
+                                            {[0, 1, 2, 3].map((i) => (
+                                                <Input
+                                                    key={i}
+                                                    type="text"
+                                                    maxLength={1}
+                                                    className="w-16 h-16 text-center text-2xl font-bold bg-background/50 border-2 border-input focus:ring-2 focus:ring-primary/20 focus:border-primary rounded-xl transition-all"
+                                                    value={data.otp[i] || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value.replace(/\D/g, '')
+                                                        const newOtp = data.otp.split('')
+                                                        newOtp[i] = val
+                                                        updateData('otp', newOtp.join('').slice(0, 4))
+                                                        // Auto focus next
+                                                        if (val && i < 3) {
+                                                            const nextInput = document.querySelector(`input[name=otp-${i + 1}]`) as HTMLInputElement
+                                                            nextInput?.focus()
+                                                        }
+                                                    }}
+                                                    name={`otp-${i}`}
+                                                    autoFocus={i === 0 && data.otp.length === 0}
+                                                />
+                                            ))}
+                                        </div>
                                     </div>
                                     <div className="text-center space-y-2">
                                         <button className="text-sm text-primary hover:underline font-medium">Resend OTP</button>
@@ -208,10 +222,17 @@ export function OnboardingWizard() {
                                     </div>
                                     <Button
                                         onClick={handleNext}
-                                        className="w-full h-12 text-lg shadow-lg shadow-primary/20"
-                                        disabled={data.otp.length !== 4}
+                                        className="w-full h-14 text-lg shadow-lg shadow-primary/20 hover:shadow-xl hover:scale-[1.02] transition-all font-semibold"
+                                        disabled={data.otp.length !== 4 || isLoading}
                                     >
-                                        {isLoading ? <Loader2 className="animate-spin" /> : 'Verify'}
+                                        {isLoading ? (
+                                            <>
+                                                <Loader2 className="animate-spin mr-2" />
+                                                Verifying...
+                                            </>
+                                        ) : (
+                                            'Verify OTP'
+                                        )}
                                     </Button>
                                     <button onClick={handleBack} className="w-full text-sm text-muted-foreground hover:text-foreground">
                                         Change Number
@@ -221,19 +242,19 @@ export function OnboardingWizard() {
 
                             {/* STEP 3: PERSONAL */}
                             {step === 'personal' && (
-                                <div className="space-y-6">
-                                    <div className="space-y-2">
-                                        <h2 className="text-2xl font-semibold">About You</h2>
-                                        <p className="text-sm text-muted-foreground">Tell us a bit about yourself</p>
+                                <div className="space-y-8">
+                                    <div className="space-y-3 text-center">
+                                        <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">About You</h2>
+                                        <p className="text-base text-muted-foreground">Tell us a bit about yourself</p>
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label>Full Name</Label>
+                                        <Label className="text-sm font-medium">Full Name</Label>
                                         <Input
                                             value={data.fullName}
                                             onChange={(e) => updateData('fullName', e.target.value)}
                                             placeholder="e.g. Rohit Sharma"
-                                            className="h-11 bg-secondary/50 border-0"
+                                            className="h-12 bg-background/50 border-2 border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                                         />
                                     </div>
 
@@ -263,7 +284,7 @@ export function OnboardingWizard() {
                                             type="date"
                                             value={data.birthday}
                                             onChange={(e) => updateData('birthday', e.target.value)}
-                                            className="h-11 bg-secondary/50 border-0"
+                                            className="h-12 bg-background/50 border-2 border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                                         />
                                     </div>
 

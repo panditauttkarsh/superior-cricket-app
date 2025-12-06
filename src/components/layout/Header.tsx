@@ -12,11 +12,20 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useRouter } from 'next/navigation'
 
 export function Header() {
+    const router = useRouter()
+
+    const handleLogout = () => {
+        // Clear user data from localStorage
+        localStorage.removeItem('superior_user')
+        // Redirect to login page
+        router.push('/login')
+    }
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/60 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
-            <div className="container flex h-16 items-center px-4">
+            <div className="flex h-16 items-center pl-0 pr-4 md:pr-6 lg:pr-8">
                 <div className="mr-4 hidden md:flex">
                     {/* Breadcrumbs or Title could go here */}
                 </div>
@@ -47,23 +56,23 @@ export function Header() {
                         <DropdownMenuContent className="w-56" align="end" forceMount>
                             <DropdownMenuLabel className="font-normal">
                                 <div className="flex flex-col space-y-1">
-                                    <p className="text-sm font-medium leading-none">Superior User</p>
+                                    <p className="text-sm font-medium leading-none">SCricPlayUser</p>
                                     <p className="text-xs leading-none text-muted-foreground">
                                         user@example.com
                                     </p>
                                 </div>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="cursor-pointer">
+                            <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/profile')}>
                                 <User className="mr-2 h-4 w-4" />
                                 <span>Profile</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer">
+                            <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/settings')}>
                                 <Settings className="mr-2 h-4 w-4" />
                                 <span>Settings</span>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-500 cursor-pointer">
+                            <DropdownMenuItem className="text-red-500 cursor-pointer" onClick={handleLogout}>
                                 <LogOut className="mr-2 h-4 w-4" />
                                 <span>Log out</span>
                             </DropdownMenuItem>
