@@ -13,16 +13,25 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useRouter } from 'next/navigation'
+import { useAppStore } from '@/lib/store'
+import { logout } from '@/lib/auth/authService'
 
 export function Header() {
     const router = useRouter()
+    const { user, clearAuth } = useAppStore()
 
     const handleLogout = () => {
+        logout()
+        clearAuth()
         // Clear user data from localStorage
         localStorage.removeItem('superior_user')
         // Redirect to login page
         router.push('/login')
     }
+
+    const displayName = user?.name || 'SCricPlayUser'
+    const displayEmail = user?.email || 'user@example.com'
+    const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/60 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
             <div className="flex h-16 items-center pl-0 pr-4 md:pr-6 lg:pr-8">
@@ -48,18 +57,23 @@ export function Header() {
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="relative h-9 w-9 rounded-full ring-2 ring-white/20 hover:ring-white/40 transition-all">
                                 <Avatar className="h-9 w-9">
-                                    <AvatarImage src="/avatars/01.png" alt="@user" />
-                                    <AvatarFallback className="bg-primary text-primary-foreground font-bold">SC</AvatarFallback>
+                                    <AvatarImage src={user?.avatar || "/avatars/01.png"} alt={displayName} />
+                                    <AvatarFallback className="bg-primary text-primary-foreground font-bold">{initials}</AvatarFallback>
                                 </Avatar>
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className="w-56" align="end" forceMount>
                             <DropdownMenuLabel className="font-normal">
                                 <div className="flex flex-col space-y-1">
-                                    <p className="text-sm font-medium leading-none">SCricPlayUser</p>
+                                    <p className="text-sm font-medium leading-none">{displayName}</p>
                                     <p className="text-xs leading-none text-muted-foreground">
-                                        user@example.com
+                                        {displayEmail}
                                     </p>
+                                    {user?.role && (
+                                        <p className="text-xs leading-none text-primary capitalize mt-1">
+                                            {user.role}
+                                        </p>
+                                    )}
                                 </div>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />

@@ -3,12 +3,15 @@
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/lib/store'
-import { Calendar, MapPin, Trophy, User, TrendingUp, Brain, BarChart3, Zap, Target, Activity } from 'lucide-react'
+import { Calendar, MapPin, Trophy, User, TrendingUp, Brain, BarChart3, Zap, Target, Activity, Clock } from 'lucide-react'
 import Image from 'next/image'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
+import { getMatchTimeline } from '@/lib/services/playerService'
+import { MatchTimelineEvent } from '@/types/player'
 
 interface Commentary {
     id: string
@@ -31,7 +34,8 @@ export default function MatchDetailsPage() {
     const params = useParams()
     const { matches } = useAppStore()
     const match = matches.find(m => m.id === params.id)
-    const [activeTab, setActiveTab] = useState<'info' | 'squads' | 'scorecard' | 'commentary' | 'ai-stats'>('commentary')
+    const [activeTab, setActiveTab] = useState<'info' | 'squads' | 'scorecard' | 'commentary' | 'ai-stats' | 'timeline'>('commentary')
+    const [timeline, setTimeline] = useState<MatchTimelineEvent[]>([])
     const [commentary, setCommentary] = useState<Commentary[]>([
         { id: '1', ball: '16.4', commentary: 'FOUR! Beautiful cover drive. Walks into the shot and caresses it through the covers.', runs: 4, timestamp: new Date(), type: 'four' },
         { id: '2', ball: '16.3', commentary: 'No run, good length delivery outside off, left alone.', runs: 0, timestamp: new Date(), type: 'dot' },
@@ -113,6 +117,7 @@ export default function MatchDetailsPage() {
                     { id: 'squads', label: 'Squads', icon: User },
                     { id: 'scorecard', label: 'Scorecard', icon: Trophy },
                     { id: 'commentary', label: 'Live Commentary', icon: Zap },
+                    { id: 'timeline', label: 'Timeline', icon: Clock },
                     { id: 'ai-stats', label: 'AI Stats', icon: Brain },
                 ].map((tab) => {
                     const Icon = tab.icon
@@ -555,6 +560,84 @@ export default function MatchDetailsPage() {
                                     </CardContent>
                                 </Card>
                             </div>
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'timeline' && (
+                        <motion.div
+                            key="timeline"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="space-y-6"
+                        >
+                            <Card className="bg-card/60 backdrop-blur-sm border-white/20 shadow-xl">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Clock className="h-5 w-5" />
+                                        Match Timeline
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {timeline.length === 0 ? (
+                                        <p className="text-muted-foreground text-center py-8">Loading timeline...</p>
+                                    ) : (
+                                        <div className="relative">
+                                            {/* Timeline Line */}
+                                            <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-primary/30" />
+                                            
+                                            <div className="space-y-6">
+                                                {timeline.map((event, index) => (
+                                                    <div key={event.id} className="relative flex gap-4">
+                                                        {/* Timeline Dot */}
+                                                        <div className={`relative z-10 flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${
+                                                            event.isHighlight 
+                                                                ? 'bg-primary ring-4 ring-primary/30' 
+                                                                : 'bg-card border-2 border-primary/50'
+                                                        }`}>
+                                                            {event.type === 'wicket' && <Trophy className="h-5 w-5 text-red-400" />}
+                                                            {event.type === 'boundary' && <Zap className="h-5 w-5 text-yellow-400" />}
+                                                            {event.type === 'ball' && event.runs && event.runs > 0 && (
+                                                                <span className="text-xs font-bold">{event.runs}</span>
+                                                            )}
+                                                            {event.type === 'milestone' && <Target className="h-5 w-5 text-green-400" />}
+                                                            {event.type === 'match-event' && <Activity className="h-5 w-5 text-blue-400" />}
+                                                        </div>
+                                                        
+                                                        {/* Event Content */}
+                                                        <div className={`flex-1 pb-6 ${
+                                                            index === timeline.length - 1 ? 'pb-0' : ''
+                                                        }`}>
+                                                            <div className={`p-4 rounded-lg border ${
+                                                                event.isHighlight
+                                                                    ? 'bg-gradient-to-r from-primary/20 to-primary/10 border-primary/30'
+                                                                    : 'bg-card/40 border-white/10'
+                                                            }`}>
+                                                                <div className="flex items-start justify-between mb-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        {event.playerName && (
+                                                                            <span className="font-semibold text-primary">{event.playerName}</span>
+                                                                        )}
+                                                                        {event.runs !== undefined && event.runs > 0 && (
+                                                                            <Badge variant="outline" className="bg-green-500/20 text-green-400 border-green-500/30">
+                                                                +{event.runs} runs
+                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {new Date(event.timestamp).toLocaleTimeString()}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-sm text-foreground/90">{event.description}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
                         </motion.div>
                     )}
                 </AnimatePresence>

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Loader2, Trophy, MapPin, User, Calendar, Smartphone, Check } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Loader2, MapPin, User, Calendar, Smartphone, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,7 +26,11 @@ interface UserData {
     jerseyNumber: string
 }
 
-export function OnboardingWizard() {
+interface OnboardingWizardProps {
+    onBackToLogin?: () => void
+}
+
+export function OnboardingWizard({ onBackToLogin }: OnboardingWizardProps = {}) {
     const router = useRouter()
     const [step, setStep] = useState<OnboardingStep>('mobile')
     const [isLoading, setIsLoading] = useState(false)
@@ -84,7 +88,13 @@ export function OnboardingWizard() {
             console.log('Final Data:', data)
             // Save to localStorage or Cookie
             localStorage.setItem('superior_user', JSON.stringify(data))
-            router.push('/')
+            
+            // Redirect based on context
+            if (onBackToLogin) {
+                onBackToLogin() // Go back to login after signup
+            } else {
+                router.push('/') // Direct onboarding flow
+            }
         }
     }
 
@@ -121,7 +131,23 @@ export function OnboardingWizard() {
             {/* Mobile Logo - Only show on mobile */}
             <div className="mb-8 text-center lg:hidden">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4 ring-2 ring-primary/20 animate-pulse">
-                    <Trophy className="w-8 h-8 text-primary" />
+                    {/* Cricket Bat Icon */}
+                    <svg 
+                        className="w-8 h-8 text-primary" 
+                        viewBox="0 0 100 200" 
+                        fill="none" 
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        {/* Bat Blade */}
+                        <ellipse cx="50" cy="60" rx="35" ry="25" fill="currentColor" opacity="0.9"/>
+                        <ellipse cx="50" cy="60" rx="30" ry="20" fill="currentColor" opacity="0.7"/>
+                        {/* Bat Handle */}
+                        <rect x="45" y="60" width="10" height="120" rx="5" fill="currentColor"/>
+                        <rect x="47" y="65" width="6" height="110" rx="3" fill="currentColor" opacity="0.6"/>
+                        {/* Grip lines */}
+                        <line x1="48" y1="75" x2="52" y2="75" stroke="currentColor" strokeWidth="1" opacity="0.4"/>
+                        <line x1="48" y1="90" x2="52" y2="90" stroke="currentColor" strokeWidth="1" opacity="0.4"/>
+                    </svg>
                 </div>
                 <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">
                     CricPlay

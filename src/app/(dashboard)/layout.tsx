@@ -1,5 +1,10 @@
+'use client'
+
+import { useEffect } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { useAppStore } from '@/lib/store'
 import Image from 'next/image'
 
 export default function DashboardLayout({
@@ -7,7 +12,14 @@ export default function DashboardLayout({
 }: {
     children: React.ReactNode
 }) {
+    const { checkAuth } = useAppStore()
+
+    useEffect(() => {
+        checkAuth()
+    }, [checkAuth])
+
     return (
+        <ProtectedRoute>
         <div className="relative min-h-screen flex flex-col md:flex-row overflow-hidden">
             {/* Background Image */}
             <div className="fixed inset-0 z-0">
@@ -32,5 +44,6 @@ export default function DashboardLayout({
                 </main>
             </div>
         </div>
+        </ProtectedRoute>
     )
 }

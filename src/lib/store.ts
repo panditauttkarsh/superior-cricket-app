@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { User, AuthSession, UserRole } from '@/types/auth'
+import { getCurrentUser, isAuthenticated } from './auth/authService'
 
 export interface Team {
     id: string
@@ -35,6 +37,14 @@ export interface SellItem {
 }
 
 interface AppState {
+    // Auth State
+    user: User | null
+    isAuthenticated: boolean
+    setAuth: (session: AuthSession) => void
+    clearAuth: () => void
+    checkAuth: () => void
+    
+    // App State
     teams: Team[]
     matches: Match[]
     cart: CartItem[]
@@ -48,7 +58,42 @@ interface AppState {
     addSellItem: (item: Omit<SellItem, 'id'>) => void
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
+    // Auth State
+    user: null,
+    isAuthenticated: false,
+    
+    setAuth: (session) => {
+        localStorage.setItem('auth_user', JSON.stringify(session.user))
+        set({ user: session.user, isAuthenticated: true })
+    },
+    
+    clearAuth: () => {
+        localStorage.removeItem('auth_user')
+        set({ user: null, isAuthenticated: false })
+    },
+    
+    checkAuth: () => {
+        const user = getCurrentUser()
+        const authenticated = isAuthenticated()
+        if (user && authenticated) {
+            set({ user, isAuthenticated: true })
+        } else {
+            // Try to get from localStorage
+            const storedUser = localStorage.getItem('auth_user')
+            if (storedUser) {
+                try {
+                    const parsedUser = JSON.parse(storedUser)
+                    set({ user: parsedUser, isAuthenticated: authenticated })
+                } catch {
+                    set({ user: null, isAuthenticated: false })
+                }
+            } else {
+                set({ user: null, isAuthenticated: false })
+            }
+        }
+    },
+    
     // Initial Mock Data
     teams: [
         { id: '1', name: 'Royal Strikers', city: 'Mumbai', logo: '/team-logo.png', players: 11 },
