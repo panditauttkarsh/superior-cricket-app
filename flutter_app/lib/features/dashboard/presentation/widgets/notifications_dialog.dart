@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import '../../../../core/theme/app_colors.dart';
 
-class NotificationsDialog extends StatelessWidget {
+class NotificationsDialog extends StatefulWidget {
   const NotificationsDialog({super.key});
+
+  @override
+  State<NotificationsDialog> createState() => _NotificationsDialogState();
+}
+
+class _NotificationsDialogState extends State<NotificationsDialog> {
+  String _selectedTab = 'All';
 
   @override
   Widget build(BuildContext context) {
@@ -14,6 +21,8 @@ class NotificationsDialog extends StatelessWidget {
         'time': '2h ago',
         'icon': Icons.sports_cricket,
         'color': Colors.blue,
+        'isUnread': true,
+        'isInvitation': false,
       },
       {
         'type': 'achievement',
@@ -22,6 +31,8 @@ class NotificationsDialog extends StatelessWidget {
         'time': '5h ago',
         'icon': Icons.emoji_events,
         'color': Colors.amber,
+        'isUnread': true,
+        'isInvitation': false,
       },
       {
         'type': 'award',
@@ -30,6 +41,8 @@ class NotificationsDialog extends StatelessWidget {
         'time': '1d ago',
         'icon': Icons.military_tech,
         'color': Colors.purple,
+        'isUnread': true,
+        'isInvitation': true,
       },
       {
         'type': 'match',
@@ -38,6 +51,8 @@ class NotificationsDialog extends StatelessWidget {
         'time': '2d ago',
         'icon': Icons.calendar_today,
         'color': Colors.green,
+        'isUnread': false,
+        'isInvitation': false,
       },
       {
         'type': 'achievement',
@@ -46,26 +61,49 @@ class NotificationsDialog extends StatelessWidget {
         'time': '3d ago',
         'icon': Icons.star,
         'color': Colors.orange,
+        'isUnread': false,
+        'isInvitation': false,
       },
     ];
 
+    final filteredNotifications = _selectedTab == 'All'
+        ? notifications
+        : notifications.where((n) => n['isUnread'] == true).toList();
+
     return Dialog(
       backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Container(
-        width: MediaQuery.of(context).size.width * 0.9,
-        height: MediaQuery.of(context).size.height * 0.7,
+        width: double.maxFinite,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(20),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             // Header
             Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
+              padding: const EdgeInsets.fromLTRB(20, 20, 16, 16),
+              decoration: const BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(color: Colors.grey[800]!),
+                  bottom: BorderSide(
+                    color: AppColors.divider,
+                    width: 1,
+                  ),
                 ),
               ),
               child: Row(
@@ -74,32 +112,48 @@ class NotificationsDialog extends StatelessWidget {
                   const Text(
                     'Notifications',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textMain,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
+                      fontFamily: 'Inter',
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
+                  // Tabs
+                  Row(
+                    children: [
+                      _buildTab('All', _selectedTab == 'All'),
+                      const SizedBox(width: 16),
+                      _buildTab('Unread', _selectedTab == 'Unread'),
+                    ],
                   ),
                 ],
               ),
             ),
             // Notifications List
-            Expanded(
-              child: notifications.isEmpty
+            Flexible(
+              child: filteredNotifications.isEmpty
                   ? const Center(
-                      child: Text(
-                        'No notifications',
-                        style: TextStyle(color: Colors.grey),
+                      child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: Text(
+                          'No notifications',
+                          style: TextStyle(
+                            color: AppColors.textMeta,
+                            fontSize: 14,
+                          ),
+                        ),
                       ),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: notifications.length,
+                  : ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemCount: filteredNotifications.length,
+                      separatorBuilder: (context, index) => const Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: AppColors.divider,
+                      ),
                       itemBuilder: (context, index) {
-                        final notification = notifications[index];
+                        final notification = filteredNotifications[index];
                         return _buildNotificationItem(
                           context,
                           notification['title'] as String,
@@ -107,11 +161,32 @@ class NotificationsDialog extends StatelessWidget {
                           notification['time'] as String,
                           notification['icon'] as IconData,
                           notification['color'] as Color,
+                          notification['isUnread'] as bool,
+                          notification['isInvitation'] as bool,
                         );
                       },
                     ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTab(String label, bool isSelected) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedTab = label;
+        });
+      },
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? AppColors.textMain : AppColors.textMeta,
+          fontSize: 14,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          fontFamily: 'Inter',
         ),
       ),
     );
@@ -124,58 +199,150 @@ class NotificationsDialog extends StatelessWidget {
     String time,
     IconData icon,
     Color color,
+    bool isUnread,
+    bool isInvitation,
   ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[800]!),
-      ),
-      child: Row(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      color: Colors.transparent,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Avatar
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  message,
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 12,
-                  ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title and Time Row
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              color: AppColors.textMain,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Inter',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              time,
+                              style: TextStyle(
+                                color: AppColors.textMeta,
+                                fontSize: 12,
+                                fontFamily: 'Inter',
+                              ),
+                            ),
+                            if (isUnread) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.success,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // Description
+                    Text(
+                      message,
+                      style: TextStyle(
+                        color: AppColors.textSec,
+                        fontSize: 13,
+                        fontFamily: 'Inter',
+                        height: 1.4,
+                      ),
+                    ),
+                    // Invitation Buttons
+                    if (isInvitation) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                // Decline logic
+                              },
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                side: const BorderSide(
+                                  color: AppColors.borderLight,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Text(
+                                'Decline',
+                                style: TextStyle(
+                                  color: AppColors.textMain,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                // Accept logic
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.textMain,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: const Text(
+                                'Accept',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  time,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),

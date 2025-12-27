@@ -1654,8 +1654,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
               ),
             ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }

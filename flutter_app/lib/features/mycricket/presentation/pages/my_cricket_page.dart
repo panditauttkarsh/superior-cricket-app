@@ -367,14 +367,18 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     final user = ref.read(authStateProvider).user;
     
     if (_matchesFilter == 'My') {
-      // Get matches where user's team is involved
+      // Get matches where user's team is involved, but only started matches (live or completed)
       filteredMatches = _allMatches.where((match) {
         // Check if user's teams are involved (simplified - you might need to check team membership)
-        return match.createdBy == user?.id || 
-               match.team1Id == user?.id || 
-               match.team2Id == user?.id;
+        final isUserMatch = match.createdBy == user?.id || 
+                           match.team1Id == user?.id || 
+                           match.team2Id == user?.id;
+        // Only include matches that have been started (live or completed), exclude upcoming
+        final isStarted = match.status == 'live' || match.status == 'completed';
+        return isUserMatch && isStarted;
       }).toList();
     } else if (_matchesFilter == 'Upcoming') {
+      // Show all upcoming matches
       filteredMatches = _allMatches.where((match) => match.status == 'upcoming').toList();
     } else if (_matchesFilter == 'Nearby') {
       // Coming soon
@@ -430,40 +434,81 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
         final scorecard = match.scorecard ?? {};
         final team1Score = scorecard['team1_score'] ?? {};
         final team2Score = scorecard['team2_score'] ?? {};
-        final team1Runs = team1Score['runs'] ?? 0;
-        final team1Wickets = team1Score['wickets'] ?? 0;
-        final team2Runs = team2Score['runs'] ?? 0;
-        final team2Wickets = team2Score['wickets'] ?? 0;
+        final team1Runs = (team1Score['runs'] as num?)?.toInt() ?? 0;
+        final team1Wickets = (team1Score['wickets'] as num?)?.toInt() ?? 0;
+        final team1Overs = (team1Score['overs'] as num?)?.toDouble() ?? 0.0;
+        final team2Runs = (team2Score['runs'] as num?)?.toInt() ?? 0;
+        final team2Wickets = (team2Score['wickets'] as num?)?.toInt() ?? 0;
+        final team2Overs = (team2Score['overs'] as num?)?.toDouble() ?? 0.0;
+        
+        // Calculate result text
+        String? resultText;
+        String? winningTeam;
+        if (match.status == 'completed' && match.winnerId != null) {
+          if (match.winnerId == match.team1Id) {
+            winningTeam = match.team1Name ?? 'Team 1';
+            final runsDiff = team1Runs - team2Runs;
+            final wicketsDiff = team2Wickets - team1Wickets;
+            if (runsDiff > 0) {
+              resultText = '${match.team1Name ?? "Team 1"} won by $runsDiff runs';
+            } else if (wicketsDiff > 0) {
+              resultText = '${match.team1Name ?? "Team 1"} won by $wicketsDiff wicket${wicketsDiff > 1 ? 's' : ''}';
+            }
+          } else {
+            winningTeam = match.team2Name ?? 'Team 2';
+            final runsDiff = team2Runs - team1Runs;
+            final wicketsDiff = team1Wickets - team2Wickets;
+            if (runsDiff > 0) {
+              resultText = '${match.team2Name ?? "Team 2"} won by $runsDiff runs';
+            } else if (wicketsDiff > 0) {
+              resultText = '${match.team2Name ?? "Team 2"} won by $wicketsDiff wicket${wicketsDiff > 1 ? 's' : ''}';
+            }
+          }
+        }
+        
+        // Format date for display
+        final matchDate = match.scheduledAt ?? match.completedAt ?? match.createdAt;
+        final dateStr = _formatMatchDate(matchDate);
+        final dateTimeStr = match.scheduledAt != null 
+            ? _formatMatchDateTime(match.scheduledAt!)
+            : null;
+        
+        // Format venue (using groundType as venue placeholder)
+        final venue = match.groundType.isNotEmpty 
+            ? match.groundType 
+            : 'Venue TBA';
+        
+        // Get tournament info if available - check if match has tournament association
+        // For now, tournament info would come from a tournament_id field if it exists
+        // or from a join query. Since it's not in the current model, we'll leave it null
+        final tournamentName = null; // Will be populated when tournament relation is available
         
         final matchData = {
           'id': match.id,
-          'opponent': match.status == 'upcoming' 
-              ? 'vs ${match.team2Name ?? "Opponent"}'
-              : 'vs ${match.team2Name ?? "Opponent"}',
-          'result': match.status == 'completed' 
-              ? (match.winnerId == match.team1Id ? 'Won' : 'Lost')
-              : match.status == 'live' 
-                  ? 'Playing'
-                  : null,
-          'resultColor': match.status == 'completed' && match.winnerId == match.team1Id
-              ? AppColors.success
-              : match.status == 'completed'
-                  ? AppColors.urgent
-                  : AppColors.primary,
-          'score': match.status != 'upcoming' 
-              ? '$team1Runs/$team1Wickets'
-              : null,
-          'format': '${match.overs} Overs',
-          'status': match.status == 'live' ? 'Playing' : match.status == 'completed' ? 'Played' : 'Upcoming',
-          'date': match.scheduledAt != null 
-              ? _formatDate(match.scheduledAt!)
-              : match.createdAt != null
-                  ? _formatDate(match.createdAt)
-                  : 'Date TBA',
+          'team1Id': match.team1Id,
+          'team2Id': match.team2Id,
+          'team1Name': match.team1Name ?? 'Team 1',
+          'team2Name': match.team2Name ?? 'Team 2',
+          'team1Runs': team1Runs,
+          'team1Wickets': team1Wickets,
+          'team1Overs': team1Overs,
+          'team2Runs': team2Runs,
+          'team2Wickets': team2Wickets,
+          'team2Overs': team2Overs,
+          'overs': match.overs,
+          'venue': venue,
+          'date': dateStr,
+          'dateTime': dateTimeStr,
+          'tournamentName': tournamentName,
+          'stage': null, // Will be populated when tournament relation is available
+          'status': match.status,
+          'winnerId': match.winnerId,
+          'resultText': resultText,
+          'winningTeam': winningTeam,
         };
         
         return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.only(bottom: 16),
           child: _buildMatchCard(matchData),
         );
       }).toList(),
@@ -486,6 +531,30 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     }
   }
 
+  String _formatMatchDate(DateTime date) {
+    // Format: "06-Dec-25" to match the design
+    final day = date.day.toString().padLeft(2, '0');
+    final month = _getMonthName(date.month);
+    final year = date.year.toString().substring(2);
+    return '$day-$month-$year';
+  }
+
+  String _formatMatchDateTime(DateTime date) {
+    // Format: "Wed, 5 Jun 2024, 10:30AM" to match the reference design
+    final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final weekday = weekdays[date.weekday - 1];
+    final day = date.day;
+    final month = _getFullMonthName(date.month);
+    final year = date.year;
+    
+    // Format time
+    final hour = date.hour == 0 ? 12 : (date.hour > 12 ? date.hour - 12 : date.hour);
+    final minute = date.minute.toString().padLeft(2, '0');
+    final amPm = date.hour >= 12 ? 'PM' : 'AM';
+    
+    return '$weekday, $day $month $year, $hour:$minute$amPm';
+  }
+
   String _getMonthName(int month) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -493,116 +562,455 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     ];
     return months[month - 1];
   }
+  
+  String _getFullMonthName(int month) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[month - 1];
+  }
+  
+  String _formatOvers(double overs) {
+    // Format overs as "19.5 Ov" or "20.0 Ov"
+    return '${overs.toStringAsFixed(1)} Ov';
+  }
+  
+  String _formatOversLabel(int overs) {
+    // Format: "Limited 10 overs" for match format display
+    return 'Limited $overs overs';
+  }
 
   Widget _buildMatchCard(Map<String, dynamic> match) {
-    final isPlayed = match['status'] == 'Played' || match['status'] == 'Playing';
-    final isLive = match['status'] == 'Playing';
+    final status = match['status'] as String? ?? 'upcoming';
+    final isCompleted = status == 'completed';
+    final isUpcoming = status == 'upcoming';
+    
+    // For upcoming matches, show the new design
+    if (isUpcoming) {
+      return _buildUpcomingMatchCard(match);
+    }
+    
+    // For completed matches, show the detailed design
+    return _buildCompletedMatchCard(match);
+  }
+  
+  Widget _buildUpcomingMatchCard(Map<String, dynamic> match) {
+    final dateTime = match['dateTime'] as String? ?? 'Date TBA';
+    final venue = match['venue'] as String? ?? 'Venue TBA';
+    final overs = match['overs'] as int? ?? 20;
+    final team1Name = match['team1Name'] as String? ?? 'Team 1';
+    final team2Name = match['team2Name'] as String? ?? 'Team 2';
     
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Row(
-        children: [
-          // Icon on left - matching second screenshot
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: isPlayed
-                  ? AppColors.primary.withOpacity(0.15)
-                  : AppColors.primary.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              isPlayed ? Icons.sports_cricket : Icons.calendar_today,
-              color: AppColors.primary,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header: Date/Time and Venue
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  match['opponent'] as String,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textMain,
+                // Date/Time centered
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      dateTime,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textMain,
+                        fontFamily: 'Inter',
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 6),
-                if (isPlayed)
-                  Row(
+                // Venue with icon
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      size: 16,
+                      color: AppColors.textSec,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      venue,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSec,
+                        fontFamily: 'Inter',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 20),
+            
+            // Team 1
+            _buildUpcomingTeamRow(team1Name),
+            
+            const SizedBox(height: 16),
+            
+            // Team 2
+            _buildUpcomingTeamRow(team2Name),
+            
+            const SizedBox(height: 20),
+            
+            // Divider
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.divider,
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Footer: Match Format and Start Button
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Match Format
+                Text(
+                  _formatOversLabel(overs),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSec,
+                    fontFamily: 'Inter',
+                  ),
+                ),
+                // Start Button
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // Start match logic
+                  },
+                  icon: const Icon(
+                    Icons.edit,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                  label: const Text(
+                    'Start',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      fontFamily: 'Inter',
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6B35), // Orange color from reference
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildUpcomingTeamRow(String teamName) {
+    return Row(
+      children: [
+        // Circular Avatar
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.primary.withOpacity(0.1),
+          ),
+          child: Icon(
+            Icons.sports_cricket,
+            color: AppColors.primary,
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Team Name
+        Expanded(
+          child: Text(
+            teamName,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textMain,
+              fontFamily: 'Inter',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildCompletedMatchCard(Map<String, dynamic> match) {
+    final stage = match['stage'] as String?;
+    final tournamentName = match['tournamentName'] as String?;
+    final venue = match['venue'] as String? ?? 'Venue TBA';
+    final date = match['date'] as String? ?? 'Date TBA';
+    final overs = match['overs'] as int? ?? 20;
+    
+    // Build header text - only show if tournament exists
+    final headerText = tournamentName != null && tournamentName.isNotEmpty
+        ? (stage != null && stage.isNotEmpty 
+            ? '$stage, $tournamentName' 
+            : tournamentName)
+        : null;
+    
+    final team1Name = match['team1Name'] as String? ?? 'Team 1';
+    final team2Name = match['team2Name'] as String? ?? 'Team 2';
+    final team1Runs = (match['team1Runs'] as num?)?.toInt() ?? 0;
+    final team1Wickets = (match['team1Wickets'] as num?)?.toInt() ?? 0;
+    final team1Overs = (match['team1Overs'] as num?)?.toDouble() ?? 0.0;
+    final team2Runs = (match['team2Runs'] as num?)?.toInt() ?? 0;
+    final team2Wickets = (match['team2Wickets'] as num?)?.toInt() ?? 0;
+    final team2Overs = (match['team2Overs'] as num?)?.toDouble() ?? 0.0;
+    
+    final winnerId = match['winnerId'] as String?;
+    final winningTeam = match['winningTeam'] as String?;
+    final resultText = match['resultText'] as String?;
+    final team1Id = match['team1Id'] as String;
+    final team2Id = match['team2Id'] as String;
+    
+    final isTeam1Winner = winnerId != null && winnerId == team1Id;
+    final isTeam2Winner = winnerId != null && winnerId == team2Id;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Section
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          match['result'] as String,
+                      // Match Stage and Tournament - only show if tournament exists
+                      if (headerText != null) ...[
+                        Text(
+                          headerText,
                           style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textMain,
+                            fontFamily: 'Inter',
                           ),
                         ),
+                        const SizedBox(height: 6),
+                      ],
+                      // Venue, Date, and Overs
+                      Text(
+                        '$venue | $date | $overs Ov.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSec,
+                          fontFamily: 'Inter',
+                        ),
                       ),
-                      if (match['score'] != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          match['score'] as String,
+                    ],
+                  ),
+                ),
+                // Result Button
+                Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.textMain,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Result',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.textMain,
+                            color: Colors.white,
+                            fontFamily: 'Inter',
                           ),
                         ),
                       ],
-                    ],
-                  )
-                else
-                  Text(
-                    match['date'] as String,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSec,
                     ),
                   ),
               ],
             ),
           ),
-          // Overs badge on right - matching second screenshot
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+          
+          // Teams and Scores Section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              children: [
+                // Team 1
+                _buildTeamRow(
+                  team1Name,
+                  team1Runs,
+                  team1Wickets,
+                  team1Overs,
+                  isTeam1Winner,
+                ),
+                const SizedBox(height: 12),
+                // Team 2
+                _buildTeamRow(
+                  team2Name,
+                  team2Runs,
+                  team2Wickets,
+                  team2Overs,
+                  isTeam2Winner,
+                ),
+              ],
             ),
-            child: Text(
-              match['format'] as String,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primary,
+          ),
+          
+          // Result Summary
+          if (resultText != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
               ),
+              child: Text(
+                resultText,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textMain,
+                  fontFamily: 'Inter',
+                ),
+              ),
+            ),
+          ],
+          
+          // Action Links
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _buildActionLink('Insights', () {}),
+                const SizedBox(width: 20),
+                _buildActionLink('Table', () {}),
+                const SizedBox(width: 20),
+                _buildActionLink('Leaderboard', () {}),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+  
+  Widget _buildTeamRow(String teamName, int runs, int wickets, double overs, bool isWinner) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Team Name
+        Expanded(
+          child: Text(
+            teamName,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: isWinner ? FontWeight.bold : FontWeight.w500,
+              color: AppColors.textMain,
+              fontFamily: 'Inter',
+            ),
+          ),
+        ),
+        // Score and Overs
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '$runs/$wickets',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: isWinner ? FontWeight.bold : FontWeight.w600,
+                color: AppColors.textMain,
+                fontFamily: 'Inter',
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _formatOvers(overs),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.normal,
+                color: AppColors.textSec,
+                fontFamily: 'Inter',
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildActionLink(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: AppColors.primary,
+          fontFamily: 'Inter',
+        ),
       ),
     );
   }
