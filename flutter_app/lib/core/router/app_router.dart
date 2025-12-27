@@ -1,0 +1,331 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/auth/presentation/pages/onboarding_page.dart';
+import '../../features/auth/presentation/pages/signup_page.dart';
+import '../../features/auth/presentation/pages/email_verification_callback_page.dart';
+import '../../features/dashboard/presentation/pages/dashboard_page.dart';
+import '../../core/widgets/loading_screen.dart';
+import '../../features/player/presentation/pages/player_dashboard_page.dart';
+import '../../features/player/presentation/pages/scorecards_page.dart';
+import '../../features/player/presentation/pages/leaderboards_page.dart';
+import '../../features/coach/presentation/pages/coach_dashboard_page.dart';
+import '../../features/coach/presentation/pages/team_management_page.dart';
+import '../../features/coach/presentation/pages/player_monitoring_page.dart';
+import '../../features/tournament/presentation/pages/tournament_list_page.dart';
+import '../../features/tournament/presentation/pages/tournament_details_page.dart';
+import '../../features/tournament/presentation/pages/fixtures_page.dart';
+import '../../features/tournament/presentation/pages/points_table_page.dart';
+import '../../features/tournament/presentation/pages/tournaments_arena_page.dart';
+import '../../features/academy/presentation/pages/academy_dashboard_page.dart';
+import '../../features/academy/presentation/pages/academy_detail_page.dart';
+import '../../features/academy/presentation/pages/training_programs_page.dart';
+import '../../features/match/presentation/pages/match_center_page.dart';
+import '../../features/match/presentation/pages/match_details_page.dart';
+import '../../features/match/presentation/pages/match_list_page.dart';
+import '../../features/match/presentation/pages/match_detail_screen.dart';
+import '../../features/feed/presentation/pages/feed_page.dart';
+import '../../features/admin/presentation/pages/admin_dashboard_page.dart';
+import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/mycricket/presentation/pages/my_cricket_page.dart';
+import '../../features/shop/presentation/pages/shop_page.dart';
+import '../../features/mycricket/presentation/pages/scorecard_page.dart';
+import '../../features/mycricket/presentation/pages/create_match_page.dart';
+import '../../features/mycricket/presentation/pages/my_team_squad_page.dart';
+import '../../features/mycricket/presentation/pages/opponent_team_squad_page.dart';
+import '../../features/mycricket/presentation/pages/toss_page.dart';
+import '../../features/mycricket/presentation/pages/initial_players_setup_page.dart';
+import '../../core/providers/auth_provider.dart';
+
+final routerProvider = Provider<GoRouter>((ref) {
+  final authState = ref.watch(authStateProvider);
+  
+  return GoRouter(
+    initialLocation: '/loading',
+    redirect: (context, state) {
+      final currentLocation = state.matchedLocation;
+      final isLoggedIn = authState.isAuthenticated;
+      final isLoginPage = currentLocation == '/login' || 
+                         currentLocation == '/onboarding' ||
+                         currentLocation == '/signup';
+      final isLoadingPage = currentLocation == '/loading';
+      
+      // If auth is still loading, stay on loading page or redirect to it
+      if (authState.isLoading) {
+        if (!isLoadingPage) {
+          return '/loading';
+        }
+        return null; // Stay on loading page
+      }
+      
+      // PRIORITY 1: If logged in and on a login/loading page, redirect to home immediately
+      if (isLoggedIn && (isLoginPage || isLoadingPage)) {
+        return '/';
+      }
+      
+      // PRIORITY 2: If not logged in and trying to access protected routes, redirect to login
+      if (!isLoggedIn && !isLoginPage && !isLoadingPage) {
+        return '/login';
+      }
+      
+      // No redirect needed
+      return null;
+    },
+    routes: [
+      // Loading Route
+      GoRoute(
+        path: '/loading',
+        builder: (context, state) => const LoadingScreen(),
+      ),
+      // Auth Routes
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const OnboardingPage(),
+      ),
+      GoRoute(
+        path: '/signup',
+        builder: (context, state) => const SignUpPage(),
+      ),
+      // Email verification callback (deep link handler)
+      GoRoute(
+        path: '/login-callback',
+        builder: (context, state) {
+          final code = state.uri.queryParameters['code'];
+          final type = state.uri.queryParameters['type'];
+          return EmailVerificationCallbackPage(
+            code: code,
+            type: type,
+          );
+        },
+      ),
+      
+      // Dashboard Routes
+      GoRoute(
+        path: '/',
+        builder: (context, state) => const DashboardPage(),
+      ),
+      
+      // My Cricket Route
+      GoRoute(
+        path: '/my-cricket',
+        builder: (context, state) {
+          final tab = state.uri.queryParameters['tab'];
+          return MyCricketPage(initialTab: tab);
+        },
+      ),
+      
+      // Feed Route
+      GoRoute(
+        path: '/feed',
+        builder: (context, state) => const FeedPage(),
+      ),
+      
+      // Match Routes
+      GoRoute(
+        path: '/match-center',
+        builder: (context, state) => const MatchCenterPage(),
+      ),
+      GoRoute(
+        path: '/matches',
+        builder: (context, state) => const MatchCenterPage(),
+      ),
+      GoRoute(
+        path: '/matches/:id',
+        builder: (context, state) {
+          final matchId = state.pathParameters['id']!;
+          return MatchDetailScreen(matchId: matchId);
+        },
+      ),
+      GoRoute(
+        path: '/create-match',
+        builder: (context, state) => const CreateMatchPage(),
+      ),
+      GoRoute(
+        path: '/my-team-squad',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return MyTeamSquadPage(
+            teamName: extra?['teamName'] ?? 'My Team',
+            initialPlayers: extra?['players'] ?? [],
+          );
+        },
+      ),
+      GoRoute(
+        path: '/opponent-team-squad',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return OpponentTeamSquadPage(
+            teamName: extra?['teamName'] ?? 'Opponent Team',
+            initialPlayers: extra?['players'] ?? [],
+          );
+        },
+      ),
+      GoRoute(
+        path: '/toss',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return TossPage(
+            myTeam: extra?['myTeam'] ?? 'My Team',
+            opponentTeam: extra?['opponentTeam'] ?? 'Opponent Team',
+            overs: extra?['overs'] ?? '20',
+            groundType: extra?['groundType'] ?? 'Turf',
+            ballType: extra?['ballType'] ?? 'Leather',
+            myTeamPlayers: extra?['myTeamPlayers'] ?? [],
+            opponentTeamPlayers: extra?['opponentTeamPlayers'] ?? [],
+            initialStriker: extra?['initialStriker'],
+            initialNonStriker: extra?['initialNonStriker'],
+            initialBowler: extra?['initialBowler'],
+            youtubeVideoId: extra?['youtubeVideoId'],
+            matchId: extra?['matchId'],
+            team1Id: extra?['team1Id'],
+            team2Id: extra?['team2Id'],
+          );
+        },
+      ),
+      GoRoute(
+        path: '/initial-players-setup',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return InitialPlayersSetupPage(
+            myTeam: extra?['myTeam'] ?? 'My Team',
+            opponentTeam: extra?['opponentTeam'] ?? 'Opponent Team',
+            overs: extra?['overs'] ?? '20',
+            groundType: extra?['groundType'] ?? 'Turf',
+            ballType: extra?['ballType'] ?? 'Leather',
+            myTeamPlayers: extra?['myTeamPlayers'] ?? [],
+            opponentTeamPlayers: extra?['opponentTeamPlayers'] ?? [],
+            tossWinner: extra?['tossWinner'],
+            tossChoice: extra?['tossChoice'],
+            matchId: extra?['matchId'],
+            youtubeVideoId: extra?['youtubeVideoId'],
+            team1Id: extra?['team1Id'],
+            team2Id: extra?['team2Id'],
+          );
+        },
+      ),
+      
+      // Player Routes
+      GoRoute(
+        path: '/player',
+        builder: (context, state) => const PlayerDashboardPage(),
+      ),
+      GoRoute(
+        path: '/player/scorecards',
+        builder: (context, state) => const ScorecardsPage(),
+      ),
+      GoRoute(
+        path: '/player/leaderboards',
+        builder: (context, state) => const LeaderboardsPage(),
+      ),
+      
+      // Coach Routes
+      GoRoute(
+        path: '/coach',
+        builder: (context, state) => const CoachDashboardPage(),
+      ),
+      GoRoute(
+        path: '/coach/teams/:id',
+        builder: (context, state) {
+          final teamId = state.pathParameters['id']!;
+          return TeamManagementPage(teamId: teamId);
+        },
+      ),
+      GoRoute(
+        path: '/coach/players',
+        builder: (context, state) => const PlayerMonitoringPage(),
+      ),
+      
+      // Tournament Routes
+      GoRoute(
+        path: '/tournament',
+        builder: (context, state) => const TournamentListPage(),
+      ),
+      GoRoute(
+        path: '/tournaments-arena',
+        builder: (context, state) => const TournamentsArenaPage(),
+      ),
+      GoRoute(
+        path: '/tournament/:id',
+        builder: (context, state) {
+          final tournamentId = state.pathParameters['id']!;
+          return TournamentDetailsPage(tournamentId: tournamentId);
+        },
+      ),
+      GoRoute(
+        path: '/tournament/:id/fixtures',
+        builder: (context, state) {
+          final tournamentId = state.pathParameters['id']!;
+          return FixturesPage(tournamentId: tournamentId);
+        },
+      ),
+      GoRoute(
+        path: '/tournament/:id/points',
+        builder: (context, state) {
+          final tournamentId = state.pathParameters['id']!;
+          return PointsTablePage(tournamentId: tournamentId);
+        },
+      ),
+      
+      // Academy Routes
+      GoRoute(
+        path: '/academy',
+        builder: (context, state) => const AcademyDashboardPage(),
+      ),
+      GoRoute(
+        path: '/academy-detail',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return AcademyDetailPage(academy: extra ?? {});
+        },
+      ),
+      GoRoute(
+        path: '/academy/:id/programs',
+        builder: (context, state) {
+          final academyId = state.pathParameters['id']!;
+          return TrainingProgramsPage(academyId: academyId);
+        },
+      ),
+      
+      // Admin Routes
+      GoRoute(
+        path: '/admin',
+        builder: (context, state) => const AdminDashboardPage(),
+      ),
+      
+      // Profile & Settings
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) => const ProfilePage(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: '/shop',
+        builder: (context, state) => const ShopPage(),
+      ),
+      GoRoute(
+        path: '/scorecard',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return ScorecardPage(
+            matchId: extra?['matchId'],
+            team1: extra?['myTeam'] ?? extra?['team1'] ?? 'Team 1',
+            team2: extra?['opponentTeam'] ?? extra?['team2'] ?? 'Team 2',
+            overs: extra?['overs'] != null ? int.tryParse(extra!['overs'].toString()) : 20,
+            youtubeVideoId: extra?['youtubeVideoId'], // YouTube video ID for live stream
+          );
+        },
+      ),
+    ],
+  );
+});
+
