@@ -8,6 +8,7 @@ import '../../../../core/models/match_model.dart';
 import '../../../../core/models/tournament_model.dart';
 import '../../../mycricket/presentation/widgets/enhanced_create_match_dialog.dart';
 import '../widgets/notifications_dialog.dart';
+import '../../../notifications/presentation/pages/notifications_page.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -42,17 +43,56 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   Future<void> _loadLiveMatches() async {
     try {
       final matchRepo = ref.read(matchRepositoryProvider);
-      final matches = await matchRepo.getMatches(
+      final authState = ref.read(authStateProvider);
+      final userId = authState.user?.id;
+      
+      // Get matches: live matches + matches user is part of (upcoming/live/completed)
+      List<MatchModel> allMatches = [];
+      
+      // 1. Get all live matches (visible to everyone)
+      final liveMatches = await matchRepo.getMatches(
         status: 'live',
-        limit: 5,
+        limit: 10,
       );
+      allMatches.addAll(liveMatches);
+      
+      // 2. If user is logged in, get matches they're part of (from match_players)
+      if (userId != null) {
+        final playerMatches = await matchRepo.getPlayerMatches(userId);
+        // Add matches that aren't already in the list
+        for (var match in playerMatches) {
+          if (!allMatches.any((m) => m.id == match.id)) {
+            allMatches.add(match);
+          }
+        }
+        
+        // 3. Also get matches created by user or where user's team is involved
+        final userMatches = await matchRepo.getMatches(
+          userId: userId,
+          includePlayerMatches: true,
+          limit: 10,
+        );
+        for (var match in userMatches) {
+          if (!allMatches.any((m) => m.id == match.id)) {
+            allMatches.add(match);
+          }
+        }
+      }
+      
+      // Sort by created_at (newest first) and limit to 5
+      allMatches.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (allMatches.length > 5) {
+        allMatches = allMatches.take(5).toList();
+      }
+      
       if (mounted) {
         setState(() {
-          _liveMatches = matches;
+          _liveMatches = allMatches;
           _isLoadingMatches = false;
         });
       }
     } catch (e) {
+      print('Error loading matches: $e');
       if (mounted) {
         setState(() {
           _isLoadingMatches = false;
@@ -190,25 +230,88 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ),
         ),
         const Spacer(),
-        // Notification Button
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.primary.withOpacity(0.1),
-            border: Border.all(
-              color: AppColors.primary.withOpacity(0.2),
-            ),
-          ),
-          child: IconButton(
-            icon: const Icon(
-              Icons.notifications_outlined,
-              color: AppColors.primary,
-              size: 24,
-            ),
-            onPressed: () => _showNotificationsDialog(context),
-          ),
+        // Notification Button with Badge
+        Consumer(
+          builder: (context, ref, _) {
+            final authState = ref.watch(authStateProvider);
+            final userId = authState.user?.id;
+            
+            if (userId == null) {
+              return Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withOpacity(0.1),
+                  border: Border.all(
+                    color: AppColors.primary.withOpacity(0.2),
+                  ),
+                ),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.notifications_outlined,
+                    color: AppColors.primary,
+                    size: 24,
+                  ),
+                  onPressed: () => context.push('/notifications'),
+                ),
+              );
+            }
+            
+            // Use the unread count provider from notifications page
+            final unreadCountAsync = ref.watch(unreadCountProvider(userId));
+            final unreadCount = unreadCountAsync.value ?? 0;
+            
+            return Stack(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.primary.withOpacity(0.1),
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(0.2),
+                    ),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.notifications_outlined,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
+                    onPressed: () => context.push('/notifications'),
+                  ),
+                ),
+                if (unreadCount > 0)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        unreadCount > 9 ? '9+' : '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -222,7 +325,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              'Live Matches',
+              'My Matches',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
@@ -262,7 +365,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     height: 200,
                     child: Center(
                       child: Text(
-                        'No live matches',
+                        'No matches yet',
                         style: TextStyle(
                           color: AppColors.textSec,
                           fontSize: 14,
@@ -304,7 +407,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                               team2: match.team2Name ?? 'Team 2',
                               score: '$battingRuns/$battingWickets',
                               overs: '${battingOvers.toStringAsFixed(1)} Ov',
-                              status: 'Live',
+                              status: match.status == 'live' ? 'Live' : 
+                                      match.status == 'upcoming' ? 'Upcoming' : 
+                                      match.status == 'completed' ? 'Completed' : 'Match',
                             ),
                           ),
                         );

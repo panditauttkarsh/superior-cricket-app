@@ -31,6 +31,9 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
   
   List<String> _myTeamPlayers = [];
   List<String> _opponentTeamPlayers = [];
+  // Store full player data for match_players table
+  List<Map<String, dynamic>> _myTeamPlayersData = [];
+  List<Map<String, dynamic>> _opponentTeamPlayersData = [];
 
   @override
   void initState() {
@@ -283,6 +286,33 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
             'scheduled_at': DateTime.now().toIso8601String(),
             'created_by': user?.id,
           });
+          
+          // Save players to match_players table (this will trigger notifications)
+          final matchPlayerRepo = ref.read(matchPlayerRepositoryProvider);
+          try {
+            // Add my team players
+            if (_myTeamPlayers.isNotEmpty) {
+              await matchPlayerRepo.addPlayersToMatch(
+                matchId: match.id,
+                players: _myTeamPlayers,
+                teamType: 'team1',
+                addedBy: user?.id,
+              );
+            }
+            
+            // Add opponent team players
+            if (_opponentTeamPlayers.isNotEmpty) {
+              await matchPlayerRepo.addPlayersToMatch(
+                matchId: match.id,
+                players: _opponentTeamPlayers,
+                teamType: 'team2',
+                addedBy: user?.id,
+              );
+            }
+          } catch (playerError) {
+            print('Warning: Failed to save players to match: $playerError');
+            // Don't block navigation if player saving fails
+          }
           
           // Navigate to Toss page (AFTER match settings, BEFORE initial players setup)
           if (mounted) {

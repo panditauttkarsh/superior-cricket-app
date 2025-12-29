@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/repositories/profile_repository.dart';
+import '../../../../core/providers/repository_providers.dart';
 
-class MyTeamSquadPage extends StatefulWidget {
+class MyTeamSquadPage extends ConsumerStatefulWidget {
   final String teamName;
   final List<String> initialPlayers;
 
@@ -13,11 +16,14 @@ class MyTeamSquadPage extends StatefulWidget {
   });
 
   @override
-  State<MyTeamSquadPage> createState() => _MyTeamSquadPageState();
+  ConsumerState<MyTeamSquadPage> createState() => _MyTeamSquadPageState();
 }
 
-class _MyTeamSquadPageState extends State<MyTeamSquadPage> {
+class _MyTeamSquadPageState extends ConsumerState<MyTeamSquadPage> {
   List<Map<String, dynamic>> _players = [];
+  
+  // Track player IDs to prevent duplicates
+  Set<String> _addedPlayerIds = {};
 
   @override
   void initState() {
@@ -69,55 +75,143 @@ class _MyTeamSquadPageState extends State<MyTeamSquadPage> {
           }).toList();
   }
 
-  void _addPlayer() {
-    final nameController = TextEditingController();
+  Future<void> _addPlayer() async {
+    final usernameController = TextEditingController();
     final roleController = TextEditingController();
+    bool isLoading = false;
+    String? errorMessage;
     
-    showDialog(
+    await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add New Player'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Player Name'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add Player by Username'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: usernameController,
+                enabled: !isLoading,
+                decoration: const InputDecoration(
+                  labelText: 'Enter player username',
+                  hintText: '@utkarsh_pandita or utkarsh_pandita',
+                  prefixIcon: Icon(Icons.alternate_email),
+                ),
+                onSubmitted: isLoading ? null : (value) async {
+                  if (value.trim().isNotEmpty) {
+                    await _handleAddPlayer(
+                      usernameController.text.trim(),
+                      roleController.text.trim(),
+                      setDialogState,
+                      (loading) => setDialogState(() => isLoading = loading),
+                      (error) => setDialogState(() => errorMessage = error),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: roleController,
+                enabled: !isLoading,
+                decoration: const InputDecoration(
+                  labelText: 'Role (optional, e.g., Batsman, Bowler)',
+                ),
+              ),
+              if (errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  errorMessage!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              ],
+              if (isLoading) ...[
+                const SizedBox(height: 16),
+                const CircularProgressIndicator(),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: roleController,
-              decoration: const InputDecoration(labelText: 'Role (e.g., Batsman, Bowler)'),
+            ElevatedButton(
+              onPressed: isLoading ? null : () async {
+                if (usernameController.text.trim().isNotEmpty) {
+                  await _handleAddPlayer(
+                    usernameController.text.trim(),
+                    roleController.text.trim(),
+                    setDialogState,
+                    (loading) => setDialogState(() => isLoading = loading),
+                    (error) => setDialogState(() => errorMessage = error),
+                  );
+                }
+              },
+              child: const Text('Add'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameController.text.trim().isNotEmpty) {
-                setState(() {
-                  _players.add({
-                    'name': nameController.text.trim(),
-                    'role': roleController.text.trim().isEmpty
-                        ? 'Player'
-                        : roleController.text.trim(),
-                    'avatar': null,
-                    'isCaptain': false,
-                    'isWicketKeeper': false,
-                  });
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
       ),
     );
+  }
+  
+  Future<void> _handleAddPlayer(
+    String usernameInput,
+    String roleInput,
+    StateSetter setDialogState,
+    Function(bool) setIsLoading,
+    Function(String?) setError,
+  ) async {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      final profileRepo = ref.read(profileRepositoryProvider);
+      final profile = await profileRepo.getProfileByUsername(usernameInput);
+      
+      if (profile == null) {
+        setError('Player with this username does not exist');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Check for duplicate
+      if (_addedPlayerIds.contains(profile.id)) {
+        setError('Player already added to this team');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Add player
+      setState(() {
+        _addedPlayerIds.add(profile.id);
+        _players.add({
+          'id': profile.id, // Internal ID (hidden from UI)
+          'name': profile.name ?? profile.username,
+          'username': profile.username, // Public username
+          'role': roleInput.isEmpty ? 'Player' : roleInput,
+          'avatar': profile.profileImageUrl,
+          'isCaptain': false,
+          'isWicketKeeper': false,
+        });
+      });
+      
+      Navigator.pop(context);
+      
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${profile.name ?? profile.username} added to ${widget.teamName}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      setError('Error adding player: $e');
+      setIsLoading(false);
+    }
   }
 
   void _editPlayer(int index) {
@@ -180,6 +274,10 @@ class _MyTeamSquadPageState extends State<MyTeamSquadPage> {
           ElevatedButton(
             onPressed: () {
               setState(() {
+                final playerId = _players[index]['id'] as String?;
+                if (playerId != null) {
+                  _addedPlayerIds.remove(playerId);
+                }
                 _players.removeAt(index);
               });
               Navigator.pop(context);

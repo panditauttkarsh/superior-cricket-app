@@ -9,6 +9,7 @@ class MatchRepository {
     String? status,
     String? userId,
     int? limit,
+    bool includePlayerMatches = false, // If true, also include matches where user is a player
   }) async {
     try {
       dynamic query = _supabase.from('matches').select();
@@ -18,7 +19,28 @@ class MatchRepository {
       }
 
       if (userId != null) {
-        query = query.or('team1_id.eq.$userId,team2_id.eq.$userId,created_by.eq.$userId');
+        if (includePlayerMatches) {
+          // Get matches where user is a player (from match_players table)
+          final playerMatchesResponse = await _supabase
+              .from('match_players')
+              .select('match_id')
+              .eq('player_id', userId);
+          
+          final playerMatchIds = (playerMatchesResponse as List)
+              .map((e) => e['match_id'] as String)
+              .toList();
+          
+          // Query matches: created by user, OR user is in team, OR user is a player
+          if (playerMatchIds.isNotEmpty) {
+            query = query.or(
+              'team1_id.eq.$userId,team2_id.eq.$userId,created_by.eq.$userId,id.in.(${playerMatchIds.join(',')})'
+            );
+          } else {
+            query = query.or('team1_id.eq.$userId,team2_id.eq.$userId,created_by.eq.$userId');
+          }
+        } else {
+          query = query.or('team1_id.eq.$userId,team2_id.eq.$userId,created_by.eq.$userId');
+        }
       }
 
       if (limit != null) {
@@ -33,6 +55,44 @@ class MatchRepository {
           .toList();
     } catch (e) {
       throw Exception('Failed to fetch matches: $e');
+    }
+  }
+  
+  // Get matches where user is a player (from match_players table)
+  Future<List<MatchModel>> getPlayerMatches(String playerId) async {
+    try {
+      // Get match IDs where user is a player
+      final playerMatchesResponse = await _supabase
+          .from('match_players')
+          .select('match_id')
+          .eq('player_id', playerId);
+      
+      final matchIds = (playerMatchesResponse as List)
+          .map((e) => e['match_id'] as String)
+          .toList();
+      
+      if (matchIds.isEmpty) {
+        return [];
+      }
+      
+      // Fetch match details - build OR query for multiple IDs
+      dynamic query = _supabase.from('matches').select();
+      
+      if (matchIds.length == 1) {
+        query = query.eq('id', matchIds[0]);
+      } else {
+        // Build OR condition: id = id1 OR id = id2 OR ...
+        final orConditions = matchIds.map((id) => 'id.eq.$id').join(',');
+        query = query.or(orConditions);
+      }
+      
+      final response = await query.order('created_at', ascending: false);
+      
+      return (response as List)
+          .map((json) => MatchModel.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to fetch player matches: $e');
     }
   }
 

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/repositories/profile_repository.dart';
+import '../../../../core/providers/repository_providers.dart';
 
-class OpponentTeamSquadPage extends StatefulWidget {
+class OpponentTeamSquadPage extends ConsumerStatefulWidget {
   final String teamName;
   final List<String> initialPlayers;
 
@@ -13,11 +16,14 @@ class OpponentTeamSquadPage extends StatefulWidget {
   });
 
   @override
-  State<OpponentTeamSquadPage> createState() => _OpponentTeamSquadPageState();
+  ConsumerState<OpponentTeamSquadPage> createState() => _OpponentTeamSquadPageState();
 }
 
-class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
+class _OpponentTeamSquadPageState extends ConsumerState<OpponentTeamSquadPage> {
   List<Map<String, dynamic>> _players = [];
+  
+  // Track player IDs to prevent duplicates
+  Set<String> _addedPlayerIds = {};
 
   @override
   void initState() {
@@ -25,22 +31,30 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
     _players = widget.initialPlayers.isEmpty
         ? [
             {
+              'id': 'demo-1',
               'name': 'Virat K.',
+              'username': 'virat_k',
               'role': 'Top Order Batter',
               'initials': 'VK',
             },
             {
+              'id': 'demo-2',
               'name': 'Rohit S.',
+              'username': 'rohit_s',
               'role': 'Opener • Captain',
               'initials': 'RS',
             },
             {
+              'id': 'demo-3',
               'name': 'Jasprit J.',
+              'username': 'jasprit_j',
               'role': 'Fast Bowler',
               'initials': 'JJ',
             },
             {
+              'id': 'demo-4',
               'name': 'Hardik P.',
+              'username': 'hardik_p',
               'role': 'All-Rounder',
               'initials': 'HP',
             },
@@ -51,65 +65,160 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
                 ? '${parts[0][0]}${parts[1][0]}'
                 : (name.length >= 2 ? name.substring(0, 2) : name).toUpperCase();
             return {
+              'id': 'temp-${name.hashCode}',
               'name': name,
+              'username': name.toLowerCase().replaceAll(' ', '_'),
               'role': 'Player',
               'initials': initials,
             };
           }).toList();
+    
+    // Initialize added player IDs set
+    _addedPlayerIds = _players.map((p) => p['id'] as String).toSet();
   }
 
-  void _addPlayer() {
-    final nameController = TextEditingController();
+  Future<void> _addPlayer() async {
+    final usernameController = TextEditingController();
     final roleController = TextEditingController();
+    bool isLoading = false;
+    String? errorMessage;
     
-    showDialog(
+    await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Quick Add Player'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Player Name'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add Player by Username'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: usernameController,
+                enabled: !isLoading,
+                decoration: const InputDecoration(
+                  labelText: 'Enter player username',
+                  hintText: '@utkarsh_pandita or utkarsh_pandita',
+                  prefixIcon: Icon(Icons.alternate_email),
+                ),
+                onSubmitted: isLoading ? null : (value) async {
+                  if (value.trim().isNotEmpty) {
+                    await _handleAddPlayer(
+                      usernameController.text.trim(),
+                      roleController.text.trim(),
+                      setDialogState,
+                      (loading) => setDialogState(() => isLoading = loading),
+                      (error) => setDialogState(() => errorMessage = error),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: roleController,
+                enabled: !isLoading,
+                decoration: const InputDecoration(
+                  labelText: 'Role (optional, e.g., Batsman, Bowler)',
+                ),
+              ),
+              if (errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  errorMessage!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              ],
+              if (isLoading) ...[
+                const SizedBox(height: 16),
+                const CircularProgressIndicator(),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: roleController,
-              decoration: const InputDecoration(labelText: 'Role'),
+            ElevatedButton(
+              onPressed: isLoading ? null : () async {
+                if (usernameController.text.trim().isNotEmpty) {
+                  await _handleAddPlayer(
+                    usernameController.text.trim(),
+                    roleController.text.trim(),
+                    setDialogState,
+                    (loading) => setDialogState(() => isLoading = loading),
+                    (error) => setDialogState(() => errorMessage = error),
+                  );
+                }
+              },
+              child: const Text('Add'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameController.text.trim().isNotEmpty) {
-                final name = nameController.text.trim();
-                final parts = name.split(' ');
-                final initials = parts.length > 1
-                    ? '${parts[0][0]}${parts[1][0]}'
-                    : (name.length >= 2 ? name.substring(0, 2) : name).toUpperCase();
-                setState(() {
-                  _players.add({
-                    'name': name,
-                    'role': roleController.text.trim().isEmpty
-                        ? 'Player'
-                        : roleController.text.trim(),
-                    'initials': initials,
-                  });
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
       ),
     );
+  }
+  
+  Future<void> _handleAddPlayer(
+    String usernameInput,
+    String roleInput,
+    StateSetter setDialogState,
+    Function(bool) setIsLoading,
+    Function(String?) setError,
+  ) async {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      final profileRepo = ref.read(profileRepositoryProvider);
+      final profile = await profileRepo.getProfileByUsername(usernameInput);
+      
+      if (profile == null) {
+        setError('Player with this username does not exist');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Check for duplicate
+      if (_addedPlayerIds.contains(profile.id)) {
+        setError('Player already added to this team');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Generate initials
+      final name = profile.name ?? profile.username;
+      final parts = name.split(' ');
+      final initials = parts.length > 1
+          ? '${parts[0][0]}${parts[1][0]}'
+          : (name.length >= 2 ? name.substring(0, 2) : name).toUpperCase();
+      
+      // Add player
+      setState(() {
+        _addedPlayerIds.add(profile.id);
+        _players.add({
+          'id': profile.id, // Internal ID (hidden from UI)
+          'name': name,
+          'username': profile.username, // Public username
+          'role': roleInput.isEmpty ? 'Player' : roleInput,
+          'initials': initials,
+        });
+      });
+      
+      Navigator.pop(context);
+      
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${profile.name ?? profile.username} added to ${widget.teamName}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      setError('Error adding player: $e');
+      setIsLoading(false);
+    }
   }
 
   void _editPlayer(int index) {
@@ -178,6 +287,10 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
           ElevatedButton(
             onPressed: () {
               setState(() {
+                final playerId = _players[index]['id'] as String?;
+                if (playerId != null) {
+                  _addedPlayerIds.remove(playerId);
+                }
                 _players.removeAt(index);
               });
               Navigator.pop(context);

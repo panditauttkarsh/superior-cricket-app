@@ -6,6 +6,9 @@ import '../repositories/academy_repository.dart';
 import '../repositories/shop_repository.dart';
 import '../repositories/post_repository.dart';
 import '../repositories/commentary_repository.dart';
+import '../repositories/profile_repository.dart';
+import '../repositories/notification_repository.dart';
+import '../repositories/match_player_repository.dart';
 
 final matchRepositoryProvider = Provider<MatchRepository>((ref) {
   return MatchRepository();
@@ -33,5 +36,17 @@ final postRepositoryProvider = Provider<PostRepository>((ref) {
 
 final commentaryRepositoryProvider = Provider<CommentaryRepository>((ref) {
   return CommentaryRepository();
+});
+
+final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
+  return ProfileRepository();
+});
+
+final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
+  return NotificationRepository();
+});
+
+final matchPlayerRepositoryProvider = Provider<MatchPlayerRepository>((ref) {
+  return MatchPlayerRepository();
 });
 

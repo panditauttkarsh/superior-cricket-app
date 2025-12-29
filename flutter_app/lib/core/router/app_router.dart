@@ -26,6 +26,7 @@ import '../../features/match/presentation/pages/match_center_page.dart';
 import '../../features/match/presentation/pages/match_details_page.dart';
 import '../../features/match/presentation/pages/match_list_page.dart';
 import '../../features/match/presentation/pages/match_detail_screen.dart';
+import '../../features/match/presentation/pages/match_detail_page_comprehensive.dart';
 import '../../features/feed/presentation/pages/feed_page.dart';
 import '../../features/admin/presentation/pages/admin_dashboard_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
@@ -40,6 +41,7 @@ import '../../features/mycricket/presentation/pages/toss_page.dart';
 import '../../features/mycricket/presentation/pages/initial_players_setup_page.dart';
 import '../../features/live/presentation/pages/live_screen.dart';
 import '../../features/match/presentation/pages/commentary_page.dart';
+import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../core/providers/auth_provider.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -163,7 +165,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/matches/:id',
         builder: (context, state) {
           final matchId = state.pathParameters['id']!;
-          return MatchDetailScreen(matchId: matchId);
+          return MatchDetailPageComprehensive(matchId: matchId);
         },
       ),
       GoRoute(
@@ -378,6 +380,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final matchId = state.pathParameters['matchId']!;
           return CommentaryPage(matchId: matchId);
+        },
+      ),
+      // Notifications Route
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) {
+          return const NotificationsPage();
         },
       ),
     ],
