@@ -22,8 +22,8 @@ BEGIN
   WHERE m.id = NEW.match_id;
   
   -- Check if match exists
-  IF match_data.id IS NULL THEN
-    RAISE WARNING 'Match not found: %', NEW.match_id;
+  IF NOT FOUND OR match_data.id IS NULL THEN
+    RAISE NOTICE 'Match not found: %', NEW.match_id;
     RETURN NEW;
   END IF;
   
@@ -64,7 +64,8 @@ BEGIN
 EXCEPTION
   WHEN OTHERS THEN
     -- Log error but don't fail the insert
-    RAISE WARNING 'Error creating notification: %', SQLERRM;
+    -- Use RAISE NOTICE so it shows in logs
+    RAISE NOTICE 'Error creating notification for player % in match %: %', NEW.player_id, NEW.match_id, SQLERRM;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER
