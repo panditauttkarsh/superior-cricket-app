@@ -38,6 +38,8 @@ import '../../features/mycricket/presentation/pages/my_team_squad_page.dart';
 import '../../features/mycricket/presentation/pages/opponent_team_squad_page.dart';
 import '../../features/mycricket/presentation/pages/toss_page.dart';
 import '../../features/mycricket/presentation/pages/initial_players_setup_page.dart';
+import '../../features/live/presentation/pages/live_screen.dart';
+import '../../features/match/presentation/pages/commentary_page.dart';
 import '../../core/providers/auth_provider.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -356,6 +358,26 @@ final routerProvider = Provider<GoRouter>((ref) {
             initialNonStriker: extra?['initialNonStriker'],
             initialBowler: extra?['initialBowler'],
           );
+        },
+      ),
+      // Live Stream Route
+      GoRoute(
+        path: '/live',
+        builder: (context, state) {
+          final channelHandle = state.uri.queryParameters['channel'];
+          final videoId = state.uri.queryParameters['videoId'];
+          return LiveScreen(
+            channelHandle: channelHandle,
+            videoId: videoId,
+          );
+        },
+      ),
+      // Commentary Route
+      GoRoute(
+        path: '/commentary/:matchId',
+        builder: (context, state) {
+          final matchId = state.pathParameters['matchId']!;
+          return CommentaryPage(matchId: matchId);
         },
       ),
     ],

@@ -1,0 +1,541 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/models/commentary_model.dart';
+import '../../../../core/repositories/commentary_repository.dart';
+import '../../../../core/providers/repository_providers.dart';
+import '../../../../core/theme/app_colors.dart';
+
+/// Provider for commentary stream with initial data and real-time updates
+final commentaryStreamProvider = StreamProvider.family<List<CommentaryModel>, String>((ref, matchId) async* {
+  final repository = ref.watch(commentaryRepositoryProvider);
+  
+  // First, fetch all existing commentary
+  print('Commentary: Provider - Starting for matchId=$matchId');
+  final initialCommentary = await repository.getCommentaryByMatchId(matchId);
+  print('Commentary: Provider - Initial fetch got ${initialCommentary.length} entries');
+  yield initialCommentary;
+  
+  // Then stream updates - each update will refetch ALL entries
+  print('Commentary: Provider - Starting stream for matchId=$matchId');
+  yield* repository.streamCommentary(matchId);
+});
+
+class CommentaryPage extends ConsumerWidget {
+  final String matchId;
+
+  const CommentaryPage({
+    super.key,
+    required this.matchId,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final commentaryAsync = ref.watch(commentaryStreamProvider(matchId));
+
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: const Text('Ball-by-Ball Commentary'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+      ),
+      body: commentaryAsync.when(
+        data: (commentaryList) {
+          if (commentaryList.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.comment_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No commentary yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Commentary will appear here as the match progresses',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Debug: Print commentary list
+          print('Commentary: Displaying ${commentaryList.length} entries');
+          for (var entry in commentaryList) {
+            print('Commentary: ${entry.over} - ${entry.commentaryText}');
+          }
+          
+          // Sort by over and timestamp to ensure correct order (newest first)
+          final sortedList = List<CommentaryModel>.from(commentaryList)
+            ..sort((a, b) {
+              // First sort by over (descending)
+              final overCompare = b.over.compareTo(a.over);
+              if (overCompare != 0) return overCompare;
+              // Then by timestamp (descending)
+              return b.timestamp.compareTo(a.timestamp);
+            });
+          
+          // Group commentary by over and insert over summaries
+          final groupedCommentary = _groupCommentaryWithSummaries(sortedList);
+          
+          print('Commentary: Grouped into ${groupedCommentary.length} items');
+          
+          return ListView.builder(
+            reverse: true, // Show latest at bottom, but scroll to bottom
+            padding: const EdgeInsets.all(16),
+            itemCount: groupedCommentary.length,
+            itemBuilder: (context, index) {
+              final item = groupedCommentary[index];
+              final isLatest = index == 0; // Latest is first in reversed list
+              
+              if (item['type'] == 'overSummary') {
+                return OverSummaryCard(
+                  summaryText: item['text'] as String,
+                  isLatest: isLatest,
+                );
+              } else {
+                final commentary = item['commentary'] as CommentaryModel;
+                // Skip newBatsman entries in grouping, show them directly
+                if (commentary.ballType == 'newBatsman') {
+                  return NewBatsmanCard(
+                    batsmanName: commentary.strikerName,
+                    isLatest: isLatest,
+                  );
+                }
+                return CommentaryCard(
+                  commentary: commentary,
+                  isLatest: isLatest,
+                );
+              }
+            },
+          );
+        },
+        loading: () => const Center(
+          child: CircularProgressIndicator(),
+        ),
+        error: (error, stack) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Error loading commentary',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[800],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error.toString(),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  /// Group commentary entries and insert over summaries
+  /// Over summaries should appear ABOVE their over's balls
+  /// Since list is reversed (newest first), summaries appear before their over's balls
+  List<Map<String, dynamic>> _groupCommentaryWithSummaries(List<CommentaryModel> commentaryList) {
+    final List<Map<String, dynamic>> grouped = [];
+    final Map<int, Map<String, dynamic>> overSummaries = {};
+    
+    // First pass: collect over summaries
+    for (final commentary in commentaryList) {
+      if (commentary.ballType == 'overSummary') {
+        // Extract over number from summary text (e.g., "OVER 16" -> 16)
+        final match = RegExp(r'OVER (\d+)').firstMatch(commentary.commentaryText);
+        if (match != null) {
+          final overNum = int.parse(match.group(1)!);
+          overSummaries[overNum] = {
+            'type': 'overSummary',
+            'text': commentary.commentaryText,
+            'over': overNum,
+            'timestamp': commentary.timestamp,
+          };
+        }
+      }
+    }
+    
+    // Second pass: add ALL entries, inserting summaries before their over's balls
+    // Since list is already reversed (newest first), we process in order
+    int? currentOver = -1;
+    for (final commentary in commentaryList) {
+      // Skip over summaries in main loop, we'll insert them manually
+      if (commentary.ballType == 'overSummary') {
+        continue;
+      }
+      
+      final overNum = commentary.over.toInt();
+      
+      // If we've moved to a new over, insert summary for the previous over first
+      if (currentOver != -1 && overNum != currentOver && overSummaries.containsKey(currentOver)) {
+        grouped.add(overSummaries[currentOver]!);
+        overSummaries.remove(currentOver);
+      }
+      
+      // Add ALL commentary entries (including newBatsman, wickets, normal balls)
+      grouped.add({
+        'type': 'commentary',
+        'commentary': commentary,
+        'over': overNum,
+      });
+      
+      currentOver = overNum;
+    }
+    
+    // Add summary for the last over if exists
+    if (currentOver != -1 && overSummaries.containsKey(currentOver)) {
+      grouped.add(overSummaries[currentOver]!);
+    }
+    
+    return grouped;
+  }
+}
+
+/// New Batsman Card Widget
+class NewBatsmanCard extends StatelessWidget {
+  final String batsmanName;
+  final bool isLatest;
+
+  const NewBatsmanCard({
+    super.key,
+    required this.batsmanName,
+    this.isLatest = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.green[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.green[300]!,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(
+              Icons.person_add,
+              color: Colors.green[700],
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'New batsman: $batsmanName comes to the crease',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.green[900],
+                  fontWeight: FontWeight.w600,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Over Summary Card Widget
+class OverSummaryCard extends StatelessWidget {
+  final String summaryText;
+  final bool isLatest;
+
+  const OverSummaryCard({
+    super.key,
+    required this.summaryText,
+    this.isLatest = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = summaryText.split('\n');
+    final overTitle = lines.isNotEmpty ? lines[0] : '';
+    final ballRuns = lines.length > 1 ? lines[1] : '';
+    final summary = lines.length > 2 ? lines[2] : '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16, top: 8),
+      decoration: BoxDecoration(
+        color: isLatest ? AppColors.primary.withOpacity(0.1) : Colors.blue[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isLatest ? AppColors.primary : Colors.blue[300]!,
+          width: isLatest ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Over Title
+            Text(
+              overTitle,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Ball Runs
+            Text(
+              ballRuns,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Summary
+            Text(
+              summary,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class CommentaryCard extends StatelessWidget {
+  final CommentaryModel commentary;
+  final bool isLatest;
+
+  const CommentaryCard({
+    super.key,
+    required this.commentary,
+    this.isLatest = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isLatest ? AppColors.primary.withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isLatest 
+              ? AppColors.primary.withOpacity(0.3) 
+              : Colors.grey[300]!,
+          width: isLatest ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Over and Ball Type
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _getBallTypeColor(commentary.ballType),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    commentary.overDisplay,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (isLatest)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'LIVE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                const Spacer(),
+                if (commentary.isExtra)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[300],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      commentary.extraType ?? 'EXTRA',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Commentary Text
+            Text(
+              commentary.commentaryText,
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.grey[800],
+                fontWeight: isLatest ? FontWeight.w600 : FontWeight.normal,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Runs and Players Info
+            Row(
+              children: [
+                if (commentary.runs > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _getRunsColor(commentary.runs),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${commentary.runs} run${commentary.runs > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                if (commentary.runs > 0) const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${commentary.strikerName} • ${commentary.bowlerName}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Timestamp (optional, show relative time)
+                Text(
+                  _formatTimestamp(commentary.timestamp),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getBallTypeColor(String ballType) {
+    switch (ballType) {
+      case 'wicket':
+        return Colors.red;
+      case 'wide':
+      case 'noBall':
+        return Colors.orange;
+      default:
+        return AppColors.primary;
+    }
+  }
+
+  Color _getRunsColor(int runs) {
+    if (runs == 6) return Colors.purple;
+    if (runs == 4) return Colors.blue;
+    if (runs >= 1) return Colors.green;
+    return Colors.grey;
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else {
+      return '${difference.inDays}d ago';
+    }
+  }
+}
+

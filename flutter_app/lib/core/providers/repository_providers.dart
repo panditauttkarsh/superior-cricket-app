@@ -5,6 +5,7 @@ import '../repositories/tournament_repository.dart';
 import '../repositories/academy_repository.dart';
 import '../repositories/shop_repository.dart';
 import '../repositories/post_repository.dart';
+import '../repositories/commentary_repository.dart';
 
 final matchRepositoryProvider = Provider<MatchRepository>((ref) {
   return MatchRepository();
@@ -28,5 +29,9 @@ final shopRepositoryProvider = Provider<ShopRepository>((ref) {
 
 final postRepositoryProvider = Provider<PostRepository>((ref) {
   return PostRepository();
+});
+
+final commentaryRepositoryProvider = Provider<CommentaryRepository>((ref) {
+  return CommentaryRepository();
 });
 

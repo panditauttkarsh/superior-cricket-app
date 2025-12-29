@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -1439,47 +1438,10 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
     );
   }
 
-  Future<void> _openPitchPointChannel() async {
-    // Open Pitch Point YouTube channel
-    const pitchPointChannelUrl = 'https://www.youtube.com/@PITCH-POINT';
-    
-    try {
-      final uri = Uri.parse(pitchPointChannelUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        // Show input field after opening channel
-        if (mounted) {
-          setState(() {
-            _showYouTubeInput = true;
-            _youtubeLiveEnabled = true;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Pitch Point channel opened! Start your live stream and paste the video ID below.'),
-              duration: Duration(seconds: 4),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not open YouTube channel. Please manually navigate to @PITCH-POINT'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error opening channel: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  void _openPitchPointChannel() {
+    // Navigate directly to Live Screen - NO external browser/app
+    // The Live Screen will check for live stream and play it in-app
+    context.push('/live?channel=@PITCH-POINT');
   }
 
   void _showGoLiveInstructions() {

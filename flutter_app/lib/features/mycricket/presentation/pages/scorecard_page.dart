@@ -6,7 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/repository_providers.dart';
+import '../../../../core/models/commentary_model.dart';
+import '../../../../core/services/commentary_service.dart';
+import '../../../../core/repositories/commentary_repository.dart';
 import 'dart:async';
+import 'package:uuid/uuid.dart';
 
 class ScorecardPage extends ConsumerStatefulWidget {
   final String? matchId;
@@ -117,6 +121,12 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   List<String> _currentOverBalls = [];
   // Over history (for reference, not displayed in main UI)
   List<List<String>> _overHistory = [];
+  
+  // Track valid balls (excluding wides/no-balls) for over calculation
+  int _totalValidBalls = 0;
+  
+  // Track current over's ball data for summary generation
+  List<Map<String, dynamic>> _currentOverBallData = []; // [{runs, isWicket, displayValue}]
   
   List<String> _battingTeamPlayers = [];
   List<String> _bowlingTeamPlayers = [];
@@ -885,6 +895,41 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _batsmenWhoHaveBatted.add(selectedBatsman);
       });
       _saveScorecardToSupabase();
+      
+      // Generate new batsman arrival commentary
+      _generateNewBatsmanCommentary(selectedBatsman);
+    }
+  }
+  
+  /// Generate commentary for new batsman arrival
+  Future<void> _generateNewBatsmanCommentary(String batsmanName) async {
+    if (widget.matchId == null) return;
+    
+    try {
+      // Calculate current over/ball position
+      final over = (_totalValidBalls - 1) ~/ 6;
+      final ball = ((_totalValidBalls - 1) % 6) + 1;
+      final overDecimal = over + (ball / 10.0);
+      
+      final commentaryText = 'New batsman: $batsmanName comes to the crease';
+      
+      final commentary = CommentaryModel(
+        id: const Uuid().v4(),
+        matchId: widget.matchId!,
+        over: overDecimal,
+        ballType: 'newBatsman',
+        runs: 0,
+        strikerName: batsmanName,
+        bowlerName: _bowler,
+        timestamp: DateTime.now(),
+        commentaryText: commentaryText,
+      );
+      
+      final repository = ref.read(commentaryRepositoryProvider);
+      await repository.createCommentary(commentary);
+      print('Commentary: New batsman arrival - $batsmanName');
+    } catch (e) {
+      print('Error generating new batsman commentary: $e');
     }
   }
   
@@ -1725,17 +1770,27 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     
     _saveScorecardToSupabase();
     
-    // Show new batsman selection (unless all out)
+    // STEP 3: Generate commentary for wicket (valid ball) - MUST BE DONE IMMEDIATELY
+    // Use the striker name BEFORE it's changed
+    final dismissedStriker = _striker;
+    _generateCommentary(
+      ballType: 'wicket',
+      runs: isRunOut ? runsCompleted : 0,
+      wicketType: outType,
+      isValidBall: true,
+    );
+    
+    // STEP 4: Show new batsman selection (unless all out) - AFTER commentary generated
     if (isRetiredHurt) {
       // For Retired Hurt, show new batsman selection
-      Future.delayed(const Duration(milliseconds: 300), () {
+      Future.delayed(const Duration(milliseconds: 300), () async {
         if (_retiredHurtPlayers.length + _wickets < _battingTeamPlayers.length - 1) {
-          _showSelectNewBatsman();
+          await _showSelectNewBatsman();
         }
       });
     } else if (_wickets < _maxWickets) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        _showSelectNewBatsman();
+      Future.delayed(const Duration(milliseconds: 300), () async {
+        await _showSelectNewBatsman();
       });
     }
     
@@ -1744,6 +1799,148 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       Future.delayed(const Duration(milliseconds: 800), () {
         _showSelectNextBowler();
       });
+    }
+  }
+
+  /// Generate and save commentary entry for the current ball
+  /// Also tracks ball data for over summary generation
+  Future<void> _generateCommentary({
+    required String ballType,
+    required int runs,
+    String? wicketType,
+    String? shotDirection,
+    String? shotType,
+    bool isExtra = false,
+    String? extraType,
+    int? extraRuns,
+    bool isValidBall = true, // true for normal balls, false for wides/no-balls
+  }) async {
+    // If matchId is null (e.g. local practice), skip commentary persistence
+    if (widget.matchId == null) {
+      print('Commentary: Skipping - matchId is null');
+      return;
+    }
+
+    try {
+      print('Commentary: Generating for matchId=${widget.matchId}, ballType=$ballType, runs=$runs, isValidBall=$isValidBall');
+      // We'll compute a single over value for display/commentary
+      double overDecimal;
+
+      // Track valid balls (excluding wides/no-balls)
+      if (isValidBall) {
+        // Increment valid ball count FIRST
+        _totalValidBalls++;
+
+        // Calculate over and ball using CORRECT formula:
+        // over = (totalValidBalls - 1) ~/ 6
+        // ball = ((totalValidBalls - 1) % 6) + 1
+        // This ensures: 1→0.1, 2→0.2, 3→0.3, 4→0.4, 5→0.5, 6→0.6, 7→1.1
+        final over = (_totalValidBalls - 1) ~/ 6;
+        final ball = ((_totalValidBalls - 1) % 6) + 1;
+        overDecimal = over + (ball / 10.0); // e.g., 0.1, 0.2, ..., 0.6, 1.1
+
+        // Track current over's ball data for summary
+        _currentOverBallData.add({
+          'runs': runs,
+          'isWicket': ballType == 'wicket',
+          'displayValue': runs,
+        });
+
+        // Check if over is complete (ball == 6 means we just completed an over)
+        if (ball == 6) {
+          // Generate summary for the completed over
+          await _generateOverSummary(over);
+          _currentOverBallData.clear();
+        }
+      } else {
+        // For invalid balls (wides/no-balls), use current valid ball position
+        final over = (_totalValidBalls - 1) ~/ 6;
+        final ball = ((_totalValidBalls - 1) % 6) + 1;
+        overDecimal = over + (ball / 10.0);
+      }
+
+      // Generate CricHeroes-style commentary text
+      final commentaryText = CommentaryService.generateCommentary(
+        over: overDecimal,
+        ballType: ballType,
+        runs: runs,
+        strikerName: _striker,
+        bowlerName: _bowler,
+        wicketType: wicketType,
+        shotDirection: shotDirection,
+        shotType: shotType,
+        isExtra: isExtra,
+        extraType: extraType,
+        extraRuns: extraRuns,
+      );
+
+      final commentary = CommentaryModel(
+        id: const Uuid().v4(),
+        matchId: widget.matchId!,
+        over: overDecimal,
+        ballType: ballType,
+        runs: runs,
+        wicketType: wicketType,
+        strikerName: _striker,
+        bowlerName: _bowler,
+        nonStrikerName: _nonStriker,
+        timestamp: DateTime.now(),
+        commentaryText: commentaryText,
+        shotDirection: shotDirection,
+        shotType: shotType,
+        isExtra: isExtra,
+        extraType: extraType,
+        extraRuns: extraRuns,
+      );
+
+      // Use repository provider to persist commentary
+      final repository = ref.read(commentaryRepositoryProvider);
+      await repository.createCommentary(commentary);
+      print('Commentary: Successfully saved - ${commentary.commentaryText}');
+    } catch (e) {
+      // Commentary is non-critical; log and continue
+      // ignore: avoid_print
+      print('Error generating commentary: $e');
+    }
+  }
+  
+  /// Generate and save over summary
+  /// Called when 6 valid balls are completed
+  /// overNumber is the completed over (e.g., 15 means over 15 is done)
+  Future<void> _generateOverSummary(int overNumber) async {
+    if (widget.matchId == null || _currentOverBallData.isEmpty) return;
+    
+    try {
+      // Use the ball data we've been tracking (before it was cleared)
+      final ballRuns = _currentOverBallData.map((b) => b['runs'] as int).toList();
+      final ballWickets = _currentOverBallData.map((b) => b['isWicket'] as bool).toList();
+      final runsInOver = ballRuns.fold(0, (sum, runs) => sum + runs);
+      final wicketsInOver = ballWickets.where((w) => w).length;
+      
+      // Create over summary entry (stored as special commentary entry)
+      // Format: "OVER 16\n4 0 0 4 6 0\n14 Runs | 0 Wkt | 95/3"
+      final summaryText = 'OVER $overNumber\n'
+          '${ballRuns.join(' ')}\n'
+          '$runsInOver Runs | $wicketsInOver Wkt | $_totalRuns/$_wickets';
+      
+      // Create summary with over number as decimal to appear before the over's balls
+      // e.g., over 16 summary has over = 15.99 to appear before 15.6, 15.5, etc.
+      final summaryCommentary = CommentaryModel(
+        id: const Uuid().v4(),
+        matchId: widget.matchId!,
+        over: (overNumber - 1) + 0.99, // e.g., 15.99 to appear before 15.6
+        ballType: 'overSummary',
+        runs: runsInOver,
+        strikerName: '',
+        bowlerName: '',
+        timestamp: DateTime.now().subtract(const Duration(seconds: 1)), // Slightly earlier timestamp
+        commentaryText: summaryText,
+      );
+      
+      final repository = ref.read(commentaryRepositoryProvider);
+      await repository.createCommentary(summaryCommentary);
+    } catch (e) {
+      print('Error generating over summary: $e');
     }
   }
 
@@ -1778,9 +1975,23 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                       color: AppColors.textMain,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.more_vert, color: AppColors.textMain),
-                    onPressed: () {},
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Commentary Button
+                      if (widget.matchId != null)
+                        IconButton(
+                          icon: const Icon(Icons.comment, color: AppColors.textMain),
+                          tooltip: 'View Commentary',
+                          onPressed: () {
+                            context.push('/commentary/${widget.matchId}');
+                          },
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.more_vert, color: AppColors.textMain),
+                        onPressed: () {},
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -3576,6 +3787,16 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _projected = (_crr * (widget.overs ?? 20)).round();
     });
     _saveScorecardToSupabase();
+    
+    // Generate commentary for wide (NOT a valid ball - doesn't count towards over)
+    _generateCommentary(
+      ballType: 'wide',
+      runs: totalRuns,
+      isExtra: true,
+      extraType: 'WD',
+      extraRuns: totalRuns,
+      isValidBall: false, // Wide doesn't count as valid ball
+    );
   }
 
   // Handle No Ball with runs (ICC rules: No Ball = 1 run + any additional runs)
@@ -3619,6 +3840,16 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _projected = (_crr * (widget.overs ?? 20)).round();
     });
     _saveScorecardToSupabase();
+    
+    // Generate commentary for no ball (NOT a valid ball - doesn't count towards over)
+    _generateCommentary(
+      ballType: 'noBall',
+      runs: totalRuns,
+      isExtra: true,
+      extraType: 'NB',
+      extraRuns: totalRuns,
+      isValidBall: false, // No ball doesn't count as valid ball
+    );
   }
 
   // Handle Byes with runs (ICC rules: Byes count as a ball)
@@ -3678,6 +3909,16 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     });
     
     _saveScorecardToSupabase();
+    
+    // Generate commentary for byes (valid ball)
+    _generateCommentary(
+      ballType: 'bye',
+      runs: runs,
+      isExtra: true,
+      extraType: 'B',
+      extraRuns: runs,
+      isValidBall: true, // Byes count as valid ball
+    );
     
     // If over is complete, show next bowler selection
     if (_currentBall == 0 && _currentOver > 0) {
@@ -4187,6 +4428,15 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     });
     
     _saveScorecardToSupabase();
+    
+    // Generate commentary for EVERY ball (valid ball)
+    _generateCommentary(
+      ballType: 'normal',
+      runs: runs,
+      shotDirection: direction,
+      shotType: shotType,
+      isValidBall: true,
+    );
     
     // If over is complete, show next bowler selection
     if (_currentBall == 0 && _currentOver > 0) {
