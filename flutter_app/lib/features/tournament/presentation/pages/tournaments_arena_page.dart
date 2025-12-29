@@ -451,7 +451,7 @@ class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
                 ),
                 const SizedBox(height: 2),
                 const Text(
-                  'CricPlay Arena',
+                  'PITCH POINT Arena',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w600,

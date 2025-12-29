@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,64 +29,196 @@ class _EmailVerificationCallbackPageState
   @override
   void initState() {
     super.initState();
+    debugPrint('Callback page: initState called');
+    debugPrint('Callback page: code = ${widget.code}, type = ${widget.type}');
     _processVerification();
+    
+    // Also listen to auth state changes in case session is already available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final supabase = Supabase.instance.client;
+      final session = supabase.auth.currentSession;
+      if (session != null && session.user != null) {
+        debugPrint('Callback page: Session already available in initState');
+        _processVerification();
+      }
+    });
   }
 
   Future<void> _processVerification() async {
     try {
       final supabase = Supabase.instance.client;
+      final authNotifier = ref.read(authStateProvider.notifier);
       
-      // Get the code from URL parameters
-      final code = widget.code;
-      
-      if (code == null || code.isEmpty) {
-        setState(() {
-          _error = 'No verification code found in the link';
-          _isProcessing = false;
-        });
-        return;
+      // Check for error parameters in the URL first
+      final error = widget.code; // This might contain error info
+      if (error != null && error.contains('error')) {
+        // Parse error from URL
+        final uri = Uri.tryParse('cricplay://login-callback?$error');
+        if (uri != null) {
+          final errorCode = uri.queryParameters['error_code'];
+          final errorDesc = uri.queryParameters['error_description'];
+          
+          if (errorCode == 'unexpected_failure' && errorDesc?.contains('Database error') == true) {
+            // Database error - trigger function might be missing
+            if (mounted) {
+              setState(() {
+                _error = 'Database configuration error. Please contact support. Error: $errorDesc';
+                _isProcessing = false;
+              });
+            }
+            return;
+          }
+        }
       }
-
-      // Verify the email using the code
-      // Supabase automatically handles the session from the deep link
-      // We just need to check if the user is now authenticated
-      final session = supabase.auth.currentSession;
+      
+      debugPrint('Callback page: Starting verification process');
       
       // Supabase Flutter automatically handles the deep link and creates a session
-      // We just need to wait a moment and check if the session exists
-      await Future.delayed(const Duration(milliseconds: 1000));
+      // Wait a moment for Supabase to process the callback
+      await Future.delayed(const Duration(milliseconds: 1500));
       
-      final currentSession = supabase.auth.currentSession;
+      // Check if we have a session now
+      var session = supabase.auth.currentSession;
+      debugPrint('Callback page: Initial session check: ${session != null ? "found" : "not found"}');
       
-      if (currentSession != null) {
-        // Session exists, user is verified
-        // Refresh the auth state in the provider by reading it again
-        // This will trigger the provider to check the session
-        ref.invalidate(authStateProvider);
+      // If no session yet, wait a bit more and check again (OAuth might take longer)
+      int retries = 0;
+      while (session == null && retries < 10) {
         await Future.delayed(const Duration(milliseconds: 500));
-        
-        setState(() {
-          _message = 'Email verified successfully!';
-          _isProcessing = false;
-        });
-        
-        // Navigate to home after a short delay
-        await Future.delayed(const Duration(seconds: 2));
-        if (mounted) {
-          context.go('/');
+        session = supabase.auth.currentSession;
+        retries++;
+        debugPrint('Callback page: Retry $retries, session: ${session != null ? "found" : "not found"}');
+      }
+      
+      if (session != null && session.user != null) {
+        debugPrint('Callback page: Session found, user ID: ${session.user.id}, email: ${session.user.email}');
+        // Session exists - handle OAuth callback (Google login)
+        try {
+          debugPrint('Callback page: Calling handleGoogleAuthCallback');
+          final success = await authNotifier.handleGoogleAuthCallback();
+          debugPrint('Callback page: handleGoogleAuthCallback returned: $success');
+          
+          if (success && mounted) {
+            // Refresh auth state to ensure it's updated
+            await authNotifier.refreshAuth();
+            await Future.delayed(const Duration(milliseconds: 500));
+            
+            // Verify auth state is actually updated
+            final authState = ref.read(authStateProvider);
+            debugPrint('Callback page: Auth state - authenticated: ${authState.isAuthenticated}, loading: ${authState.isLoading}');
+            
+            if (authState.isAuthenticated && mounted) {
+              debugPrint('Callback page: User authenticated, navigating to dashboard');
+              // Navigate immediately - GoRouter redirect will handle it
+              if (mounted) {
+                context.go('/');
+              }
+              return;
+            }
+            
+            // If still not authenticated, try one more refresh
+            debugPrint('Callback page: Auth state not updated, trying refresh');
+            await authNotifier.refreshAuth();
+            await Future.delayed(const Duration(milliseconds: 500));
+            final retryAuthState = ref.read(authStateProvider);
+            if (retryAuthState.isAuthenticated && mounted) {
+              debugPrint('Callback page: Auth state updated after refresh, navigating');
+              context.go('/');
+              return;
+            }
+            
+            // If auth state not updated yet, try invalidating to force refresh
+            ref.invalidate(authStateProvider);
+            await Future.delayed(const Duration(milliseconds: 500));
+            final finalAuthState = ref.read(authStateProvider);
+            if (finalAuthState.isAuthenticated && mounted) {
+              context.go('/');
+              return;
+            }
+            
+            setState(() {
+              _error = 'Authentication succeeded but state update failed. Please try again.';
+              _isProcessing = false;
+            });
+            return;
+          }
+          
+          // If handleGoogleAuthCallback didn't work, try refreshing auth state
+          ref.invalidate(authStateProvider);
+          await Future.delayed(const Duration(milliseconds: 1000));
+          
+          final authState = ref.read(authStateProvider);
+          if (authState.isAuthenticated && mounted) {
+            // Auth state updated - navigate to trigger redirect
+            await Future.delayed(const Duration(milliseconds: 300));
+            if (mounted) {
+              context.go('/');
+            }
+            return;
+          } else if (mounted) {
+            setState(() {
+              _error = authState.error ?? 'Authentication completed but state update failed. Please try logging in again.';
+              _isProcessing = false;
+            });
+          }
+        } catch (e) {
+          // If handleGoogleAuthCallback fails, invalidate and let auth state refresh
+          // The session exists, so auth state should pick it up
+          debugPrint('Callback handler error: $e');
+          ref.invalidate(authStateProvider);
+          await Future.delayed(const Duration(milliseconds: 1500));
+          
+          // Check if auth state is now authenticated
+          final authState = ref.read(authStateProvider);
+          if (authState.isAuthenticated && mounted) {
+            // Auth state updated - navigate to trigger redirect
+            await Future.delayed(const Duration(milliseconds: 300));
+            if (mounted) {
+              context.go('/');
+            }
+            return;
+          } else if (mounted) {
+            setState(() {
+              _error = 'Failed to complete authentication. Session exists but state update failed.';
+              _isProcessing = false;
+            });
+          }
         }
       } else {
-        // No session yet, might need to verify manually
+        // No session yet - might still be processing
+        // Try one more time after a longer wait
+        await Future.delayed(const Duration(milliseconds: 2000));
+        final finalSession = supabase.auth.currentSession;
+        
+        if (finalSession != null && finalSession.user != null) {
+          // Session found on retry - handle as OAuth
+          final success = await authNotifier.handleGoogleAuthCallback();
+          if (success && mounted) {
+            // Auth state updated - navigate to trigger redirect
+            await Future.delayed(const Duration(milliseconds: 300));
+            final authState = ref.read(authStateProvider);
+            if (authState.isAuthenticated && mounted) {
+              context.go('/');
+            }
+            return;
+          }
+        }
+        
+        // Still no session
+        if (mounted) {
+          setState(() {
+            _error = 'Authentication failed. The link may have expired. Please try again.';
+            _isProcessing = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
-          _error = 'Verification failed. The link may have expired. Please try logging in or request a new verification email.';
+          _error = 'Failed to process authentication: ${e.toString()}';
           _isProcessing = false;
         });
       }
-    } catch (e) {
-      setState(() {
-        _error = 'Failed to verify email: ${e.toString()}';
-        _isProcessing = false;
-      });
     }
   }
 

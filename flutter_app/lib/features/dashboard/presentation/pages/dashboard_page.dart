@@ -322,9 +322,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     String overs = '18.2 Ov',
     String status = 'India need 24 runs in 10 balls',
   }) {
-    // Cricket stadium image - night view with floodlights (aerial view)
-    // Using the screenshot provided by the user
-    final localAssetPath = 'assets/images/Screenshot 2025-12-26 at 4.44.26 PM.png';
+    // Night cricket stadium banner image
+    const bannerImagePath = 'assets/images/night cricket.webp';
     
     return Container(
       width: 280,
@@ -338,10 +337,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         borderRadius: BorderRadius.circular(16),
         child: Stack(
           children: [
-            // Cricket Stadium Background - Using the provided screenshot
+            // Night Cricket Stadium Background Banner
             Positioned.fill(
               child: Image.asset(
-                localAssetPath,
+                bannerImagePath,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   // Fallback to gradient if image not found
@@ -360,7 +359,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 },
               ),
             ),
-            // Dark overlay for better text readability
+            // Dark gradient overlay for text readability
+            // Top opacity ~0.35, Bottom opacity ~0.75
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -368,8 +368,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withOpacity(0.3),
-                      Colors.black.withOpacity(0.7),
+                      Colors.black.withOpacity(0.35),
+                      Colors.black.withOpacity(0.75),
                     ],
                   ),
                 ),
@@ -463,9 +463,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       ),
                       // Score
                       Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             score,
+                            textAlign: TextAlign.center,
                             style: const TextStyle(
                               fontSize: 32,
                               fontWeight: FontWeight.w700,
@@ -474,6 +477,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           ),
                           Text(
                             overs,
+                            textAlign: TextAlign.center,
                             style: const TextStyle(
                               fontSize: 14,
                               color: Color(0xFF00D26A),

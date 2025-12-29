@@ -52,22 +52,38 @@ final routerProvider = Provider<GoRouter>((ref) {
                          currentLocation == '/onboarding' ||
                          currentLocation == '/signup';
       final isLoadingPage = currentLocation == '/loading';
+      final isCallbackPage = currentLocation == '/login-callback';
       
       // If auth is still loading, stay on loading page or redirect to it
+      // But allow callback page to process OAuth
       if (authState.isLoading) {
+        if (isCallbackPage) {
+          return null; // Let callback page process
+        }
         if (!isLoadingPage) {
           return '/loading';
         }
-        return null; // Stay on loading page
+        return null; // Stay on current page
       }
       
-      // PRIORITY 1: If logged in and on a login/loading page, redirect to home immediately
-      if (isLoggedIn && (isLoginPage || isLoadingPage)) {
+      // PRIORITY 1: If logged in and on a login/loading/callback page, redirect to home immediately
+      if (isLoggedIn && (isLoginPage || isLoadingPage || isCallbackPage)) {
+        // Force redirect to dashboard when authenticated
         return '/';
       }
       
-      // PRIORITY 2: If not logged in and trying to access protected routes, redirect to login
-      if (!isLoggedIn && !isLoginPage && !isLoadingPage) {
+      // PRIORITY 2: If not logged in and on loading page (auth check complete), redirect to login
+      if (!isLoggedIn && isLoadingPage) {
+        return '/login';
+      }
+      
+      // PRIORITY 3: If not logged in and on callback page (OAuth failed), redirect to login
+      if (!isLoggedIn && isCallbackPage) {
+        return '/login';
+      }
+      
+      // PRIORITY 4: If not logged in and trying to access protected routes, redirect to login
+      if (!isLoggedIn && !isLoginPage && !isLoadingPage && !isCallbackPage) {
         return '/login';
       }
       
@@ -97,10 +113,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login-callback',
         builder: (context, state) {
+          // Handle both success and error cases
           final code = state.uri.queryParameters['code'];
           final type = state.uri.queryParameters['type'];
+          final error = state.uri.queryParameters['error'];
+          final errorCode = state.uri.queryParameters['error_code'];
+          final errorDescription = state.uri.queryParameters['error_description'];
+          
           return EmailVerificationCallbackPage(
-            code: code,
+            code: code ?? error, // Pass error as code if no code
             type: type,
           );
         },
@@ -321,7 +342,19 @@ final routerProvider = Provider<GoRouter>((ref) {
             team1: extra?['myTeam'] ?? extra?['team1'] ?? 'Team 1',
             team2: extra?['opponentTeam'] ?? extra?['team2'] ?? 'Team 2',
             overs: extra?['overs'] != null ? int.tryParse(extra!['overs'].toString()) : 20,
+            maxOversPerBowler: extra?['maxOversPerBowler'] != null 
+                ? int.tryParse(extra!['maxOversPerBowler'].toString()) 
+                : null,
             youtubeVideoId: extra?['youtubeVideoId'], // YouTube video ID for live stream
+            myTeamPlayers: extra?['myTeamPlayers'] != null 
+                ? List<String>.from(extra!['myTeamPlayers']) 
+                : null,
+            opponentTeamPlayers: extra?['opponentTeamPlayers'] != null
+                ? List<String>.from(extra!['opponentTeamPlayers'])
+                : null,
+            initialStriker: extra?['initialStriker'],
+            initialNonStriker: extra?['initialNonStriker'],
+            initialBowler: extra?['initialBowler'],
           );
         },
       ),

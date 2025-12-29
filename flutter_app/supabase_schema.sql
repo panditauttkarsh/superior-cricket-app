@@ -8,6 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
   email TEXT,
+  username TEXT, -- Unique username (auto-generated from name)
   name TEXT,
   phone TEXT,
   profile_image_url TEXT,
@@ -15,7 +16,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   state TEXT,
   role TEXT, -- 'player', 'coach', 'admin', 'academy_owner'
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT unique_email UNIQUE (email)
 );
 
 -- Players table
@@ -287,4 +289,82 @@ CREATE TRIGGER update_tournaments_updated_at BEFORE UPDATE ON public.tournaments
 CREATE TRIGGER update_academies_updated_at BEFORE UPDATE ON public.academies FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_shop_items_updated_at BEFORE UPDATE ON public.shop_items FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_posts_updated_at BEFORE UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- AUTHENTICATION & USERNAME HELPER FUNCTIONS
+-- ============================================
+
+-- Helper function to generate unique username
+-- This function helps prevent race conditions when generating usernames
+CREATE OR REPLACE FUNCTION generate_unique_username(base_name TEXT)
+RETURNS TEXT AS $$
+DECLARE
+  clean_name TEXT;
+  username TEXT;
+  counter INTEGER := 0;
+  max_attempts INTEGER := 1000;
+BEGIN
+  -- Clean the base name: lowercase, remove spaces and special chars
+  clean_name := lower(regexp_replace(base_name, '[^a-z0-9]', '', 'g'));
+  
+  -- Ensure minimum length
+  IF length(clean_name) = 0 THEN
+    clean_name := 'user';
+  END IF;
+  
+  -- Limit length to 20 characters
+  IF length(clean_name) > 20 THEN
+    clean_name := substring(clean_name, 1, 20);
+  END IF;
+  
+  -- Try to find a unique username
+  username := clean_name;
+  
+  WHILE counter < max_attempts LOOP
+    -- Check if username exists
+    IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE username = username) THEN
+      RETURN username;
+    END IF;
+    
+    -- Append number
+    counter := counter + 1;
+    IF length(clean_name) + length(counter::TEXT) <= 20 THEN
+      username := clean_name || counter::TEXT;
+    ELSE
+      username := 'user' || counter::TEXT;
+    END IF;
+  END LOOP;
+  
+  -- Fallback: use timestamp
+  RETURN 'user' || extract(epoch from now())::BIGINT::TEXT;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to check if email exists (for preventing duplicate accounts)
+CREATE OR REPLACE FUNCTION email_exists(check_email TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE LOWER(TRIM(email)) = LOWER(TRIM(check_email))
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to check if username exists
+CREATE OR REPLACE FUNCTION username_exists(check_username TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE LOWER(TRIM(username)) = LOWER(TRIM(check_username))
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Index for faster email lookups
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(LOWER(TRIM(email)));
+
+-- Index for faster username lookups (partial index for non-null usernames)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_username_unique ON public.profiles(LOWER(TRIM(username))) WHERE username IS NOT NULL;
 

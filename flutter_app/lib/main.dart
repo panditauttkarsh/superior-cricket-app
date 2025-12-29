@@ -22,16 +22,23 @@ void main() async {
   try {
     await SupabaseConfig.initialize();
     
-    // Listen for auth state changes (including email verification via deep link)
+    // Listen for auth state changes (including OAuth callbacks)
+    // Note: We can't access providers here, so we'll handle this in the app widget
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       final AuthChangeEvent event = data.event;
       final Session? session = data.session;
       
       debugPrint('Auth state changed: $event');
       if (event == AuthChangeEvent.signedIn && session != null) {
-        debugPrint('User signed in - email may have been verified');
+        debugPrint('User signed in - OAuth or email verification completed');
+        debugPrint('Session user ID: ${session.user.id}');
+        debugPrint('Session user email: ${session.user.email}');
+        // The auth provider will pick up the session on next check
+        // We don't need to manually update it here as the provider checks Supabase directly
       } else if (event == AuthChangeEvent.userUpdated) {
         debugPrint('User updated - email verification may have completed');
+      } else if (event == AuthChangeEvent.signedOut) {
+        debugPrint('User signed out');
       }
     });
   } catch (e) {
@@ -45,21 +52,44 @@ void main() async {
   
   runApp(
     const ProviderScope(
-      child: CricPlayApp(),
+      child: PitchPointApp(),
     ),
   );
 }
 
-class CricPlayApp extends ConsumerWidget {
-  const CricPlayApp({super.key});
+class PitchPointApp extends ConsumerStatefulWidget {
+  const PitchPointApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PitchPointApp> createState() => _PitchPointAppState();
+}
+
+class _PitchPointAppState extends ConsumerState<PitchPointApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Listen for auth state changes and refresh provider
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+      
+      if (event == AuthChangeEvent.signedIn && session != null) {
+        // Refresh auth state provider when user signs in
+        // This ensures the provider picks up the new session
+        Future.microtask(() {
+          ref.read(authStateProvider.notifier).refreshAuth();
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
     
     return MaterialApp.router(
-      title: 'CricPlay',
+      title: 'PITCH POINT',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

@@ -265,7 +265,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 children: [
                   _buildProfileField(
                     'Username',
-                    _profileData['name'] ?? 'User Name',
+                    ref.read(authStateProvider).user?.username ?? _profileData['name'] ?? 'User Name',
                   ),
                   _buildDivider(),
                   _buildProfileField(

@@ -5,10 +5,123 @@ import '../../domain/models/user_model.dart' as app_models;
 class AuthRepository {
   final _supabase = SupabaseConfig.client;
 
+  // Check if email exists in auth.users (across all providers)
+  Future<bool> _emailExists(String email) async {
+    try {
+      // Query auth.users via RPC or check profiles table
+      // Note: Direct query to auth.users is restricted, so we check profiles
+      final response = await _supabase
+          .from('profiles')
+          .select('email')
+          .eq('email', email.toLowerCase().trim())
+          .maybeSingle();
+      
+      return response != null;
+    } catch (e) {
+      // If query fails, assume email doesn't exist to allow registration
+      return false;
+    }
+  }
+
+  // Check if email is registered via Google
+  Future<bool> _isGoogleUser(String email) async {
+    try {
+      // Check auth.users for Google provider
+      // Since we can't directly query auth.users, we check if profile exists
+      // and check the auth metadata if available
+      final response = await _supabase
+          .from('profiles')
+          .select('id, email')
+          .eq('email', email.toLowerCase().trim())
+          .maybeSingle();
+      
+      if (response == null) return false;
+      
+      // Check auth user's provider
+      final userId = response['id'] as String;
+      final authUser = _supabase.auth.admin.getUserById(userId);
+      // Note: Admin API requires server-side, so we'll use a different approach
+      // We'll check during registration/login instead
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Generate unique username from name
+  Future<String> _generateUniqueUsername(String name) async {
+    // Clean name: lowercase, remove spaces, remove special chars
+    String baseUsername = name
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '')
+        .trim();
+    
+    // Ensure minimum length
+    if (baseUsername.isEmpty) {
+      baseUsername = 'user';
+    }
+    
+    // Limit length
+    if (baseUsername.length > 20) {
+      baseUsername = baseUsername.substring(0, 20);
+    }
+    
+    // Check if username exists and generate unique one
+    String username = baseUsername;
+    int counter = 1;
+    int maxAttempts = 1000; // Prevent infinite loop
+    
+    while (counter < maxAttempts) {
+      final exists = await _usernameExists(username);
+      if (!exists) {
+        return username;
+      }
+      
+      // Append number
+      final suffix = counter.toString();
+      final maxLength = 20 - suffix.length;
+      if (maxLength > 0) {
+        username = baseUsername.substring(0, maxLength) + suffix;
+      } else {
+        username = 'user$suffix';
+      }
+      counter++;
+    }
+    
+    // Fallback: use timestamp
+    return 'user${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  // Check if username exists (using case-insensitive comparison)
+  Future<bool> _usernameExists(String username) async {
+    try {
+      final normalizedUsername = username.toLowerCase().trim();
+      final response = await _supabase
+          .from('profiles')
+          .select('username')
+          .ilike('username', normalizedUsername)
+          .maybeSingle();
+      
+      return response != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<app_models.AuthSession> login(String email, String password) async {
     try {
+      final normalizedEmail = email.toLowerCase().trim();
+      
+      // Check if email exists and might be a Google user
+      final emailExists = await _emailExists(normalizedEmail);
+      if (emailExists) {
+        // Try to login - if it fails with "Invalid login credentials",
+        // it might be a Google user, but we can't be 100% sure
+        // So we'll let Supabase handle the error
+      }
+
       final response = await _supabase.auth.signInWithPassword(
-        email: email,
+        email: normalizedEmail,
         password: password,
       );
 
@@ -23,22 +136,21 @@ class AuthRepository {
       // Get or create user profile
       final profile = await _getOrCreateProfile(response.user!);
 
-      final roleString = profile['role'] as String? ?? 'player';
-      final role = app_models.UserRole.values.firstWhere(
-        (r) => r.toString().split('.').last == roleString,
-        orElse: () => app_models.UserRole.player,
-      );
+      // Role not in new schema, default to player
+      final role = app_models.UserRole.player;
 
       return app_models.AuthSession(
         token: response.session!.accessToken,
         refreshToken: response.session!.refreshToken ?? '',
         user: app_models.User(
           id: response.user!.id,
-          email: response.user!.email ?? email,
-          name: profile['name'] as String? ?? email.split('@')[0],
+          email: response.user!.email ?? normalizedEmail,
+          name: profile['full_name'] as String? ?? 
+                normalizedEmail.split('@')[0],
+          username: profile['username'] as String?,
           role: role,
-          avatar: profile['profile_image_url'] as String?,
-          phone: profile['phone'] as String?,
+          avatar: profile['avatar_url'] as String?,
+          phone: null, // Phone not in new schema
           createdAt: DateTime.parse(profile['created_at'] as String),
           updatedAt: DateTime.parse(profile['updated_at'] as String),
         ),
@@ -48,7 +160,15 @@ class AuthRepository {
             : DateTime.now().add(const Duration(days: 7)),
       );
     } on AuthException catch (e) {
-      // Supabase auth-specific errors
+      // Handle specific errors
+      if (e.message.contains('Invalid login credentials')) {
+        // Check if email exists - if yes, might be Google user
+        final emailExists = await _emailExists(email.toLowerCase().trim());
+        if (emailExists) {
+          throw Exception('This email is already registered via Google login. Please sign in using Google.');
+        }
+        throw Exception('Invalid email or password. Please check your credentials.');
+      }
       throw Exception('Login failed: ${e.message}');
     } catch (e) {
       // Other errors
@@ -56,21 +176,112 @@ class AuthRepository {
     }
   }
 
-  Future<app_models.AuthSession> loginWithGoogle(String token) async {
-    // Note: Google OAuth requires full OAuth flow implementation
-    // This is a placeholder - implement based on your OAuth setup in Supabase
-    throw UnimplementedError(
-      'Google OAuth requires full OAuth flow. '
-      'Set up Google OAuth in Supabase dashboard and implement the redirect flow.'
-    );
+  Future<app_models.AuthSession> loginWithGoogle() async {
+    try {
+      // Sign in with Google OAuth
+      // With LaunchMode.externalApplication, Supabase automatically launches the browser
+      // The method returns true if the OAuth flow was initiated successfully
+      final success = await _supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: SupabaseConfig.redirectUrl,
+        authScreenLaunchMode: LaunchMode.externalApplication,
+      );
+
+      // If successful, the OAuth flow will complete in the browser
+      // When done, Supabase will redirect to our deep link (cricplay://login-callback)
+      // The session will be automatically handled by Supabase when the deep link is received
+      // We throw a special exception to indicate the flow has started
+      // The callback handler will complete the authentication
+      if (success) {
+        throw Exception('OAuth flow initiated. Please complete authentication in the browser.');
+      } else {
+        throw Exception('Failed to initiate OAuth flow. Please try again.');
+      }
+    } on AuthException catch (e) {
+      throw Exception('Google login failed: ${e.message}');
+    } catch (e) {
+      // Re-throw our custom message
+      if (e.toString().contains('OAuth flow initiated')) {
+        rethrow;
+      }
+      throw Exception('Google login failed: ${e.toString()}');
+    }
+  }
+
+  // Handle Google OAuth callback (call this after redirect)
+  Future<app_models.AuthSession> handleGoogleAuthCallback() async {
+    try {
+      final session = _supabase.auth.currentSession;
+      if (session == null) {
+        throw Exception('No active session found');
+      }
+
+      final user = session.user;
+      if (user == null) {
+        throw Exception('User not found in session');
+      }
+
+      // Check if email already exists with different provider
+      final email = user.email;
+      if (email != null) {
+        final emailExists = await _emailExists(email);
+        if (emailExists) {
+          // Check if it's a Google user or email/password user
+          // If email/password user exists, we should link accounts
+          // For now, we'll allow login and link the profile
+        }
+      }
+
+      // Get or create profile with username generation
+      final profile = await _getOrCreateProfile(user);
+
+      // Role not in new schema, default to player
+      final role = app_models.UserRole.player;
+
+      return app_models.AuthSession(
+        token: session.accessToken,
+        refreshToken: session.refreshToken ?? '',
+        user: app_models.User(
+          id: user.id,
+          email: user.email ?? '',
+          name: profile['full_name'] as String? ?? 
+                user.userMetadata?['name'] ?? 
+                'User',
+          username: profile['username'] as String?,
+          role: role,
+          avatar: profile['avatar_url'] as String? ?? user.userMetadata?['avatar_url'],
+          phone: null, // Phone not in new schema
+          createdAt: DateTime.parse(profile['created_at'] as String),
+          updatedAt: DateTime.parse(profile['updated_at'] as String),
+        ),
+        expiresAt: session.expiresAt != null
+            ? DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000)
+            : DateTime.now().add(const Duration(days: 7)),
+      );
+    } catch (e) {
+      throw Exception('Failed to handle Google auth: ${e.toString()}');
+    }
   }
 
   Future<app_models.AuthSession> register(String email, String password, String name) async {
     try {
+      final normalizedEmail = email.toLowerCase().trim();
+      
+      // Check if email already exists
+      final emailExists = await _emailExists(normalizedEmail);
+      if (emailExists) {
+        // Check if it's a Google user
+        // Since we can't directly check provider, we'll check if user can login with password
+        // If email exists but password login fails, it's likely a Google user
+        throw Exception('This email is already registered via Google login. Please sign in using Google.');
+      }
+
       final response = await _supabase.auth.signUp(
-        email: email,
+        email: normalizedEmail,
         password: password,
-        data: {'name': name},
+        data: {
+          'name': name,
+        },
         emailRedirectTo: SupabaseConfig.redirectUrl,
       );
 
@@ -78,32 +289,27 @@ class AuthRepository {
         throw Exception('Registration failed: User not created');
       }
 
-      // Get or create user profile (this handles both new and existing profiles)
+      // Get or create user profile (trigger handles creation)
       final profile = await _getOrCreateProfile(response.user!);
 
       // Check if we have a session (email confirmation disabled)
       if (response.session == null) {
-        // No session means email confirmation is required
-        // But since it's disabled, this shouldn't happen
-        // However, we'll still return a session-like object for the user
         throw Exception('Registration successful but email verification required. Please check your email.');
       }
 
-      final roleString = profile['role'] as String? ?? 'player';
-      final role = app_models.UserRole.values.firstWhere(
-        (r) => r.toString().split('.').last == roleString,
-        orElse: () => app_models.UserRole.player,
-      );
+      // Role not in new schema, default to player
+      final role = app_models.UserRole.player;
 
       return app_models.AuthSession(
         token: response.session!.accessToken,
         refreshToken: response.session!.refreshToken ?? '',
         user: app_models.User(
           id: response.user!.id,
-          email: email,
-          name: profile['name'] as String? ?? name,
+          email: normalizedEmail,
+          name: profile['full_name'] as String? ?? name,
+          username: profile['username'] as String?,
           role: role,
-          avatar: profile['profile_image_url'] as String?,
+          avatar: profile['avatar_url'] as String?,
           phone: profile['phone'] as String?,
           createdAt: DateTime.parse(profile['created_at'] as String),
           updatedAt: DateTime.parse(profile['updated_at'] as String),
@@ -114,12 +320,18 @@ class AuthRepository {
             : DateTime.now().add(const Duration(days: 7)),
       );
     } on AuthException catch (e) {
-      // Supabase auth-specific errors
+      // Handle specific Supabase errors
+      if (e.message.contains('already registered') || e.message.contains('already exists')) {
+        throw Exception('This email is already registered. Please sign in instead.');
+      }
       throw Exception('Registration failed: ${e.message}');
     } catch (e) {
-      // Other errors - provide more detail
+      // Other errors
       final errorMsg = e.toString();
-      if (errorMsg.contains('duplicate key') || errorMsg.contains('already exists')) {
+      if (errorMsg.contains('already registered') || errorMsg.contains('Google login')) {
+        // Re-throw our custom message
+        throw e;
+      } else if (errorMsg.contains('duplicate key') || errorMsg.contains('already exists')) {
         throw Exception('An account with this email already exists. Please login instead.');
       } else if (errorMsg.contains('profiles')) {
         throw Exception('Registration successful but profile creation failed. Please try logging in.');
@@ -137,19 +349,19 @@ class AuthRepository {
 
       final profile = await _getOrCreateProfile(user);
 
-      final roleString = profile['role'] as String? ?? 'player';
-      final role = app_models.UserRole.values.firstWhere(
-        (r) => r.toString().split('.').last == roleString,
-        orElse: () => app_models.UserRole.player,
-      );
+      // Role not in new schema, default to player
+      final role = app_models.UserRole.player;
 
       return app_models.User(
         id: user.id,
         email: user.email ?? '',
-        name: profile['name'] as String? ?? user.email?.split('@')[0] ?? 'User',
+        name: profile['full_name'] as String? ?? 
+              user.email?.split('@')[0] ?? 
+              'User',
+        username: profile['username'] as String?,
         role: role,
-        avatar: profile['profile_image_url'] as String?,
-        phone: profile['phone'] as String?,
+        avatar: profile['avatar_url'] as String?,
+        phone: null, // Phone not in new schema
         createdAt: DateTime.parse(profile['created_at'] as String),
         updatedAt: DateTime.parse(profile['updated_at'] as String),
       );
@@ -160,48 +372,72 @@ class AuthRepository {
 
   Future<Map<String, dynamic>> _getOrCreateProfile(User supabaseUser) async {
     try {
-      // Try to get existing profile
-      final response = await _supabase
+      // Profile is automatically created by trigger on_auth_user_created
+      // Just fetch it - if it doesn't exist, wait a moment and retry
+      var response = await _supabase
           .from('profiles')
           .select()
           .eq('id', supabaseUser.id)
           .maybeSingle();
 
-      if (response != null) {
-        return response as Map<String, dynamic>;
+      // If profile doesn't exist yet (race condition), wait and retry
+      if (response == null) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        response = await _supabase
+            .from('profiles')
+            .select()
+            .eq('id', supabaseUser.id)
+            .maybeSingle();
       }
 
-      // Profile doesn't exist, create it
-      final profileData = {
-        'id': supabaseUser.id,
-        'email': supabaseUser.email,
-        'name': supabaseUser.userMetadata?['name'] ?? 
-                supabaseUser.email?.split('@')[0] ?? 
-                'User',
-        'role': 'player',
-      };
+      // If still doesn't exist, trigger might not have fired - create manually
+      if (response == null) {
+        // Use database function to generate username
+        final name = supabaseUser.userMetadata?['name'] ?? 
+                    supabaseUser.email?.split('@')[0] ?? 
+                    'User';
+        
+        // Call the database function to generate unique username
+        final usernameResult = await _supabase.rpc(
+          'generate_unique_username',
+          params: {'base_name': name},
+        );
+        
+        final username = usernameResult as String? ?? 
+                        name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        
+        final profileData = {
+          'id': supabaseUser.id,
+          'email': supabaseUser.email?.toLowerCase().trim(),
+          'full_name': name,
+          'username': username,
+          'avatar_url': supabaseUser.userMetadata?['avatar_url'],
+        };
 
-      await _supabase.from('profiles').insert(profileData);
+        await _supabase.from('profiles').insert(profileData);
 
-      // Fetch the newly created profile
-      final newResponse = await _supabase
-          .from('profiles')
-          .select()
-          .eq('id', supabaseUser.id)
-          .single();
+        // Fetch the newly created profile
+        response = await _supabase
+            .from('profiles')
+            .select()
+            .eq('id', supabaseUser.id)
+            .single();
+      }
 
-      return newResponse as Map<String, dynamic>;
+      return response as Map<String, dynamic>;
     } catch (e) {
-      // If profile creation fails, try to return a minimal profile
-      // This allows login to proceed even if profile creation has issues
+      // If profile creation fails, return minimal profile
       print('Warning: Profile creation/retrieval failed: $e');
+      final name = supabaseUser.userMetadata?['name'] ?? 
+                  supabaseUser.email?.split('@')[0] ?? 
+                  'User';
+      
       return {
         'id': supabaseUser.id,
-        'email': supabaseUser.email,
-        'name': supabaseUser.userMetadata?['name'] ?? 
-                supabaseUser.email?.split('@')[0] ?? 
-                'User',
-        'role': 'player',
+        'email': supabaseUser.email?.toLowerCase().trim(),
+        'full_name': name,
+        'username': name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), ''),
+        'avatar_url': supabaseUser.userMetadata?['avatar_url'],
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       };

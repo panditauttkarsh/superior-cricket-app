@@ -49,7 +49,7 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
             final parts = name.split(' ');
             final initials = parts.length > 1
                 ? '${parts[0][0]}${parts[1][0]}'
-                : name.substring(0, 2).toUpperCase();
+                : (name.length >= 2 ? name.substring(0, 2) : name).toUpperCase();
             return {
               'name': name,
               'role': 'Player',
@@ -92,7 +92,7 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
                 final parts = name.split(' ');
                 final initials = parts.length > 1
                     ? '${parts[0][0]}${parts[1][0]}'
-                    : name.substring(0, 2).toUpperCase();
+                    : (name.length >= 2 ? name.substring(0, 2) : name).toUpperCase();
                 setState(() {
                   _players.add({
                     'name': name,
@@ -146,7 +146,7 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
               final parts = name.split(' ');
               final initials = parts.length > 1
                   ? '${parts[0][0]}${parts[1][0]}'
-                  : name.substring(0, 2).toUpperCase();
+                  : (name.length >= 2 ? name.substring(0, 2) : name).toUpperCase();
               setState(() {
                 _players[index] = {
                   ...player,
@@ -219,13 +219,18 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
                       }
                     },
                   ),
-                  const Text(
-                    'OPPONENT TEAM SQUAD',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF205A28),
-                      letterSpacing: 1,
+                  ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
+                    ).createShader(bounds),
+                    child: const Text(
+                      'OPPONENT TEAM SQUAD',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1,
+                      ),
                     ),
                   ),
                   IconButton(
@@ -245,7 +250,7 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF205A28), Color(0xFF143d1b)],
+                    colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
                   ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
@@ -266,7 +271,7 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
                           Text(
                             'Team Name',
                             style: TextStyle(
-                              color: AppColors.primary.withOpacity(0.8),
+                              color: Colors.white.withOpacity(0.8),
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),
@@ -324,7 +329,7 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.primary, width: 2),
+                        border: Border.all(color: const Color(0xFFC72B32), width: 2),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.1),
@@ -335,9 +340,11 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
                       ),
                       child: Center(
                         child: Text(
-                          widget.teamName.substring(0, 2).toUpperCase(),
+                          widget.teamName.length >= 2 
+                              ? widget.teamName.substring(0, 2).toUpperCase()
+                              : widget.teamName.toUpperCase(),
                           style: const TextStyle(
-                            color: AppColors.primary,
+                            color: Color(0xFFC72B32),
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -359,23 +366,38 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'SQUAD MEMBERS',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[500],
-                            letterSpacing: 1.2,
+                        ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
+                          ).createShader(bounds),
+                          child: const Text(
+                            'SQUAD MEMBERS',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                              letterSpacing: 1.2,
+                            ),
                           ),
                         ),
                         TextButton.icon(
                           onPressed: () {},
-                          icon: const Icon(Icons.sort, size: 16, color: Color(0xFF205A28)),
-                          label: const Text(
-                            'Sort by Role',
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.bold,
+                          icon: ShaderMask(
+                            shaderCallback: (bounds) => const LinearGradient(
+                              colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
+                            ).createShader(bounds),
+                            child: const Icon(Icons.sort, size: 16, color: Colors.white),
+                          ),
+                          label: ShaderMask(
+                            shaderCallback: (bounds) => const LinearGradient(
+                              colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
+                            ).createShader(bounds),
+                            child: const Text(
+                              'Sort by Role',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -414,12 +436,17 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
                               color: AppColors.primary,
                             ),
                             const SizedBox(width: 8),
-                            const Text(
-                              'Quick Add Player',
-                              style: TextStyle(
-                                color: AppColors.primary,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                            ShaderMask(
+                              shaderCallback: (bounds) => const LinearGradient(
+                                colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
+                              ).createShader(bounds),
+                              child: const Text(
+                                'Quick Add Player',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -443,33 +470,34 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
             top: BorderSide(color: Colors.grey[200]!),
           ),
         ),
-        child: ElevatedButton(
-          onPressed: () {
+        child: InkWell(
+          onTap: () {
             final players = _players.map((p) => p['name'] as String).toList();
             context.pop(players);
           },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
+              ),
               borderRadius: BorderRadius.circular(12),
             ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Save Opponent Squad',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'Save Opponent Squad',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.arrow_forward, size: 20),
-              const SizedBox(width: 8),
-            ],
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward, size: 20, color: Colors.white),
+              ],
+            ),
           ),
         ),
       ),
@@ -499,15 +527,16 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              gradient: const LinearGradient(
+                colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
+              ),
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.primary.withOpacity(0.3)),
             ),
             child: Center(
               child: Text(
                 player['initials'] as String,
                 style: const TextStyle(
-                  color: Color(0xFF205A28),
+                  color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -525,7 +554,7 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF205A28),
+                    color: Color(0xFF1E3A5F),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -544,7 +573,7 @@ class _OpponentTeamSquadPageState extends State<OpponentTeamSquadPage> {
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.edit, color: Color(0xFF205A28), size: 20),
+                icon: const Icon(Icons.edit, color: Color(0xFF1E3A5F), size: 20),
                 onPressed: () => _editPlayer(index),
               ),
               IconButton(

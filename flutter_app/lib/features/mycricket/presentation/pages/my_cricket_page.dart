@@ -2001,7 +2001,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
         'name': team.name,
         'location': team.location ?? team.city ?? 'Location TBA',
         'captain': team.captainName ?? 'Captain TBA',
-        'logo': team.logoUrl ?? team.name.substring(0, 2).toUpperCase(),
+        'logo': team.logoUrl ?? (team.name.length >= 2 ? team.name.substring(0, 2) : team.name).toUpperCase(),
         'status': team.totalMatches != null && team.totalMatches! > 0 ? 'Active' : 'New',
         'matches': team.totalMatches != null ? '${team.totalMatches} matches' : '0 matches',
         'isFollowing': false, // You can add following logic later

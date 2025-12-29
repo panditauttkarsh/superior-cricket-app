@@ -163,7 +163,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     
                     // Title
                     const Text(
-                      'CricPlay',
+                      'PITCH POINT',
                       style: TextStyle(
                         fontSize: 48,
                         fontWeight: FontWeight.bold,
@@ -586,12 +586,46 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
+  Future<void> _handleGoogleLogin() async {
+    setState(() {
+      _error = null;
+      _message = null;
+      _isLoading = true;
+    });
+
+    try {
+      final authNotifier = ref.read(authStateProvider.notifier);
+      final success = await authNotifier.loginWithGoogle();
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        
+        if (!success) {
+          final authState = ref.read(authStateProvider);
+          setState(() {
+            _error = authState.error ?? 'Google login failed. Please try again.';
+          });
+        }
+        // If successful, OAuth flow will handle redirect and navigation
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() {
+          _error = err.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   Widget _buildSocialButtons() {
     return Row(
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: _isLoading ? null : _handleGoogleLogin,
             icon: Container(
               width: 20,
               height: 20,

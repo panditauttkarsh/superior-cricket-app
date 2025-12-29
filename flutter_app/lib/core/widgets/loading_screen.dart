@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/auth_provider.dart';
 import 'dart:math' as math;
 
@@ -50,41 +51,8 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen>
     });
 
     // Start progress animation
-    _progressController.forward().then((_) {
-      // Wait for auth state to be checked, then navigate
-      if (mounted) {
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            _checkAuthAndNavigate();
-          }
-        });
-      }
-    });
-  }
-
-  void _checkAuthAndNavigate() {
-    final authState = ref.read(authStateProvider);
-    
-    // Wait a bit more if still loading auth (max 3 seconds)
-    if (authState.isLoading) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) {
-          _checkAuthAndNavigate();
-        }
-      });
-      return;
-    }
-    
-    // Navigate based on auth state
-    if (mounted) {
-      if (authState.isAuthenticated) {
-        // User is authenticated, go to home
-        GoRouter.of(context).go('/');
-      } else {
-        // User is not authenticated, go to login
-        GoRouter.of(context).go('/login');
-      }
-    }
+    _progressController.forward();
+    // Navigation is handled by GoRouter's redirect() - no manual navigation here
   }
 
   @override
@@ -96,6 +64,27 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Watch auth state for display purposes - navigation is handled by GoRouter redirect()
+    final authState = ref.watch(authStateProvider);
+    
+    // Also check Supabase session directly as fallback (in case auth state provider hasn't updated)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!authState.isAuthenticated && !authState.isLoading) {
+        // Check Supabase session directly
+        try {
+          final supabase = Supabase.instance.client;
+          final session = supabase.auth.currentSession;
+          if (session != null && session.user != null) {
+            // User is signed in but auth state provider hasn't updated
+            // Refresh auth state provider
+            ref.read(authStateProvider.notifier).refreshAuth();
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+      }
+    });
+    
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(

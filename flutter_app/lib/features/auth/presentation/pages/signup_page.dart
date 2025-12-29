@@ -152,7 +152,7 @@ class _SignUpPageState extends ConsumerState<SignUpPage> with TickerProviderStat
                 const SizedBox(height: 20),
                 
                 const Text(
-                  'Join CricPlay',
+                  'Join PITCH POINT',
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,

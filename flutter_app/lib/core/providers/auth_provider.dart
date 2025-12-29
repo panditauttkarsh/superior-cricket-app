@@ -56,8 +56,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _checkAuth() async {
     try {
-      // Check Supabase session (it manages its own session)
-      final user = await _authRepository.getCurrentUser();
+      // Add timeout to prevent infinite loading
+      final user = await _authRepository.getCurrentUser()
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              throw Exception('Auth check timeout');
+            },
+          );
       // If we get here, user is authenticated
       state = state.copyWith(
         isAuthenticated: true,
@@ -68,15 +74,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // No valid session - user is not logged in
       // This is expected if user hasn't logged in yet
       // Clear any stored tokens (they might be stale)
-      await _prefs.remove('auth_token');
-      await _prefs.remove('auth_refresh_token');
-      await _prefs.remove('auth_user');
+      try {
+        await _prefs.remove('auth_token');
+        await _prefs.remove('auth_refresh_token');
+        await _prefs.remove('auth_user');
+      } catch (_) {
+        // Ignore pref errors
+      }
+      // Always set loading to false, even on error
       state = state.copyWith(
         isAuthenticated: false,
         user: null,
         isLoading: false,
       );
     }
+  }
+
+  // Public method to refresh auth state (called when OAuth completes)
+  Future<void> refreshAuth() async {
+    await _checkAuth();
   }
 
   Future<bool> login(String email, String password) async {
@@ -125,22 +141,53 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> loginWithGoogle(String token) async {
+  Future<bool> loginWithGoogle() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final result = await _authRepository.loginWithGoogle(token);
+      // Initiate Google OAuth flow
+      // This will open browser and return immediately
+      // The actual authentication happens in the browser
+      // Session will be set when deep link callback is received
+      await _authRepository.loginWithGoogle();
+      // OAuth flow initiated - keep loading state
+      // The callback handler will update the state when OAuth completes
+      // If callback doesn't happen within 60 seconds, loading will timeout in loading screen
+      return true;
+    } catch (e) {
+      final errorMsg = e.toString().replaceFirst('Exception: ', '');
+      // If it's the OAuth flow initiated message, that's expected
+      if (errorMsg.contains('OAuth flow initiated')) {
+        // Keep loading state - callback will handle completion
+        // Don't set loading to false here - let the callback or timeout handle it
+        return true;
+      }
+      // Other errors - reset loading state
+      state = state.copyWith(
+        isLoading: false,
+        error: errorMsg,
+      );
+      return false;
+    }
+  }
+
+  // Handle Google OAuth callback after redirect
+  Future<bool> handleGoogleAuthCallback() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final result = await _authRepository.handleGoogleAuthCallback();
       await _prefs.setString('auth_token', result.token);
       await _prefs.setString('auth_refresh_token', result.refreshToken);
       state = state.copyWith(
         isAuthenticated: true,
         user: result.user,
         isLoading: false,
+        error: null,
       );
       return true;
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: e.toString(),
+        error: e.toString().replaceFirst('Exception: ', ''),
       );
       return false;
     }
@@ -160,9 +207,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return true;
     } catch (e) {
+      // Extract error message
+      String errorMessage = 'Registration failed';
+      if (e.toString().contains('Google login')) {
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
+      } else if (e.toString().contains('already registered') || e.toString().contains('already exists')) {
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
+      } else {
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
+      }
+      
       state = state.copyWith(
         isLoading: false,
-        error: e.toString(),
+        error: errorMessage,
       );
       return false;
     }
@@ -173,7 +230,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _prefs.remove('auth_token');
     await _prefs.remove('auth_refresh_token');
     await _prefs.remove('auth_user');
-    state = AuthState();
+    // Reset to initial loading state, then check auth (will find no user)
+    state = AuthState(isLoading: true);
+    await _checkAuth(); // This will set isLoading to false and isAuthenticated to false
   }
 }
 

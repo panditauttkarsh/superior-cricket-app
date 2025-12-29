@@ -10,6 +10,7 @@ class User {
   final String id;
   final String email;
   final String name;
+  final String? username;
   final UserRole role;
   final String? avatar;
   final String? phone;
@@ -20,6 +21,7 @@ class User {
     required this.id,
     required this.email,
     required this.name,
+    this.username,
     required this.role,
     this.avatar,
     this.phone,
@@ -32,6 +34,7 @@ class User {
       id: json['id'],
       email: json['email'],
       name: json['name'],
+      username: json['username'],
       role: UserRole.values.firstWhere(
         (e) => e.toString().split('.').last == json['role'],
         orElse: () => UserRole.player,
@@ -48,6 +51,7 @@ class User {
       'id': id,
       'email': email,
       'name': name,
+      'username': username,
       'role': role.toString().split('.').last,
       'avatar': avatar,
       'phone': phone,

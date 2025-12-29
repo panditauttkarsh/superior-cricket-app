@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -548,7 +549,7 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF205A28),
+                color: Color(0xFF1E3A5F),
                 letterSpacing: -0.5,
               ),
             ),
@@ -738,14 +739,14 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
       children: [
         Row(
           children: [
-            const Icon(Icons.timer, color: Color(0xFF205A28), size: 24),
+            const Icon(Icons.timer, color: Color(0xFF1E3A5F), size: 24),
             const SizedBox(width: 8),
             const Text(
               'Overs',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF205A28),
+                color: Color(0xFF1E3A5F),
               ),
             ),
           ],
@@ -844,7 +845,7 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
                   label,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isSelected ? AppColors.primary : AppColors.textSec,
+                    color: isSelected ? Colors.white : const Color(0xFF1E3A5F),
                   ),
                 ),
               ],
@@ -894,14 +895,14 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
       children: [
         Row(
           children: [
-            const Icon(Icons.stadium, color: AppColors.primary, size: 24),
+            const Icon(Icons.stadium, color: Color(0xFF1E3A5F), size: 24),
             const SizedBox(width: 8),
             const Text(
               'Ground Type',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: AppColors.primary,
+                color: Color(0xFF1E3A5F),
               ),
             ),
           ],
@@ -978,14 +979,14 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
       children: [
         Row(
           children: [
-            const Icon(Icons.sports_cricket, color: Color(0xFF205A28), size: 20),
+            const Icon(Icons.sports_cricket, color: Color(0xFF1E3A5F), size: 20),
             const SizedBox(width: 8),
             const Text(
               'Ball Type',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF205A28),
+                color: Color(0xFF1E3A5F),
               ),
             ),
           ],
@@ -1142,12 +1143,12 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
             width: double.infinity,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF205A28), Color(0xFF2d7a35)],
+                colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
               ),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withOpacity(0.3),
+                  color: const Color(0xFFC72B32).withOpacity(0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1157,11 +1158,7 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
-                  setState(() {
-                    _youtubeLiveEnabled = true;
-                    _showYouTubeInput = true;
-                  });
-                  _showGoLiveInstructions();
+                  _showGoLiveOptions();
                 },
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
@@ -1169,10 +1166,15 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
-                        Icons.videocam,
-                        color: Colors.white,
-                        size: 24,
+                      Image.asset(
+                        'assets/images/icon youtube.webp',
+                        width: 24,
+                        height: 24,
+                        errorBuilder: (context, error, stackTrace) => const Icon(
+                          Icons.videocam,
+                          color: Colors.white,
+                          size: 24,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       const Text(
@@ -1212,27 +1214,50 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
           const SizedBox(height: 12),
           
           // Connect to Existing Stream Button
-          OutlinedButton.icon(
-            onPressed: () {
-              setState(() {
-                _showYouTubeInput = true;
-                _youtubeLiveEnabled = false;
-              });
-            },
-            icon: const Icon(Icons.link, color: Color(0xFF205A28)),
-            label: const Text(
-              'Connect to Existing Live Stream',
-              style: TextStyle(
-                color: Color(0xFF205A28),
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+          Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
               ),
+              borderRadius: BorderRadius.circular(12),
             ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-              side: const BorderSide(color: Color(0xFF205A28), width: 1.5),
-              shape: RoundedRectangleBorder(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _showYouTubeInput = true;
+                    _youtubeLiveEnabled = false;
+                  });
+                },
                 borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Image.asset(
+                        'assets/images/icon youtube.webp',
+                        width: 20,
+                        height: 20,
+                        errorBuilder: (context, error, stackTrace) => const Icon(
+                          Icons.link,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Connect to Existing Live Stream',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -1343,13 +1368,127 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
     );
   }
 
+  void _showGoLiveOptions() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.videocam, color: Color(0xFFC72B32)),
+            SizedBox(width: 8),
+            Text('Go Live on YouTube'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Choose an option:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              // Option 1: Go Live on Pitch Point Channel
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Open Pitch Point YouTube channel for live streaming
+                  _openPitchPointChannel();
+                },
+                icon: const Icon(Icons.live_tv, color: Colors.white),
+                label: const Text('Go Live on Pitch Point Channel'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFC72B32),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Option 2: Paste Existing Stream Link
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _showYouTubeInput = true;
+                    _youtubeLiveEnabled = false;
+                  });
+                },
+                icon: const Icon(Icons.link, color: Color(0xFFC72B32)),
+                label: const Text('Paste Existing Stream Link'),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFC72B32), width: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openPitchPointChannel() async {
+    // Open Pitch Point YouTube channel
+    const pitchPointChannelUrl = 'https://www.youtube.com/@PITCH-POINT';
+    
+    try {
+      final uri = Uri.parse(pitchPointChannelUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        // Show input field after opening channel
+        if (mounted) {
+          setState(() {
+            _showYouTubeInput = true;
+            _youtubeLiveEnabled = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pitch Point channel opened! Start your live stream and paste the video ID below.'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open YouTube channel. Please manually navigate to @PITCH-POINT'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening channel: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _showGoLiveInstructions() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.videocam, color: Color(0xFF205A28)),
+            Icon(Icons.videocam, color: Color(0xFFC72B32)),
             SizedBox(width: 8),
             Text('Go Live on YouTube'),
           ],
@@ -1400,7 +1539,7 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: const Color(0xFFC72B32),
             ),
             child: const Text('Got it, I\'ll start streaming'),
           ),

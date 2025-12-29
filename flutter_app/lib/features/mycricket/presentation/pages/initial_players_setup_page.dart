@@ -113,11 +113,16 @@ class _InitialPlayersSetupPageState extends State<InitialPlayersSetupPage> with 
 
     // Navigate to scorecard with all match data
     if (mounted) {
+      // Calculate max overs per bowler based on match format
+      final oversInt = int.tryParse(widget.overs) ?? 20;
+      final maxOversPerBowler = oversInt <= 20 ? 4 : 10; // T20=4, ODI=10
+      
       context.push('/scorecard', extra: {
         'matchId': widget.matchId,
         'myTeam': widget.myTeam,
         'opponentTeam': widget.opponentTeam,
         'overs': widget.overs,
+        'maxOversPerBowler': maxOversPerBowler,
         'groundType': widget.groundType,
         'ballType': widget.ballType,
         'tossWinner': widget.tossWinner,
