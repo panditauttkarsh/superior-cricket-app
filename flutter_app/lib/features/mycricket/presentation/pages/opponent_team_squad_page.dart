@@ -7,7 +7,7 @@ import '../../../../core/providers/repository_providers.dart';
 
 class OpponentTeamSquadPage extends ConsumerStatefulWidget {
   final String teamName;
-  final List<String> initialPlayers;
+  final List<Map<String, dynamic>> initialPlayers;
 
   const OpponentTeamSquadPage({
     super.key,
@@ -28,53 +28,45 @@ class _OpponentTeamSquadPageState extends ConsumerState<OpponentTeamSquadPage> {
   @override
   void initState() {
     super.initState();
-    _players = widget.initialPlayers.isEmpty
-        ? [
-            {
-              'id': 'demo-1',
-              'name': 'Virat K.',
-              'username': 'virat_k',
-              'role': 'Top Order Batter',
-              'initials': 'VK',
-            },
-            {
-              'id': 'demo-2',
-              'name': 'Rohit S.',
-              'username': 'rohit_s',
-              'role': 'Opener • Captain',
-              'initials': 'RS',
-            },
-            {
-              'id': 'demo-3',
-              'name': 'Jasprit J.',
-              'username': 'jasprit_j',
-              'role': 'Fast Bowler',
-              'initials': 'JJ',
-            },
-            {
-              'id': 'demo-4',
-              'name': 'Hardik P.',
-              'username': 'hardik_p',
-              'role': 'All-Rounder',
-              'initials': 'HP',
-            },
-          ]
-        : widget.initialPlayers.map((name) {
-            final parts = name.split(' ');
-            final initials = parts.length > 1
-                ? '${parts[0][0]}${parts[1][0]}'
-                : (name.length >= 2 ? name.substring(0, 2) : name).toUpperCase();
-            return {
-              'id': 'temp-${name.hashCode}',
-              'name': name,
-              'username': name.toLowerCase().replaceAll(' ', '_'),
-              'role': 'Player',
-              'initials': initials,
-            };
-          }).toList();
+    // Use initial players if provided, otherwise use defaults
+    if (widget.initialPlayers.isNotEmpty) {
+      _players = List<Map<String, dynamic>>.from(widget.initialPlayers);
+    } else {
+      // Default demo players
+      _players = [
+        {
+          'id': 'demo-1',
+          'name': 'Virat K.',
+          'username': 'virat_k',
+          'role': 'Top Order Batter',
+          'initials': 'VK',
+        },
+        {
+          'id': 'demo-2',
+          'name': 'Rohit S.',
+          'username': 'rohit_s',
+          'role': 'Opener • Captain',
+          'initials': 'RS',
+        },
+        {
+          'id': 'demo-3',
+          'name': 'Jasprit J.',
+          'username': 'jasprit_j',
+          'role': 'Fast Bowler',
+          'initials': 'JJ',
+        },
+        {
+          'id': 'demo-4',
+          'name': 'Hardik P.',
+          'username': 'hardik_p',
+          'role': 'All-Rounder',
+          'initials': 'HP',
+        },
+      ];
+    }
     
     // Initialize added player IDs set
-    _addedPlayerIds = _players.map((p) => p['id'] as String).toSet();
+    _addedPlayerIds = _players.map((p) => p['id'] as String? ?? '').where((id) => id.isNotEmpty).toSet();
   }
 
   Future<void> _addPlayer() async {
@@ -585,8 +577,8 @@ class _OpponentTeamSquadPageState extends ConsumerState<OpponentTeamSquadPage> {
         ),
         child: InkWell(
           onTap: () {
-            final players = _players.map((p) => p['name'] as String).toList();
-            context.pop(players);
+            // Return full players data (with IDs) for match_players table
+            context.pop(_players);
           },
           child: Container(
             decoration: BoxDecoration(

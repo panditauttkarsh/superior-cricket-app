@@ -108,17 +108,19 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
     switch (_currentStep) {
       case 0:
         // Step 1: Navigate to My Team Squad
-        if (_myTeamPlayers.isEmpty) {
-          final myTeamPlayers = await context.push<List<String>>(
+        if (_myTeamPlayersData.isEmpty) {
+          final myTeamPlayersData = await context.push<List<Map<String, dynamic>>>(
             '/my-team-squad',
             extra: {
               'teamName': _myTeamController.text,
-              'players': _myTeamPlayers,
+              'players': _myTeamPlayersData,
             },
           );
-          if (myTeamPlayers != null && myTeamPlayers.isNotEmpty) {
+          if (myTeamPlayersData != null && myTeamPlayersData.isNotEmpty) {
             setState(() {
-              _myTeamPlayers = myTeamPlayers;
+              _myTeamPlayersData = myTeamPlayersData;
+              // Also update string list for display
+              _myTeamPlayers = myTeamPlayersData.map((p) => p['name'] as String? ?? '').toList();
             });
           } else {
             return; // User cancelled, don't proceed
@@ -126,17 +128,19 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
         }
         
         // Step 2: Navigate to Opponent Team Squad
-        if (_opponentTeamPlayers.isEmpty) {
-          final opponentPlayers = await context.push<List<String>>(
+        if (_opponentTeamPlayersData.isEmpty) {
+          final opponentPlayersData = await context.push<List<Map<String, dynamic>>>(
             '/opponent-team-squad',
             extra: {
               'teamName': _opponentTeamController.text,
-              'players': _opponentTeamPlayers,
+              'players': _opponentTeamPlayersData,
             },
           );
-          if (opponentPlayers != null && opponentPlayers.isNotEmpty) {
+          if (opponentPlayersData != null && opponentPlayersData.isNotEmpty) {
             setState(() {
-              _opponentTeamPlayers = opponentPlayers;
+              _opponentTeamPlayersData = opponentPlayersData;
+              // Also update string list for display
+              _opponentTeamPlayers = opponentPlayersData.map((p) => p['name'] as String? ?? '').toList();
               _currentStep = 2; // Move to Match Settings
             });
           }
@@ -149,16 +153,18 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
         break;
       case 1:
         // If on step 1, navigate to Opponent Team Squad
-        final opponentPlayers = await context.push<List<String>>(
+        final opponentPlayersData = await context.push<List<Map<String, dynamic>>>(
           '/opponent-team-squad',
           extra: {
             'teamName': _opponentTeamController.text,
-            'players': _opponentTeamPlayers,
+            'players': _opponentTeamPlayersData,
           },
         );
-        if (opponentPlayers != null && opponentPlayers.isNotEmpty) {
+        if (opponentPlayersData != null && opponentPlayersData.isNotEmpty) {
           setState(() {
-            _opponentTeamPlayers = opponentPlayers;
+            _opponentTeamPlayersData = opponentPlayersData;
+            // Also update string list for display
+            _opponentTeamPlayers = opponentPlayersData.map((p) => p['name'] as String? ?? '').toList();
             _currentStep = 2;
           });
         }
@@ -290,28 +296,30 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
           // Save players to match_players table (this will trigger notifications)
           final matchPlayerRepo = ref.read(matchPlayerRepositoryProvider);
           try {
-            // Add my team players
-            if (_myTeamPlayers.isNotEmpty) {
+            // Add my team players (use full player data with IDs)
+            if (_myTeamPlayersData.isNotEmpty) {
               await matchPlayerRepo.addPlayersToMatch(
                 matchId: match.id,
-                players: _myTeamPlayers,
+                players: _myTeamPlayersData,
                 teamType: 'team1',
                 addedBy: user?.id,
               );
+              print('MatchPlayer: Added ${_myTeamPlayersData.length} players to team1');
             }
             
-            // Add opponent team players
-            if (_opponentTeamPlayers.isNotEmpty) {
+            // Add opponent team players (use full player data with IDs)
+            if (_opponentTeamPlayersData.isNotEmpty) {
               await matchPlayerRepo.addPlayersToMatch(
                 matchId: match.id,
-                players: _opponentTeamPlayers,
+                players: _opponentTeamPlayersData,
                 teamType: 'team2',
                 addedBy: user?.id,
               );
+              print('MatchPlayer: Added ${_opponentTeamPlayersData.length} players to team2');
             }
           } catch (playerError) {
-            print('Warning: Failed to save players to match: $playerError');
-            // Don't block navigation if player saving fails
+            print('Error: Failed to save players to match: $playerError');
+            // Don't block navigation if player saving fails, but log the error
           }
           
           // Navigate to Toss page (AFTER match settings, BEFORE initial players setup)

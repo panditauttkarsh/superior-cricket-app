@@ -7,7 +7,7 @@ import '../../../../core/providers/repository_providers.dart';
 
 class MyTeamSquadPage extends ConsumerStatefulWidget {
   final String teamName;
-  final List<String> initialPlayers;
+  final List<Map<String, dynamic>> initialPlayers;
 
   const MyTeamSquadPage({
     super.key,
@@ -28,7 +28,10 @@ class _MyTeamSquadPageState extends ConsumerState<MyTeamSquadPage> {
   @override
   void initState() {
     super.initState();
-    _players = widget.initialPlayers.isEmpty
+    // Use initial players if provided, otherwise use defaults
+    _players = widget.initialPlayers.isNotEmpty
+        ? List<Map<String, dynamic>>.from(widget.initialPlayers)
+        : widget.initialPlayers.isEmpty
         ? [
             {
               'name': 'Virat Kohli',
@@ -540,9 +543,8 @@ class _MyTeamSquadPageState extends ConsumerState<MyTeamSquadPage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Return players list
-          final players = _players.map((p) => p['name'] as String).toList();
-          context.pop(players);
+          // Return full players data (with IDs) for match_players table
+          context.pop(_players);
         },
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.check, color: Colors.white),
