@@ -280,7 +280,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       color: AppColors.primary,
                       size: 24,
                     ),
-                    onPressed: () => context.push('/notifications'),
+                    onPressed: () => _showNotificationsDialog(context),
                   ),
                 ),
                 if (unreadCount > 0)

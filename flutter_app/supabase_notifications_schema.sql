@@ -90,10 +90,19 @@ CREATE POLICY "Users can update own notifications"
   WITH CHECK (auth.uid() = user_id);
 
 -- System can create notifications for any user
+-- This policy allows the trigger function (SECURITY DEFINER) to insert notifications
 CREATE POLICY "System can create notifications"
   ON public.notifications
   FOR INSERT
-  WITH CHECK (true); -- Allow authenticated users to create notifications
+  WITH CHECK (true); -- Allow any insert (trigger function uses SECURITY DEFINER)
+
+-- Additional policy: Allow service role to insert (for triggers)
+-- This ensures the SECURITY DEFINER function can insert
+CREATE POLICY "Service role can create notifications"
+  ON public.notifications
+  FOR INSERT
+  TO service_role
+  WITH CHECK (true);
 
 -- Enable Realtime for notifications (so users get instant updates)
 -- Only add if not already in publication (handles case where table already exists)
@@ -161,8 +170,14 @@ BEGIN
   );
   
   RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Log error but don't fail the insert
+    RAISE WARNING 'Error creating notification: %', SQLERRM;
+    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public;
 
 -- Trigger to create notification when player is added
 CREATE TRIGGER on_player_added_to_match

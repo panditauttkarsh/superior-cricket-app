@@ -1,74 +1,61 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/models/notification_model.dart';
+import '../../../../core/repositories/notification_repository.dart';
+import '../../../../core/providers/repository_providers.dart';
+import '../../../../core/providers/auth_provider.dart';
 
-class NotificationsDialog extends StatefulWidget {
+class NotificationsDialog extends ConsumerStatefulWidget {
   const NotificationsDialog({super.key});
 
   @override
-  State<NotificationsDialog> createState() => _NotificationsDialogState();
+  ConsumerState<NotificationsDialog> createState() => _NotificationsDialogState();
 }
 
-class _NotificationsDialogState extends State<NotificationsDialog> {
+class _NotificationsDialogState extends ConsumerState<NotificationsDialog> {
   String _selectedTab = 'All';
+  List<NotificationModel> _notifications = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
+    final authState = ref.read(authStateProvider);
+    final userId = authState.user?.id;
+    
+    if (userId == null) {
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final repository = ref.read(notificationRepositoryProvider);
+      final notifications = await repository.getNotificationsByUserId(userId);
+      setState(() {
+        _notifications = notifications;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading notifications: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final notifications = [
-      {
-        'type': 'match',
-        'title': 'Upcoming Match',
-        'message': 'Your match against Royal Strikers starts in 2 hours',
-        'time': '2h ago',
-        'icon': Icons.sports_cricket,
-        'color': Colors.blue,
-        'isUnread': true,
-        'isInvitation': false,
-      },
-      {
-        'type': 'achievement',
-        'title': 'New Achievement',
-        'message': 'You scored your first century! 🎉',
-        'time': '5h ago',
-        'icon': Icons.emoji_events,
-        'color': Colors.amber,
-        'isUnread': true,
-        'isInvitation': false,
-      },
-      {
-        'type': 'award',
-        'title': 'Award Received',
-        'message': 'Best Bowler of the Month - Congratulations!',
-        'time': '1d ago',
-        'icon': Icons.military_tech,
-        'color': Colors.purple,
-        'isUnread': true,
-        'isInvitation': true,
-      },
-      {
-        'type': 'match',
-        'title': 'Match Reminder',
-        'message': 'Weekend Warriors Cup match tomorrow at 3:00 PM',
-        'time': '2d ago',
-        'icon': Icons.calendar_today,
-        'color': Colors.green,
-        'isUnread': false,
-        'isInvitation': false,
-      },
-      {
-        'type': 'achievement',
-        'title': 'Milestone Reached',
-        'message': 'You\'ve completed 50 matches! Keep it up!',
-        'time': '3d ago',
-        'icon': Icons.star,
-        'color': Colors.orange,
-        'isUnread': false,
-        'isInvitation': false,
-      },
-    ];
-
     final filteredNotifications = _selectedTab == 'All'
-        ? notifications
-        : notifications.where((n) => n['isUnread'] == true).toList();
+        ? _notifications
+        : _notifications.where((n) => !n.isRead).toList();
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -152,19 +139,13 @@ class _NotificationsDialogState extends State<NotificationsDialog> {
                         thickness: 1,
                         color: AppColors.divider,
                       ),
-                      itemBuilder: (context, index) {
-                        final notification = filteredNotifications[index];
-                        return _buildNotificationItem(
-                          context,
-                          notification['title'] as String,
-                          notification['message'] as String,
-                          notification['time'] as String,
-                          notification['icon'] as IconData,
-                          notification['color'] as Color,
-                          notification['isUnread'] as bool,
-                          notification['isInvitation'] as bool,
-                        );
-                      },
+                          itemBuilder: (context, index) {
+                            final notification = filteredNotifications[index];
+                            return _buildNotificationItem(
+                              context,
+                              notification,
+                            );
+                          },
                     ),
             ),
           ],
@@ -194,20 +175,65 @@ class _NotificationsDialogState extends State<NotificationsDialog> {
 
   Widget _buildNotificationItem(
     BuildContext context,
-    String title,
-    String message,
-    String time,
-    IconData icon,
-    Color color,
-    bool isUnread,
-    bool isInvitation,
+    NotificationModel notification,
   ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      color: Colors.transparent,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final isUnread = !notification.isRead;
+    
+    // Determine icon and color based on type
+    IconData icon;
+    Color color;
+    bool isInvitation = false;
+    
+    switch (notification.type) {
+      case 'team_added':
+        icon = Icons.group_add;
+        color = Colors.blue;
+        break;
+      case 'match_invite':
+        icon = Icons.sports_cricket;
+        color = Colors.green;
+        isInvitation = true;
+        break;
+      case 'match_update':
+        icon = Icons.update;
+        color = Colors.orange;
+        break;
+      case 'achievement':
+        icon = Icons.emoji_events;
+        color = Colors.amber;
+        break;
+      default:
+        icon = Icons.notifications;
+        color = AppColors.primary;
+    }
+    
+    final time = _formatTimestamp(notification.createdAt);
+    return InkWell(
+      onTap: () async {
+        // Mark as read
+        if (!notification.isRead) {
+          final repository = ref.read(notificationRepositoryProvider);
+          await repository.markAsRead(notification.id);
+          _loadNotifications();
+        }
+        // Navigate to action URL if available
+        if (notification.actionUrl != null) {
+          Navigator.pop(context);
+          final url = notification.actionUrl!;
+          if (url.startsWith('/match/')) {
+            final matchId = url.replaceAll('/match/', '');
+            context.push('/matches/$matchId');
+          } else {
+            context.push(url);
+          }
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        color: Colors.transparent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -233,7 +259,7 @@ class _NotificationsDialogState extends State<NotificationsDialog> {
                       children: [
                         Expanded(
                           child: Text(
-                            title,
+                            notification.title,
                             style: const TextStyle(
                               color: AppColors.textMain,
                               fontSize: 14,
@@ -272,7 +298,7 @@ class _NotificationsDialogState extends State<NotificationsDialog> {
                     const SizedBox(height: 4),
                     // Description
                     Text(
-                      message,
+                      notification.message,
                       style: TextStyle(
                         color: AppColors.textSec,
                         fontSize: 13,
@@ -288,7 +314,7 @@ class _NotificationsDialogState extends State<NotificationsDialog> {
                           Expanded(
                             child: OutlinedButton(
                               onPressed: () {
-                                // Decline logic
+                                Navigator.pop(context);
                               },
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -313,8 +339,23 @@ class _NotificationsDialogState extends State<NotificationsDialog> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: () {
-                                // Accept logic
+                              onPressed: () async {
+                                // Mark as read and navigate
+                                if (!notification.isRead) {
+                                  final repository = ref.read(notificationRepositoryProvider);
+                                  await repository.markAsRead(notification.id);
+                                  _loadNotifications();
+                                }
+                                Navigator.pop(context);
+                                if (notification.actionUrl != null) {
+                                  final url = notification.actionUrl!;
+                                  if (url.startsWith('/match/')) {
+                                    final matchId = url.replaceAll('/match/', '');
+                                    context.push('/matches/$matchId');
+                                  } else {
+                                    context.push(url);
+                                  }
+                                }
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.textMain,
@@ -346,7 +387,25 @@ class _NotificationsDialogState extends State<NotificationsDialog> {
           ),
         ],
       ),
+      ),
     );
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
+    }
   }
 }
 
