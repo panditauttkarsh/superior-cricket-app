@@ -84,5 +84,35 @@ class CommentaryRepository {
       throw Exception('Failed to delete commentary: $e');
     }
   }
+
+  /// Delete a single commentary entry by ID (for undo functionality)
+  Future<void> deleteCommentaryById(String commentaryId) async {
+    try {
+      await _supabase.from('commentary').delete().eq('id', commentaryId);
+      print('Commentary: Deleted entry with id=$commentaryId');
+    } catch (e) {
+      throw Exception('Failed to delete commentary: $e');
+    }
+  }
+
+  /// Get the last commentary entry for a match (for undo)
+  Future<CommentaryModel?> getLastCommentary(String matchId) async {
+    try {
+      final response = await _supabase
+          .from('commentary')
+          .select()
+          .eq('match_id', matchId)
+          .order('timestamp', ascending: false)
+          .order('over', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return CommentaryModel.fromJson(response as Map<String, dynamic>);
+    } catch (e) {
+      print('Error fetching last commentary: $e');
+      return null;
+    }
+  }
 }
 

@@ -44,6 +44,57 @@ class ScorecardPage extends ConsumerStatefulWidget {
   ConsumerState<ScorecardPage> createState() => _ScorecardPageState();
 }
 
+// Delivery data structure - Single source of truth for all match calculations
+class _Delivery {
+  final int deliveryNumber; // Sequential delivery number (1, 2, 3, ...)
+  final int over; // Over number (0, 1, 2, ...)
+  final int ball; // Ball number in over (1-6)
+  final String striker;
+  final String nonStriker;
+  final String bowler;
+  final int runs; // Actual runs scored (after short run reduction)
+  final int teamTotal; // Team total after this delivery
+  final int strikerRuns; // Striker runs after this delivery
+  final int strikerBalls; // Striker balls faced after this delivery
+  final int bowlerRuns; // Bowler runs conceded after this delivery
+  final int bowlerLegalBalls; // Bowler legal balls after this delivery
+  final int wickets; // Total wickets after this delivery
+  final String? wicketType; // Type of dismissal if wicket
+  final String? extraType; // 'WD', 'NB', 'B', 'LB' if extra
+  final int? extraRuns; // Extra runs if applicable
+  final bool isLegalBall; // true for legal, false for wide/no-ball
+  final bool isShortRun; // true if short run was applied
+  final String? commentaryId; // Commentary entry ID
+  final String? shotDirection;
+  final String? shotType;
+  final DateTime timestamp;
+
+  _Delivery({
+    required this.deliveryNumber,
+    required this.over,
+    required this.ball,
+    required this.striker,
+    required this.nonStriker,
+    required this.bowler,
+    required this.runs,
+    required this.teamTotal,
+    required this.strikerRuns,
+    required this.strikerBalls,
+    required this.bowlerRuns,
+    required this.bowlerLegalBalls,
+    required this.wickets,
+    this.wicketType,
+    this.extraType,
+    this.extraRuns,
+    required this.isLegalBall,
+    required this.isShortRun,
+    this.commentaryId,
+    this.shotDirection,
+    this.shotType,
+    required this.timestamp,
+  });
+}
+
 // Ball data structure for undo functionality
 class _BallData {
   final int runs;
@@ -65,6 +116,9 @@ class _BallData {
   final String? shotType;
   final String? extraType; // 'WD', 'NB', 'B', 'LB'
   final int? extraRuns;
+  final String? commentaryId; // ID of commentary entry for deletion on undo
+  final int totalValidBalls; // Track valid balls for undo
+  final int bowlerLegalBalls; // Track bowler's legal balls for undo
 
   _BallData({
     required this.runs,
@@ -86,6 +140,9 @@ class _BallData {
     this.shotType,
     this.extraType,
     this.extraRuns,
+    this.commentaryId,
+    required this.totalValidBalls,
+    required this.bowlerLegalBalls,
   });
 }
 
@@ -127,6 +184,14 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   
   // Track current over's ball data for summary generation
   List<Map<String, dynamic>> _currentOverBallData = []; // [{runs, isWicket, displayValue}]
+  
+  // Track bowler's total legal balls bowled across the spell (ICC rule)
+  // This is used to calculate bowler overs: legalBalls / 6
+  // Example: 2 legal balls = 0.2, 8 legal balls = 1.2, 15 legal balls = 2.3
+  Map<String, int> _bowlerLegalBallsMap = {}; // Track legal balls for each bowler
+  
+  // Flag to track if we're waiting for bowler selection (end-of-over lock)
+  bool _waitingForBowlerSelection = false;
   
   List<String> _battingTeamPlayers = [];
   List<String> _bowlingTeamPlayers = [];
@@ -314,6 +379,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
           'is_short_run': _isShortRun,
           'bowler_metadata': _bowlerMetadata,
           'bowler_overs_map': _bowlerOversMap.map((k, v) => MapEntry(k, v)),
+          'bowler_legal_balls_map': _bowlerLegalBallsMap.map((k, v) => MapEntry(k, v)), // Save legal balls for each bowler
+          'total_valid_balls': _totalValidBalls, // Save total valid balls
           'batting_type_map': _battingTypeMap,
           'batsmen_who_have_batted': _batsmenWhoHaveBatted.toList(),
           'current_innings': _currentInnings,
@@ -322,6 +389,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
           'first_innings_overs': _firstInningsOvers,
           'bowler_type': _bowlerType,
           'bowler_category': _bowlerCategory,
+          'waiting_for_bowler_selection': _waitingForBowlerSelection, // Save waiting state
         };
         
         await matchRepo.updateScorecard(widget.matchId!, scorecard);
@@ -340,6 +408,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     String? shotType,
     String? extraType,
     int? extraRuns,
+    String? commentaryId,
   }) {
     _undoStack.add(_BallData(
       runs: runs,
@@ -361,6 +430,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       shotType: shotType,
       extraType: extraType,
       extraRuns: extraRuns,
+      commentaryId: commentaryId,
+      totalValidBalls: _totalValidBalls,
+      bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
     ));
     
     // Keep only last 50 states for memory efficiency
@@ -369,8 +441,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     }
   }
 
-  // Undo last ball
-  void _undoLastBall() {
+  // Undo last ball - True undo that completely removes the last delivery
+  Future<void> _undoLastBall() async {
     if (_undoStack.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Nothing to undo')),
@@ -380,7 +452,20 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     
     final lastState = _undoStack.removeLast();
     
+    // Delete commentary entry if it exists
+    if (lastState.commentaryId != null && widget.matchId != null) {
+      try {
+        final repository = ref.read(commentaryRepositoryProvider);
+        await repository.deleteCommentaryById(lastState.commentaryId!);
+        print('Undo: Deleted commentary entry ${lastState.commentaryId}');
+      } catch (e) {
+        print('Undo: Error deleting commentary: $e');
+        // Continue with undo even if commentary deletion fails
+      }
+    }
+    
     setState(() {
+      // Roll back all state from before the last ball
       _totalRuns = lastState.totalRuns;
       _wickets = lastState.wickets;
       _currentOver = lastState.currentOver;
@@ -391,9 +476,16 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _strikerBalls = lastState.strikerBalls;
       _nonStrikerRuns = lastState.nonStrikerRuns;
       _nonStrikerBalls = lastState.nonStrikerBalls;
-      _bowlerOvers = lastState.bowlerOvers;
       _bowlerRuns = lastState.bowlerRuns;
       _bowlerWickets = lastState.bowlerWickets;
+      
+      // Roll back legal ball counts
+      _totalValidBalls = lastState.totalValidBalls;
+      _bowlerLegalBallsMap[_bowler] = lastState.bowlerLegalBalls;
+      
+      // Recalculate bowler overs from legal balls (ICC rule)
+      final bowlerLegalBalls = _bowlerLegalBallsMap[_bowler] ?? 0;
+      _bowlerOvers = bowlerLegalBalls / 6.0;
       
       // Recalculate strike rates
       _strikerSR = _strikerBalls > 0 ? (_strikerRuns / _strikerBalls) * 100 : 0.0;
@@ -404,6 +496,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentOverBalls.removeLast();
       }
       
+      // Remove last ball from over data if it exists
+      if (_currentOverBallData.isNotEmpty) {
+        _currentOverBallData.removeLast();
+      }
+      
       // Update CRR and projected
       final totalOvers = _currentOver + (_currentBall / 6);
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
@@ -412,6 +509,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       // Reset special run states
       _isDeclaredRun = false;
       _isShortRun = false;
+      
+      // Clear waiting flag if set
+      _waitingForBowlerSelection = false;
     });
     
     _saveScorecardToSupabase();
@@ -419,6 +519,40 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Last ball undone'), duration: Duration(seconds: 1)),
     );
+  }
+
+  // Helper function to format bowler overs display (ICC rule)
+  // Formula: overs = totalLegalBalls ~/ 6, balls = totalLegalBalls % 6
+  // Examples: 1 ball = 0.1, 6 balls = 1.0, 9 balls = 1.3, 13 balls = 2.1
+  String _formatBowlerOvers(int totalLegalBalls) {
+    if (totalLegalBalls == 0) return '0.0';
+    final overs = totalLegalBalls ~/ 6;
+    final balls = totalLegalBalls % 6;
+    return '$overs.$balls';
+  }
+
+  // Helper function to get bowler overs as double for calculations (e.g., CRR)
+  // This returns the decimal representation for mathematical operations
+  double _getBowlerOversDecimal(int totalLegalBalls) {
+    return totalLegalBalls / 6.0;
+  }
+
+  // Helper function to update bowler overs from legal balls (ICC rule)
+  // Stores both the formatted string and decimal value
+  void _updateBowlerOvers() {
+    if (_bowler.isEmpty) return;
+    final bowlerLegalBalls = _bowlerLegalBallsMap[_bowler] ?? 0;
+    // Store decimal for calculations (CRR, etc.)
+    _bowlerOvers = _getBowlerOversDecimal(bowlerLegalBalls);
+    // Update bowler overs map with decimal (for calculations)
+    _bowlerOversMap[_bowler] = _bowlerOvers;
+  }
+
+  // Helper function to increment bowler's legal balls and update overs
+  void _incrementBowlerLegalBalls() {
+    if (_bowler.isEmpty) return;
+    _bowlerLegalBallsMap[_bowler] = (_bowlerLegalBallsMap[_bowler] ?? 0) + 1;
+    _updateBowlerOvers();
   }
 
   // Helper function to swap striker and non-striker
@@ -470,10 +604,14 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       return;
     }
     
+    // ICC Rule: End-of-over bowler selection is MANDATORY and BLOCKING
+    // Cannot dismiss, all scoring/navigation blocked until bowler selected
     final selectedBowler = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      isDismissible: false, // Cannot dismiss - mandatory selection
+      enableDrag: false, // Cannot drag to dismiss
       builder: (context) => Container(
         decoration: BoxDecoration(
           color: AppColors.surface,
@@ -546,7 +684,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                               ),
                             const SizedBox(height: 4),
                             Text(
-                              'Overs: ${(_bowlerOversMap[bowler] ?? 0.0).toStringAsFixed(1)} / $maxOvers',
+                              'Overs: ${_formatBowlerOvers(_bowlerLegalBallsMap[bowler] ?? 0)} / $maxOvers',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textSec.withOpacity(0.7),
@@ -570,6 +708,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       ),
     );
     
+    // selectedBowler cannot be null because modal is non-dismissible
     if (selectedBowler != null && mounted) {
       // If bowler doesn't have metadata, show type/style selection
       if (!_bowlerMetadata.containsKey(selectedBowler)) {
@@ -582,7 +721,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       if (mounted) {
         setState(() {
-          // Store previous bowler's overs before switching
+          // Store previous bowler's legal balls and overs before switching
           if (_bowler.isNotEmpty) {
             _bowlerOversMap[_bowler] = _bowlerOvers;
           }
@@ -593,14 +732,22 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
           }
           
           // Initialize bowler stats (use existing if bowler has bowled before)
-          _bowlerOvers = _bowlerOversMap[selectedBowler] ?? 0.0;
+          // ICC Rule: Bowler overs = legal balls / 6 (not reset per over)
+          // Initialize legal balls if bowler is new
+          if (!_bowlerLegalBallsMap.containsKey(selectedBowler)) {
+            _bowlerLegalBallsMap[selectedBowler] = 0;
+          }
+          _updateBowlerOvers(); // Calculate from legal balls
           _bowlerRuns = 0; // Reset runs for new over
           _bowlerWickets = 0; // Reset wickets for new over
           
-          // Swap batsmen at end of over (ICC rule)
-          _swapBatsmen();
+          // Note: Strike rotation at end of over is already handled in run functions
+          // when overComplete is true. No need to swap again here.
           // Reset current over balls
           _currentOverBalls = [];
+          
+          // Clear waiting flag - bowler selected, next over initialized
+          _waitingForBowlerSelection = false;
         });
         _saveScorecardToSupabase();
       }
@@ -1423,6 +1570,26 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                 ),
               );
             }
+            // Restore bowler legal balls map (ICC rule: track total legal balls)
+            if (scorecard['bowler_legal_balls_map'] != null) {
+              _bowlerLegalBallsMap = Map<String, int>.from(
+                (scorecard['bowler_legal_balls_map'] as Map).map(
+                  (key, value) => MapEntry(
+                    key.toString(),
+                    value as int,
+                  ),
+                ),
+              );
+            }
+            // Restore total valid balls
+            _totalValidBalls = scorecard['total_valid_balls'] ?? 0;
+            // Restore waiting state
+            _waitingForBowlerSelection = scorecard['waiting_for_bowler_selection'] ?? false;
+            
+            // Recalculate bowler overs from legal balls (ICC rule)
+            if (_bowler.isNotEmpty && _bowlerLegalBallsMap.containsKey(_bowler)) {
+              _updateBowlerOvers();
+            }
             if (scorecard['batting_type_map'] != null) {
               _battingTypeMap = Map<String, String>.from(scorecard['batting_type_map'] as Map);
             }
@@ -1682,6 +1849,14 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   
   // Handle out type selection
   void _handleOutType(String outType, {int runsCompleted = 0}) {
+    // ICC Rule: Block all scoring when waiting for bowler selection (end-of-over lock)
+    if (_waitingForBowlerSelection) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select next bowler to continue')),
+      );
+      return;
+    }
+    
     // Check if max wickets reached (squad size - 1)
     if (_wickets >= _maxWickets && outType != 'Retired Hurt') {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1693,6 +1868,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     
     final isRetiredHurt = outType == 'Retired Hurt';
     final isRunOut = outType == 'Run Out';
+    
+    // Store striker name BEFORE any swaps (for correct commentary attribution)
+    final dismissedStriker = _striker;
     
     // For Run Out, add runs to total
     if (isRunOut && runsCompleted > 0) {
@@ -1727,6 +1905,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // Wicket counts as a ball (ICC rule) - but Retired Hurt also counts as a ball
       _currentBall += 1;
+      // Increment bowler's legal balls and update overs (ICC rule)
+      _incrementBowlerLegalBalls();
       
       // Add to current over balls
       String ballNotation = isRetiredHurt ? 'RH' : (isRunOut ? 'RO$runsCompleted' : 'W');
@@ -1740,10 +1920,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        // Update bowler overs
-        _bowlerOvers = _bowlerOvers + 1.0;
-        _bowlerOversMap[_bowler] = _bowlerOvers; // Track in map
         _currentOverBalls = [];
+        // Set flag to wait for bowler selection (end-of-over lock)
+        _waitingForBowlerSelection = true;
       }
       
       // For Run Out: Strike changes based on runs completed
@@ -1771,14 +1950,44 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _saveScorecardToSupabase();
     
     // STEP 3: Generate commentary for wicket (valid ball) - MUST BE DONE IMMEDIATELY
-    // Use the striker name BEFORE it's changed
-    final dismissedStriker = _striker;
-    _generateCommentary(
+    // Use the striker name BEFORE it's changed (stored before setState)
+    // Note: dismissedStriker was already captured before setState, so use it
+    _generateCommentaryWithStriker(
+      strikerName: dismissedStriker,
       ballType: 'wicket',
       runs: isRunOut ? runsCompleted : 0,
       wicketType: outType,
       isValidBall: true,
-    );
+    ).then((commentaryId) {
+      // Update undo stack with commentary ID
+      if (_undoStack.isNotEmpty && commentaryId != null) {
+        final lastEntry = _undoStack.removeLast();
+        _undoStack.add(_BallData(
+          runs: lastEntry.runs,
+          totalRuns: lastEntry.totalRuns,
+          wickets: lastEntry.wickets,
+          currentOver: lastEntry.currentOver,
+          currentBall: lastEntry.currentBall,
+          striker: lastEntry.striker,
+          nonStriker: lastEntry.nonStriker,
+          strikerRuns: lastEntry.strikerRuns,
+          strikerBalls: lastEntry.strikerBalls,
+          nonStrikerRuns: lastEntry.nonStrikerRuns,
+          nonStrikerBalls: lastEntry.nonStrikerBalls,
+          bowlerOvers: lastEntry.bowlerOvers,
+          bowlerRuns: lastEntry.bowlerRuns,
+          bowlerWickets: lastEntry.bowlerWickets,
+          ballNotation: lastEntry.ballNotation,
+          shotDirection: lastEntry.shotDirection,
+          shotType: lastEntry.shotType,
+          extraType: lastEntry.extraType,
+          extraRuns: lastEntry.extraRuns,
+          commentaryId: commentaryId,
+          totalValidBalls: lastEntry.totalValidBalls,
+          bowlerLegalBalls: lastEntry.bowlerLegalBalls,
+        ));
+      }
+    });
     
     // STEP 4: Show new batsman selection (unless all out) - AFTER commentary generated
     if (isRetiredHurt) {
@@ -1794,8 +2003,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       });
     }
     
-    // If over is complete, show next bowler selection
-    if (_currentBall == 0 && _currentOver > 0 && (_wickets < _maxWickets || isRetiredHurt)) {
+    // If over is complete, show next bowler selection (mandatory, blocking)
+    if (_waitingForBowlerSelection && (_wickets < _maxWickets || isRetiredHurt)) {
       Future.delayed(const Duration(milliseconds: 800), () {
         _showSelectNextBowler();
       });
@@ -1804,7 +2013,38 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
 
   /// Generate and save commentary entry for the current ball
   /// Also tracks ball data for over summary generation
-  Future<void> _generateCommentary({
+  /// Uses the current _striker for commentary attribution
+  /// Returns the commentary ID for undo tracking
+  Future<String?> _generateCommentary({
+    required String ballType,
+    required int runs,
+    String? wicketType,
+    String? shotDirection,
+    String? shotType,
+    bool isExtra = false,
+    String? extraType,
+    int? extraRuns,
+    bool isValidBall = true, // true for normal balls, false for wides/no-balls
+  }) async {
+    return await _generateCommentaryWithStriker(
+      strikerName: _striker,
+      ballType: ballType,
+      runs: runs,
+      wicketType: wicketType,
+      shotDirection: shotDirection,
+      shotType: shotType,
+      isExtra: isExtra,
+      extraType: extraType,
+      extraRuns: extraRuns,
+      isValidBall: isValidBall,
+    );
+  }
+
+  /// Generate and save commentary entry with explicit striker name
+  /// This ensures correct attribution when striker has been swapped
+  /// Returns the commentary ID for undo tracking
+  Future<String?> _generateCommentaryWithStriker({
+    required String strikerName,
     required String ballType,
     required int runs,
     String? wicketType,
@@ -1818,7 +2058,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     // If matchId is null (e.g. local practice), skip commentary persistence
     if (widget.matchId == null) {
       print('Commentary: Skipping - matchId is null');
-      return;
+      return null;
     }
 
     try {
@@ -1840,15 +2080,33 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         overDecimal = over + (ball / 10.0); // e.g., 0.1, 0.2, ..., 0.6, 1.1
 
         // Track current over's ball data for summary
+        // Store ball outcome for display (e.g., "4", "W", "0", "1", "B2", "LB1")
+        String displayValue;
+        if (ballType == 'wicket') {
+          displayValue = wicketType == 'Run Out' ? 'RO' : 'W';
+        } else if (isExtra && extraType != null) {
+          if (extraType == 'B') {
+            displayValue = runs > 0 ? 'B$runs' : 'B';
+          } else if (extraType == 'LB') {
+            displayValue = runs > 0 ? 'LB$runs' : 'LB';
+          } else {
+            displayValue = runs.toString();
+          }
+        } else {
+          displayValue = runs.toString();
+        }
+        
         _currentOverBallData.add({
           'runs': runs,
           'isWicket': ballType == 'wicket',
-          'displayValue': runs,
+          'displayValue': displayValue,
         });
 
-        // Check if over is complete (ball == 6 means we just completed an over)
+        // Check if over is complete (ball == 6 means we just completed the 6th legal ball)
+        // Generate summary AFTER the 6th ball, positioned AFTER 0.6 (not before)
         if (ball == 6) {
           // Generate summary for the completed over
+          // Position it AFTER the last ball (0.6) by using over + 0.7
           await _generateOverSummary(over);
           _currentOverBallData.clear();
         }
@@ -1860,11 +2118,12 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       }
 
       // Generate CricHeroes-style commentary text
+      // Use the provided strikerName (who faced the ball) for correct attribution
       final commentaryText = CommentaryService.generateCommentary(
         over: overDecimal,
         ballType: ballType,
         runs: runs,
-        strikerName: _striker,
+        strikerName: strikerName,
         bowlerName: _bowler,
         wicketType: wicketType,
         shotDirection: shotDirection,
@@ -1881,7 +2140,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         ballType: ballType,
         runs: runs,
         wicketType: wicketType,
-        strikerName: _striker,
+        strikerName: strikerName, // Use the striker who faced the ball
         bowlerName: _bowler,
         nonStrikerName: _nonStriker,
         timestamp: DateTime.now(),
@@ -1895,50 +2154,66 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
 
       // Use repository provider to persist commentary
       final repository = ref.read(commentaryRepositoryProvider);
-      await repository.createCommentary(commentary);
+      final created = await repository.createCommentary(commentary);
       print('Commentary: Successfully saved - ${commentary.commentaryText}');
+      return created.id; // Return commentary ID for undo tracking
     } catch (e) {
       // Commentary is non-critical; log and continue
       // ignore: avoid_print
       print('Error generating commentary: $e');
+      return null;
     }
   }
   
   /// Generate and save over summary
   /// Called when 6 valid balls are completed
-  /// overNumber is the completed over (e.g., 15 means over 15 is done)
+  /// overNumber is the completed over (e.g., 0 means over 0 is done, 1 means over 1 is done)
+  /// ICC Rule: Over summary appears AFTER the 6th legal ball (0.6, 1.6, etc.)
   Future<void> _generateOverSummary(int overNumber) async {
     if (widget.matchId == null || _currentOverBallData.isEmpty) return;
     
     try {
       // Use the ball data we've been tracking (before it was cleared)
+      // Get display values for the 6 legal balls (e.g., "4", "0", "W", "B2", "LB1", "6")
+      final ballDisplayValues = _currentOverBallData.map((b) => b['displayValue'] as String).toList();
       final ballRuns = _currentOverBallData.map((b) => b['runs'] as int).toList();
       final ballWickets = _currentOverBallData.map((b) => b['isWicket'] as bool).toList();
+      
       final runsInOver = ballRuns.fold(0, (sum, runs) => sum + runs);
       final wicketsInOver = ballWickets.where((w) => w).length;
       
-      // Create over summary entry (stored as special commentary entry)
-      // Format: "OVER 16\n4 0 0 4 6 0\n14 Runs | 0 Wkt | 95/3"
-      final summaryText = 'OVER $overNumber\n'
-          '${ballRuns.join(' ')}\n'
-          '$runsInOver Runs | $wicketsInOver Wkt | $_totalRuns/$_wickets';
+      // Get current batting pair stats AFTER end-of-over strike rotation
+      // (strike has already rotated at this point)
+      final strikerRuns = _strikerRuns;
+      final strikerBalls = _strikerBalls;
+      final nonStrikerRuns = _nonStrikerRuns;
+      final nonStrikerBalls = _nonStrikerBalls;
       
-      // Create summary with over number as decimal to appear before the over's balls
-      // e.g., over 16 summary has over = 15.99 to appear before 15.6, 15.5, etc.
+      // Create over summary entry with enhanced format
+      // Format: "OVER 0\n4 0 W B2 LB1 6\n13 Runs | 1 Wkt | 95/3\nStriker: Player1 45(30) | Non-Striker: Player2 12(18)"
+      final summaryText = 'OVER $overNumber\n'
+          '${ballDisplayValues.join(' ')}\n'
+          '$runsInOver Runs | $wicketsInOver Wkt | $_totalRuns/$_wickets\n'
+          'Striker: $_striker $strikerRuns($strikerBalls) | Non-Striker: $_nonStriker $nonStrikerRuns($nonStrikerBalls)';
+      
+      // Position summary AFTER the 6th ball (0.6, 1.6, etc.)
+      // Use over + 0.7 to ensure it appears after 0.6 but before next over's 1.1
       final summaryCommentary = CommentaryModel(
         id: const Uuid().v4(),
         matchId: widget.matchId!,
-        over: (overNumber - 1) + 0.99, // e.g., 15.99 to appear before 15.6
+        over: overNumber + 0.7, // e.g., 0.7 appears after 0.6, 1.7 appears after 1.6
         ballType: 'overSummary',
         runs: runsInOver,
-        strikerName: '',
-        bowlerName: '',
-        timestamp: DateTime.now().subtract(const Duration(seconds: 1)), // Slightly earlier timestamp
+        strikerName: _striker, // Current striker after rotation
+        bowlerName: _bowler,
+        nonStrikerName: _nonStriker, // Current non-striker after rotation
+        timestamp: DateTime.now(), // Current timestamp (after the 6th ball)
         commentaryText: summaryText,
       );
       
       final repository = ref.read(commentaryRepositoryProvider);
       await repository.createCommentary(summaryCommentary);
+      print('Over Summary: Generated for over $overNumber - $summaryText');
     } catch (e) {
       print('Error generating over summary: $e');
     }
@@ -2566,7 +2841,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        _bowlerOvers.toStringAsFixed(1),
+                                        _formatBowlerOvers(_bowlerLegalBallsMap[_bowler] ?? 0),
                                         style: const TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
@@ -2906,8 +3181,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   }
 
   Widget _buildScoreButton(String label, VoidCallback onTap, bool isHighlighted) {
+    // ICC Rule: Disable scoring when waiting for bowler selection (end-of-over lock)
+    final isDisabled = _waitingForBowlerSelection;
     return InkWell(
-      onTap: onTap,
+      onTap: isDisabled ? null : onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
@@ -2945,8 +3222,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   }
 
   Widget _buildExtrasButton(String label, VoidCallback onTap, {bool isGreen = false}) {
+    // ICC Rule: Disable scoring when waiting for bowler selection (end-of-over lock)
+    final isDisabled = _waitingForBowlerSelection;
     return InkWell(
-      onTap: onTap,
+      onTap: isDisabled ? null : onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
@@ -2986,8 +3265,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   }
 
   Widget _buildOutButton() {
+    // ICC Rule: Disable scoring when waiting for bowler selection (end-of-over lock)
+    final isDisabled = _waitingForBowlerSelection;
     return InkWell(
-      onTap: _showOutTypeSelection,
+      onTap: isDisabled ? null : _showOutTypeSelection,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
@@ -3244,11 +3525,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
           TableRow(
             children: [
               _buildTableCell(_bowler, isHeader: false),
-              _buildTableCell(_bowlerOvers.toStringAsFixed(1), isHeader: false),
+              _buildTableCell(_formatBowlerOvers(_bowlerLegalBallsMap[_bowler] ?? 0), isHeader: false),
               _buildTableCell('0', isHeader: false),
               _buildTableCell('$_bowlerRuns', isHeader: false),
               _buildTableCell('$_bowlerWickets', isHeader: false),
-              _buildTableCell((_bowlerRuns / _bowlerOvers).toStringAsFixed(2), isHeader: false),
+              _buildTableCell((_bowlerRuns / (_bowlerOvers > 0 ? _bowlerOvers : 1)).toStringAsFixed(2), isHeader: false),
             ],
           ),
         ],
@@ -3746,8 +4027,23 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     );
   }
 
-  // Handle Wide with runs (ICC rules: Wide = 1 run + any additional runs)
+  // Handle Wide with runs (ICC rules)
+  // 1. Add 1 automatic wide run to team total
+  // 2. Add runs completed by running/boundary to team total (do NOT credit batsman)
+  // 3. Do NOT increment legal ball count
+  // 4. Change strike only if runs completed by running (excluding the 1 wide) are odd
+  // Examples: Wide + 2 = +3 total (1 wide + 2 runs), strike unchanged (2 even)
+  //           Wide + 1 = +2 total (1 wide + 1 run), strike changes (1 odd)
+  //           Wide boundary = +5 total (1 wide + 4 boundary), strike unchanged (4 even)
   void _handleWideWithRuns(int additionalRuns) {
+    // ICC Rule: Block all scoring when waiting for bowler selection (end-of-over lock)
+    if (_waitingForBowlerSelection) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select next bowler to continue')),
+      );
+      return;
+    }
+    
     // Check if innings should end
     if (_shouldEndInnings) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3756,7 +4052,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       return;
     }
     
-    final totalRuns = 1 + additionalRuns;
+    // ICC Rule: 1 automatic wide run + additional runs completed
+    final automaticWideRun = 1;
+    final runsCompleted = additionalRuns; // Runs completed by running or boundary
+    final totalRuns = automaticWideRun + runsCompleted;
+    
     _saveStateForUndo(
       runs: totalRuns,
       ballNotation: additionalRuns > 0 ? 'WD+$additionalRuns' : 'WD',
@@ -3764,16 +4064,26 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       extraRuns: totalRuns,
     );
     
+    // Store striker name BEFORE any swaps (for correct commentary attribution)
+    final strikerForCommentary = _striker;
+    
     setState(() {
       _isDeclaredRun = false;
       _isShortRun = false;
       
+      // ICC Rule: Add 1 automatic wide + runs completed to team total
       _totalRuns += totalRuns;
+      // ICC Rule: Wide runs count against bowler
       _bowlerRuns += totalRuns;
+      // ICC Rule: Do NOT credit batsman for wide runs (not off the bat)
+      // _strikerRuns is NOT incremented
+      // ICC Rule: Do NOT increment balls faced (wide is not a legal delivery)
+      // _strikerBalls is NOT incremented
       
-      // Wide doesn't count as a ball (ICC rule) - DO NOT increment _currentBall
-      // But if runs are scored, batsmen swap on odd runs
-      if (totalRuns % 2 == 1) {
+      // ICC Rule: Wide doesn't count as a legal ball - DO NOT increment _currentBall
+      // ICC Rule: Change strike only if runs completed by running (excluding 1 wide) are odd
+      // Strike rotation based on runsCompleted, NOT totalRuns
+      if (runsCompleted % 2 == 1) {
         _swapBatsmen();
       }
       
@@ -3789,18 +4099,62 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _saveScorecardToSupabase();
     
     // Generate commentary for wide (NOT a valid ball - doesn't count towards over)
-    _generateCommentary(
+    // Use the striker who was on strike when the wide was bowled
+    _generateCommentaryWithStriker(
+      strikerName: strikerForCommentary,
       ballType: 'wide',
       runs: totalRuns,
       isExtra: true,
       extraType: 'WD',
       extraRuns: totalRuns,
       isValidBall: false, // Wide doesn't count as valid ball
-    );
+    ).then((commentaryId) {
+      // Update undo stack with commentary ID
+      if (_undoStack.isNotEmpty && commentaryId != null) {
+        final lastEntry = _undoStack.removeLast();
+        _undoStack.add(_BallData(
+          runs: lastEntry.runs,
+          totalRuns: lastEntry.totalRuns,
+          wickets: lastEntry.wickets,
+          currentOver: lastEntry.currentOver,
+          currentBall: lastEntry.currentBall,
+          striker: lastEntry.striker,
+          nonStriker: lastEntry.nonStriker,
+          strikerRuns: lastEntry.strikerRuns,
+          strikerBalls: lastEntry.strikerBalls,
+          nonStrikerRuns: lastEntry.nonStrikerRuns,
+          nonStrikerBalls: lastEntry.nonStrikerBalls,
+          bowlerOvers: lastEntry.bowlerOvers,
+          bowlerRuns: lastEntry.bowlerRuns,
+          bowlerWickets: lastEntry.bowlerWickets,
+          ballNotation: lastEntry.ballNotation,
+          shotDirection: lastEntry.shotDirection,
+          shotType: lastEntry.shotType,
+          extraType: lastEntry.extraType,
+          extraRuns: lastEntry.extraRuns,
+          commentaryId: commentaryId,
+          totalValidBalls: lastEntry.totalValidBalls,
+          bowlerLegalBalls: lastEntry.bowlerLegalBalls,
+        ));
+      }
+    });
   }
 
-  // Handle No Ball with runs (ICC rules: No Ball = 1 run + any additional runs)
+  // Handle No Ball with runs (ICC rules)
+  // 1. Add 1 automatic no-ball run to team total
+  // 2. Add runs off the bat to batsman (or byes/leg-byes if no bat)
+  // 3. Do NOT increment legal ball count
+  // 4. Change strike only if runs completed by running (excluding the 1 no-ball) are odd
+  // Note: For no-ball + byes/leg-byes, runs are NOT credited to batsman
   void _handleNoBallWithRuns(int additionalRuns) {
+    // ICC Rule: Block all scoring when waiting for bowler selection (end-of-over lock)
+    if (_waitingForBowlerSelection) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select next bowler to continue')),
+      );
+      return;
+    }
+    
     // Check if innings should end
     if (_shouldEndInnings) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3809,7 +4163,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       return;
     }
     
-    final totalRuns = 1 + additionalRuns;
+    // ICC Rule: 1 automatic no-ball run + additional runs (off the bat or byes/leg-byes)
+    final automaticNoBallRun = 1;
+    final runsOffBat = additionalRuns; // Runs off the bat (or byes/leg-byes)
+    final totalRuns = automaticNoBallRun + runsOffBat;
+    
     _saveStateForUndo(
       runs: totalRuns,
       ballNotation: additionalRuns > 0 ? 'NB+$additionalRuns' : 'NB',
@@ -3817,16 +4175,29 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       extraRuns: totalRuns,
     );
     
+    // Store striker name BEFORE any swaps (for correct commentary attribution)
+    final strikerForCommentary = _striker;
+    
     setState(() {
       _isDeclaredRun = false;
       _isShortRun = false;
       
+      // ICC Rule: Add 1 automatic no-ball + runs to team total
       _totalRuns += totalRuns;
+      // ICC Rule: No-ball runs count against bowler
       _bowlerRuns += totalRuns;
+      // ICC Rule: Credit batsman only if runs are off the bat
+      // For now, we assume additionalRuns are off the bat (not byes/leg-byes)
+      // If byes/leg-byes, they should be handled separately
+      if (runsOffBat > 0) {
+        _strikerRuns += runsOffBat;
+        // Note: Balls faced is NOT incremented for no-ball (not a legal delivery)
+      }
       
-      // No ball doesn't count as a ball (ICC rule) - DO NOT increment _currentBall
-      // But if runs are scored, batsmen swap on odd runs
-      if (totalRuns % 2 == 1) {
+      // ICC Rule: No ball doesn't count as a legal ball - DO NOT increment _currentBall
+      // ICC Rule: Change strike only if runs off the bat (excluding 1 no-ball) are odd
+      // Strike rotation based on runsOffBat, NOT totalRuns
+      if (runsOffBat % 2 == 1) {
         _swapBatsmen();
       }
       
@@ -3842,18 +4213,57 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _saveScorecardToSupabase();
     
     // Generate commentary for no ball (NOT a valid ball - doesn't count towards over)
-    _generateCommentary(
+    // Use the striker who was on strike when the no ball was bowled
+    _generateCommentaryWithStriker(
+      strikerName: strikerForCommentary,
       ballType: 'noBall',
       runs: totalRuns,
       isExtra: true,
       extraType: 'NB',
       extraRuns: totalRuns,
       isValidBall: false, // No ball doesn't count as valid ball
-    );
+    ).then((commentaryId) {
+      // Update undo stack with commentary ID
+      if (_undoStack.isNotEmpty && commentaryId != null) {
+        final lastEntry = _undoStack.removeLast();
+        _undoStack.add(_BallData(
+          runs: lastEntry.runs,
+          totalRuns: lastEntry.totalRuns,
+          wickets: lastEntry.wickets,
+          currentOver: lastEntry.currentOver,
+          currentBall: lastEntry.currentBall,
+          striker: lastEntry.striker,
+          nonStriker: lastEntry.nonStriker,
+          strikerRuns: lastEntry.strikerRuns,
+          strikerBalls: lastEntry.strikerBalls,
+          nonStrikerRuns: lastEntry.nonStrikerRuns,
+          nonStrikerBalls: lastEntry.nonStrikerBalls,
+          bowlerOvers: lastEntry.bowlerOvers,
+          bowlerRuns: lastEntry.bowlerRuns,
+          bowlerWickets: lastEntry.bowlerWickets,
+          ballNotation: lastEntry.ballNotation,
+          shotDirection: lastEntry.shotDirection,
+          shotType: lastEntry.shotType,
+          extraType: lastEntry.extraType,
+          extraRuns: lastEntry.extraRuns,
+          commentaryId: commentaryId,
+          totalValidBalls: lastEntry.totalValidBalls,
+          bowlerLegalBalls: lastEntry.bowlerLegalBalls,
+        ));
+      }
+    });
   }
 
   // Handle Byes with runs (ICC rules: Byes count as a ball)
   void _handleByesWithRuns(int runs) {
+    // ICC Rule: Block all scoring when waiting for bowler selection (end-of-over lock)
+    if (_waitingForBowlerSelection) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select next bowler to continue')),
+      );
+      return;
+    }
+    
     // Check if innings should end
     if (_shouldEndInnings) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3869,13 +4279,30 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       extraRuns: runs,
     );
     
+    // Store striker name BEFORE any swaps (for correct commentary attribution)
+    final strikerForCommentary = _striker;
+    
     setState(() {
       _isDeclaredRun = false;
       _isShortRun = false;
       
+      // ICC Rule 1: Byes ADD to team total
       _totalRuns += runs;
-      // Byes count as a ball (ICC rule)
+      
+      // ICC Rule 2: Byes do NOT add to bowler's runs (bowler only concedes from bat, wides, no-balls)
+      // _bowlerRuns is NOT incremented for byes
+      
+      // ICC Rule 3: Byes do NOT add to batsman's runs (extras, not off the bat)
+      // _strikerRuns is NOT incremented for byes
+      
+      // ICC Rule 4: Byes COUNT as a legal ball - increment striker's balls faced
+      _strikerBalls += 1;
+      _strikerSR = _strikerBalls > 0 ? (_strikerRuns / _strikerBalls) * 100 : 0.0;
+      
+      // Byes count as a legal delivery (ICC rule)
       _currentBall += 1;
+      // Increment bowler's legal balls and update overs (ICC rule)
+      _incrementBowlerLegalBalls();
       
       // Add to current over balls
       _currentOverBalls.add(runs > 0 ? 'B$runs' : 'B');
@@ -3888,11 +4315,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _bowlerOvers = _bowlerOvers + 1.0;
         _currentOverBalls = [];
+        // Set flag to wait for bowler selection (end-of-over lock)
+        _waitingForBowlerSelection = true;
       }
       
-      // Swap batsmen if odd runs or end of over
+      // ICC Rule 5: Strike rotation - odd runs (1,3,5) = swap, even (0,2,4) = no swap
+      // ICC Rule 6: Over progression - can end the over
       if (runs % 2 == 1 || overComplete) {
         _swapBatsmen();
       }
@@ -3911,17 +4340,48 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _saveScorecardToSupabase();
     
     // Generate commentary for byes (valid ball)
-    _generateCommentary(
+    // Use the striker who was on strike when the byes occurred
+    _generateCommentaryWithStriker(
+      strikerName: strikerForCommentary,
       ballType: 'bye',
       runs: runs,
       isExtra: true,
       extraType: 'B',
       extraRuns: runs,
       isValidBall: true, // Byes count as valid ball
-    );
+    ).then((commentaryId) {
+      // Update undo stack with commentary ID
+      if (_undoStack.isNotEmpty && commentaryId != null) {
+        final lastEntry = _undoStack.removeLast();
+        _undoStack.add(_BallData(
+          runs: lastEntry.runs,
+          totalRuns: lastEntry.totalRuns,
+          wickets: lastEntry.wickets,
+          currentOver: lastEntry.currentOver,
+          currentBall: lastEntry.currentBall,
+          striker: lastEntry.striker,
+          nonStriker: lastEntry.nonStriker,
+          strikerRuns: lastEntry.strikerRuns,
+          strikerBalls: lastEntry.strikerBalls,
+          nonStrikerRuns: lastEntry.nonStrikerRuns,
+          nonStrikerBalls: lastEntry.nonStrikerBalls,
+          bowlerOvers: lastEntry.bowlerOvers,
+          bowlerRuns: lastEntry.bowlerRuns,
+          bowlerWickets: lastEntry.bowlerWickets,
+          ballNotation: lastEntry.ballNotation,
+          shotDirection: lastEntry.shotDirection,
+          shotType: lastEntry.shotType,
+          extraType: lastEntry.extraType,
+          extraRuns: lastEntry.extraRuns,
+          commentaryId: commentaryId,
+          totalValidBalls: lastEntry.totalValidBalls,
+          bowlerLegalBalls: lastEntry.bowlerLegalBalls,
+        ));
+      }
+    });
     
-    // If over is complete, show next bowler selection
-    if (_currentBall == 0 && _currentOver > 0) {
+    // If over is complete, show next bowler selection (mandatory, blocking)
+    if (_waitingForBowlerSelection) {
       Future.delayed(const Duration(milliseconds: 500), () {
         _showSelectNextBowler();
       });
@@ -3930,6 +4390,14 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
 
   // Handle Leg Byes with runs (ICC rules: Leg Byes count as a ball)
   void _handleLegByesWithRuns(int runs) {
+    // ICC Rule: Block all scoring when waiting for bowler selection (end-of-over lock)
+    if (_waitingForBowlerSelection) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select next bowler to continue')),
+      );
+      return;
+    }
+    
     // Check if innings should end
     if (_shouldEndInnings) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3945,13 +4413,30 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       extraRuns: runs,
     );
     
+    // Store striker name BEFORE any swaps (for correct commentary attribution)
+    final strikerForCommentary = _striker;
+    
     setState(() {
       _isDeclaredRun = false;
       _isShortRun = false;
       
+      // ICC Rule 1: Leg Byes ADD to team total
       _totalRuns += runs;
-      // Leg Byes count as a ball (ICC rule)
+      
+      // ICC Rule 2: Leg Byes do NOT add to bowler's runs (bowler only concedes from bat, wides, no-balls)
+      // _bowlerRuns is NOT incremented for leg-byes
+      
+      // ICC Rule 3: Leg Byes do NOT add to batsman's runs (extras, not off the bat)
+      // _strikerRuns is NOT incremented for leg-byes
+      
+      // ICC Rule 4: Leg Byes COUNT as a legal ball - increment striker's balls faced
+      _strikerBalls += 1;
+      _strikerSR = _strikerBalls > 0 ? (_strikerRuns / _strikerBalls) * 100 : 0.0;
+      
+      // Leg Byes count as a legal delivery (ICC rule)
       _currentBall += 1;
+      // Increment bowler's legal balls and update overs (ICC rule)
+      _incrementBowlerLegalBalls();
       
       // Add to current over balls
       _currentOverBalls.add(runs > 0 ? 'LB$runs' : 'LB');
@@ -3964,11 +4449,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _bowlerOvers = _bowlerOvers + 1.0;
         _currentOverBalls = [];
+        // Set flag to wait for bowler selection (end-of-over lock)
+        _waitingForBowlerSelection = true;
       }
       
-      // Swap batsmen if odd runs or end of over
+      // ICC Rule 5: Strike rotation - odd runs (1,3,5) = swap, even (0,2,4) = no swap
+      // ICC Rule 6: Over progression - can end the over
       if (runs % 2 == 1 || overComplete) {
         _swapBatsmen();
       }
@@ -3986,8 +4473,49 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     
     _saveScorecardToSupabase();
     
-    // If over is complete, show next bowler selection
-    if (_currentBall == 0 && _currentOver > 0) {
+    // Generate commentary for leg-byes (valid ball)
+    // Use the striker who was on strike when the leg-byes occurred
+    _generateCommentaryWithStriker(
+      strikerName: strikerForCommentary,
+      ballType: 'legBye',
+      runs: runs,
+      isExtra: true,
+      extraType: 'LB',
+      extraRuns: runs,
+      isValidBall: true, // Leg-byes count as valid ball
+    ).then((commentaryId) {
+      // Update undo stack with commentary ID
+      if (_undoStack.isNotEmpty && commentaryId != null) {
+        final lastEntry = _undoStack.removeLast();
+        _undoStack.add(_BallData(
+          runs: lastEntry.runs,
+          totalRuns: lastEntry.totalRuns,
+          wickets: lastEntry.wickets,
+          currentOver: lastEntry.currentOver,
+          currentBall: lastEntry.currentBall,
+          striker: lastEntry.striker,
+          nonStriker: lastEntry.nonStriker,
+          strikerRuns: lastEntry.strikerRuns,
+          strikerBalls: lastEntry.strikerBalls,
+          nonStrikerRuns: lastEntry.nonStrikerRuns,
+          nonStrikerBalls: lastEntry.nonStrikerBalls,
+          bowlerOvers: lastEntry.bowlerOvers,
+          bowlerRuns: lastEntry.bowlerRuns,
+          bowlerWickets: lastEntry.bowlerWickets,
+          ballNotation: lastEntry.ballNotation,
+          shotDirection: lastEntry.shotDirection,
+          shotType: lastEntry.shotType,
+          extraType: lastEntry.extraType,
+          extraRuns: lastEntry.extraRuns,
+          commentaryId: commentaryId,
+          totalValidBalls: lastEntry.totalValidBalls,
+          bowlerLegalBalls: lastEntry.bowlerLegalBalls,
+        ));
+      }
+    });
+    
+    // If over is complete, show next bowler selection (mandatory, blocking)
+    if (_waitingForBowlerSelection) {
       Future.delayed(const Duration(milliseconds: 500), () {
         _showSelectNextBowler();
       });
@@ -4355,6 +4883,14 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
 
   // Handle score with wagon wheel (called from run buttons)
   void _handleScoreWithWagonWheel(int runs, {String? direction, String? shotType}) {
+    // ICC Rule: Block all scoring when waiting for bowler selection (end-of-over lock)
+    if (_waitingForBowlerSelection) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select next bowler to continue')),
+      );
+      return;
+    }
+    
     if (direction == null || shotType == null) {
       // Show wagon wheel first
       _showWagonWheel(runs);
@@ -4369,31 +4905,51 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       return;
     }
     
-    // Save state for undo
+    // ICC Rule: Short run reduces attempted runs by exactly one
+    // Apply immediately to current ball (not next ball)
+    final actualRuns = _isShortRun ? (runs > 0 ? runs - 1 : 0) : runs;
+    
+    // Save state for undo (save the actual runs scored)
     _saveStateForUndo(
-      runs: runs,
-      ballNotation: runs.toString(),
+      runs: actualRuns,
+      ballNotation: actualRuns.toString(),
       shotDirection: direction,
       shotType: shotType,
     );
     
+    // Store striker name BEFORE any swaps (for correct commentary attribution)
+    final strikerForCommentary = _striker;
+    // Capture short run flag before reset
+    final wasShortRun = _isShortRun;
+    
     setState(() {
+      // Capture declared run flag before reset
+      final wasDeclaredRun = _isDeclaredRun;
+      // Reset flags after use
       _isDeclaredRun = false;
       _isShortRun = false;
       
-      _totalRuns += runs;
-      _strikerRuns += runs;
+      // ICC Rule: Declared runs are treated as actual runs completed by batsmen
+      // ICC Rule: Short run reduces declared/attempted runs by exactly one
+      // Use actual runs (reduced if short run)
+      _totalRuns += actualRuns;
+      // ICC Rule: Credit batsman only if off the bat (declared runs are off the bat)
+      _strikerRuns += actualRuns;
+      // ICC Rule: Declared runs and short runs count as legal deliveries
+      // Increment balls faced and legal ball count
       _strikerBalls += 1;
       _strikerSR = _strikerBalls > 0 ? (_strikerRuns / _strikerBalls) * 100 : 0.0;
-      _bowlerRuns += runs;
+      _bowlerRuns += actualRuns;
       
       // Increment ball (legal delivery - ICC rule)
       _currentBall += 1;
+      // Increment bowler's legal balls and update overs (ICC rule)
+      _incrementBowlerLegalBalls();
       
       // Add to current over balls (max 6 legal deliveries)
-      String ballNotation = runs.toString();
-      if (_isDeclaredRun) ballNotation += ' (DR)';
-      if (_isShortRun) ballNotation += ' (SR)';
+      String ballNotation = actualRuns.toString();
+      if (wasDeclaredRun) ballNotation += ' (DR)';
+      if (wasShortRun) ballNotation += ' (SR)';
       _currentOverBalls.add(ballNotation);
       
       // Check if over is complete (ICC rule: 6 legal balls = 1 over)
@@ -4405,14 +4961,16 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _bowlerOvers = _bowlerOvers + 1.0;
         _currentOverBalls = [];
+        // Set flag to wait for bowler selection (end-of-over lock)
+        _waitingForBowlerSelection = true;
       }
       
-      // Swap batsmen if:
-      // 1. Odd runs scored (1, 3, 5) - batsmen swap ends (ICC rule)
-      // 2. End of over (6 balls) - batsmen always swap (ICC rule)
-      if (runs % 2 == 1 || overComplete) {
+      // ICC Rule: Strike rotation based on ACTUAL runs (after short run reduction)
+      // No automatic penalty runs affect strike rotation
+      // 1. Odd runs (1, 3, 5) - batsmen swap ends
+      // 2. End of over (6 balls) - batsmen always swap
+      if (actualRuns % 2 == 1 || overComplete) {
         _swapBatsmen();
       }
       
@@ -4430,16 +4988,49 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _saveScorecardToSupabase();
     
     // Generate commentary for EVERY ball (valid ball)
-    _generateCommentary(
+    // Use the striker who faced the ball (before swap) for correct attribution
+    // Use actual runs (after short run reduction if applicable)
+    _generateCommentaryWithStriker(
+      strikerName: strikerForCommentary,
       ballType: 'normal',
-      runs: runs,
+      runs: actualRuns, // Use actual runs (reduced if short run)
       shotDirection: direction,
       shotType: shotType,
       isValidBall: true,
-    );
+    ).then((commentaryId) {
+      // Update undo stack with commentary ID for true undo
+      if (_undoStack.isNotEmpty && commentaryId != null) {
+        // Update the last entry with commentary ID
+        final lastEntry = _undoStack.removeLast();
+        _undoStack.add(_BallData(
+          runs: lastEntry.runs,
+          totalRuns: lastEntry.totalRuns,
+          wickets: lastEntry.wickets,
+          currentOver: lastEntry.currentOver,
+          currentBall: lastEntry.currentBall,
+          striker: lastEntry.striker,
+          nonStriker: lastEntry.nonStriker,
+          strikerRuns: lastEntry.strikerRuns,
+          strikerBalls: lastEntry.strikerBalls,
+          nonStrikerRuns: lastEntry.nonStrikerRuns,
+          nonStrikerBalls: lastEntry.nonStrikerBalls,
+          bowlerOvers: lastEntry.bowlerOvers,
+          bowlerRuns: lastEntry.bowlerRuns,
+          bowlerWickets: lastEntry.bowlerWickets,
+          ballNotation: lastEntry.ballNotation,
+          shotDirection: lastEntry.shotDirection,
+          shotType: lastEntry.shotType,
+          extraType: lastEntry.extraType,
+          extraRuns: lastEntry.extraRuns,
+          commentaryId: commentaryId,
+          totalValidBalls: lastEntry.totalValidBalls,
+          bowlerLegalBalls: lastEntry.bowlerLegalBalls,
+        ));
+      }
+    });
     
-    // If over is complete, show next bowler selection
-    if (_currentBall == 0 && _currentOver > 0) {
+    // If over is complete, show next bowler selection (mandatory, blocking)
+    if (_waitingForBowlerSelection) {
       Future.delayed(const Duration(milliseconds: 500), () {
         _showSelectNextBowler();
       });
@@ -4477,29 +5068,37 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     );
   }
 
-  // Handle declared run (manual striker change)
+  // Handle declared run
+  // ICC Rule: Declared runs are treated as actual runs completed by batsmen
+  // They are added to team total, credited to batsman (if off the bat),
+  // and increment balls faced and legal ball count
+  // Note: This function just sets the flag - actual scoring happens in _handleScoreWithWagonWheel
   void _handleDeclaredRun() {
     setState(() {
       _isDeclaredRun = true;
       _isShortRun = false;
-      _swapBatsmen();
+      // Note: Strike rotation will happen in _handleScoreWithWagonWheel based on actual runs
     });
     _saveScorecardToSupabase();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Striker changed (Declared Run)'), duration: Duration(seconds: 1)),
+      const SnackBar(content: Text('Declared Run flag set - score runs to apply'), duration: Duration(seconds: 1)),
     );
   }
 
-  // Handle short run (manual striker change)
+  // Handle short run
+  // ICC Rule: Short run reduces declared/attempted runs by exactly one
+  // Apply reduced value consistently to team total and batsman runs
+  // Count the ball as legal, rotate strike only if final reduced runs are odd
+  // Note: This function just sets the flag - actual scoring happens in _handleScoreWithWagonWheel
   void _handleShortRun() {
     setState(() {
       _isShortRun = true;
       _isDeclaredRun = false;
-      _swapBatsmen();
+      // Note: Strike rotation will happen in _handleScoreWithWagonWheel based on actual (reduced) runs
     });
     _saveScorecardToSupabase();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Striker changed (Short Run)'), duration: Duration(seconds: 1)),
+      const SnackBar(content: Text('Short Run flag set - score runs to apply reduction'), duration: Duration(seconds: 1)),
     );
   }
 }
