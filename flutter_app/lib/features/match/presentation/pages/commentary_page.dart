@@ -22,10 +22,12 @@ final commentaryStreamProvider = StreamProvider.family<List<CommentaryModel>, St
 
 class CommentaryPage extends ConsumerWidget {
   final String matchId;
+  final bool showAppBar;
 
   const CommentaryPage({
     super.key,
     required this.matchId,
+    this.showAppBar = false,
   });
 
   @override
@@ -33,12 +35,15 @@ class CommentaryPage extends ConsumerWidget {
     final commentaryAsync = ref.watch(commentaryStreamProvider(matchId));
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: const Text('Ball-by-Ball Commentary'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
+      backgroundColor: Colors.grey[50],
+      appBar: showAppBar
+          ? AppBar(
+              title: const Text('Ball-by-Ball Commentary'),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            )
+          : null,
       body: commentaryAsync.when(
         data: (commentaryList) {
           if (commentaryList.isEmpty) {
@@ -117,7 +122,7 @@ class CommentaryPage extends ConsumerWidget {
           
           return ListView.builder(
             reverse: true, // Show latest at bottom, but scroll to bottom
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             itemCount: groupedCommentary.length,
             itemBuilder: (context, index) {
               final item = groupedCommentary[index];
@@ -255,40 +260,41 @@ class NewBatsmanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.green[50],
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: Colors.green[300]!,
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         child: Row(
           children: [
             Icon(
               Icons.person_add,
               color: Colors.green[700],
-              size: 20,
+              size: 22,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Text(
                 'New batsman: $batsmanName comes to the crease',
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: 16,
                   color: Colors.green[900],
                   fontWeight: FontWeight.w600,
                   fontStyle: FontStyle.italic,
+                  height: 1.5,
                 ),
               ),
             ),
@@ -319,24 +325,24 @@ class OverSummaryCard extends StatelessWidget {
     final battingPair = lines.length > 3 ? lines[3] : '';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16, top: 8),
+      margin: const EdgeInsets.only(bottom: 20, top: 12),
       decoration: BoxDecoration(
         color: isLatest ? AppColors.primary.withOpacity(0.1) : Colors.blue[50],
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isLatest ? AppColors.primary : Colors.blue[300]!,
-          width: isLatest ? 2 : 1,
+          width: isLatest ? 2 : 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -344,47 +350,51 @@ class OverSummaryCard extends StatelessWidget {
             Text(
               overTitle,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primary,
+                letterSpacing: 0.5,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             // Ball Runs (6 legal ball outcomes)
             Text(
               ballRuns,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 17,
                 fontWeight: FontWeight.w600,
                 color: Colors.grey[800],
-                letterSpacing: 2,
+                letterSpacing: 2.5,
+                height: 1.4,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             // Summary (Runs | Wickets | Match Score)
             Text(
               summary,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 15,
                 color: Colors.grey[700],
                 fontWeight: FontWeight.w500,
+                height: 1.5,
               ),
             ),
             // Batting Pair Stats (after end-of-over strike rotation)
             if (battingPair.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   battingPair,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 13,
                     color: Colors.grey[800],
                     fontWeight: FontWeight.w500,
+                    height: 1.4,
                   ),
                 ),
               ),
@@ -408,132 +418,156 @@ class CommentaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isWicket = commentary.ballType == 'wicket';
+    final isBoundary = commentary.runs == 4 || commentary.runs == 6;
+    
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: isLatest ? AppColors.primary.withOpacity(0.05) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: isLatest 
+            ? AppColors.primary.withOpacity(0.05) 
+            : isWicket 
+                ? Colors.red[50] 
+                : isBoundary
+                    ? Colors.blue[50]
+                    : Colors.white,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isLatest 
               ? AppColors.primary.withOpacity(0.3) 
-              : Colors.grey[300]!,
-          width: isLatest ? 2 : 1,
+              : isWicket
+                  ? Colors.red[200]!
+                  : isBoundary
+                      ? Colors.blue[200]!
+                      : Colors.grey[300]!,
+          width: isLatest ? 2 : isWicket || isBoundary ? 1.5 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Over and Ball Type
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: _getBallTypeColor(commentary.ballType),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(22),
                   ),
                   child: Text(
                     commentary.overDisplay,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 15,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 if (isLatest)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: Colors.red,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Text(
                       'LIVE',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ),
                 const Spacer(),
                 if (commentary.isExtra)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: Colors.orange[300],
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       commentary.extraType ?? 'EXTRA',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             // Commentary Text
             Text(
               commentary.commentaryText,
               style: TextStyle(
-                fontSize: 15,
-                color: Colors.grey[800],
-                fontWeight: isLatest ? FontWeight.w600 : FontWeight.normal,
-                height: 1.4,
+                fontSize: 16,
+                color: Colors.grey[900],
+                fontWeight: isLatest || isWicket || isBoundary 
+                    ? FontWeight.w600 
+                    : FontWeight.w400,
+                height: 1.6,
+                letterSpacing: 0.2,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
             // Runs and Players Info
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 if (commentary.runs > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: _getRunsColor(commentary.runs),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       '${commentary.runs} run${commentary.runs > 1 ? 's' : ''}',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                if (commentary.runs > 0) const SizedBox(width: 8),
+                if (commentary.runs > 0) const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     '${commentary.strikerName} • ${commentary.bowlerName}',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 13,
                       color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
                 // Timestamp (optional, show relative time)
                 Text(
                   _formatTimestamp(commentary.timestamp),
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     color: Colors.grey[500],
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ],
