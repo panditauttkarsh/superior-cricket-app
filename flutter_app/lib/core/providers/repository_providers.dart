@@ -9,6 +9,8 @@ import '../repositories/commentary_repository.dart';
 import '../repositories/profile_repository.dart';
 import '../repositories/notification_repository.dart';
 import '../repositories/match_player_repository.dart';
+import '../repositories/tournament_team_repository.dart';
+import '../services/storage_service.dart';
 
 final matchRepositoryProvider = Provider<MatchRepository>((ref) {
   return MatchRepository();
@@ -48,5 +50,13 @@ final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
 
 final matchPlayerRepositoryProvider = Provider<MatchPlayerRepository>((ref) {
   return MatchPlayerRepository();
+});
+
+final tournamentTeamRepositoryProvider = Provider<TournamentTeamRepository>((ref) {
+  return TournamentTeamRepository();
+});
+
+final storageServiceProvider = Provider<StorageService>((ref) {
+  return StorageService();
 });
 

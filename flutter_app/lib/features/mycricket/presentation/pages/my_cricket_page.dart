@@ -1149,24 +1149,24 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
               ),
               ElevatedButton(
                 onPressed: () {
-                  // Show create tournament dialog
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Tournament creation feature coming soon!'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  // Navigate directly to Add Tournament screen
+                  context.go('/tournament/add');
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: AppColors.textMain,
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(25),
                   ),
-                  elevation: 2,
                 ),
-                child: const Text('Start'),
+                child: const Text(
+                  'Start',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
