@@ -80,18 +80,38 @@ class CommentaryPage extends ConsumerWidget {
             print('Commentary: ${entry.over} - ${entry.commentaryText}');
           }
           
-          // Sort by over and timestamp to ensure correct order (newest first)
+          // Sort by over and timestamp to ensure strict chronological order
+          // ICC Rule: Over summaries appear AFTER the 6th ball (0.6, 1.6, etc.)
+          // Over summaries are positioned at over + 0.7, so they naturally appear after 0.6
+          // Chronological order: 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, OVER 0 (at 0.7), 1.1, 1.2, ...
           final sortedList = List<CommentaryModel>.from(commentaryList)
             ..sort((a, b) {
-              // First sort by over (descending)
-              final overCompare = b.over.compareTo(a.over);
+              // Sort by over value (ascending for chronological order)
+              final overCompare = a.over.compareTo(b.over);
               if (overCompare != 0) return overCompare;
-              // Then by timestamp (descending)
-              return b.timestamp.compareTo(a.timestamp);
+              // Then by timestamp (ascending for chronological order)
+              return a.timestamp.compareTo(b.timestamp);
             });
           
-          // Group commentary by over and insert over summaries
-          final groupedCommentary = _groupCommentaryWithSummaries(sortedList);
+          // Convert to grouped format - summaries are already positioned correctly at over + 0.7
+          // Over summaries at over + 0.7 will naturally appear after over.6 in chronological order
+          var groupedCommentary = sortedList.map((commentary) {
+            if (commentary.ballType == 'overSummary') {
+              return {
+                'type': 'overSummary',
+                'text': commentary.commentaryText,
+              };
+            } else {
+              return {
+                'type': 'commentary',
+                'commentary': commentary,
+              };
+            }
+          }).toList();
+          
+          // Reverse for display (newest first in UI)
+          // Since ListView has reverse: true, we reverse the list so newest appears at bottom
+          groupedCommentary = groupedCommentary.reversed.toList();
           
           print('Commentary: Grouped into ${groupedCommentary.length} items');
           
@@ -296,6 +316,7 @@ class OverSummaryCard extends StatelessWidget {
     final overTitle = lines.isNotEmpty ? lines[0] : '';
     final ballRuns = lines.length > 1 ? lines[1] : '';
     final summary = lines.length > 2 ? lines[2] : '';
+    final battingPair = lines.length > 3 ? lines[3] : '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16, top: 8),
@@ -329,7 +350,7 @@ class OverSummaryCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            // Ball Runs
+            // Ball Runs (6 legal ball outcomes)
             Text(
               ballRuns,
               style: TextStyle(
@@ -340,7 +361,7 @@ class OverSummaryCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            // Summary
+            // Summary (Runs | Wickets | Match Score)
             Text(
               summary,
               style: TextStyle(
@@ -349,6 +370,25 @@ class OverSummaryCard extends StatelessWidget {
                 fontWeight: FontWeight.w500,
               ),
             ),
+            // Batting Pair Stats (after end-of-over strike rotation)
+            if (battingPair.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  battingPair,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[800],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
