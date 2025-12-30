@@ -404,7 +404,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/commentary/:matchId',
         builder: (context, state) {
           final matchId = state.pathParameters['matchId']!;
-          return CommentaryPage(matchId: matchId);
+          return CommentaryPage(matchId: matchId, showAppBar: true);
         },
       ),
       // Notifications Route

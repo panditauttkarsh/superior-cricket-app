@@ -95,6 +95,142 @@ class _Delivery {
   });
 }
 
+// Batting statistics for a single player in an innings
+class _PlayerBattingStats {
+  final String playerName;
+  final int runs;
+  final int balls;
+  final int fours;
+  final int sixes;
+  final double strikeRate;
+  final int minutes; // Time at crease (approximate)
+  final String? dismissal; // Dismissal description (e.g., "c Aryan b Nitin Sharma")
+  final bool isNotOut; // true if not out
+  final bool isCaptain; // (c) indicator
+  final bool isWicketKeeper; // (wk) indicator
+
+  _PlayerBattingStats({
+    required this.playerName,
+    required this.runs,
+    required this.balls,
+    required this.fours,
+    required this.sixes,
+    required this.strikeRate,
+    required this.minutes,
+    this.dismissal,
+    this.isNotOut = false,
+    this.isCaptain = false,
+    this.isWicketKeeper = false,
+  });
+}
+
+// Player innings statistics (accumulated from deliveries)
+class _PlayerInningsStats {
+  int runs = 0;
+  int balls = 0;
+  int fours = 0;
+  int sixes = 0;
+  DateTime? startTime;
+  
+  double get strikeRate => balls > 0 ? (runs / balls) * 100 : 0.0;
+  int get minutes {
+    if (startTime == null) return 0;
+    return DateTime.now().difference(startTime!).inMinutes;
+  }
+}
+
+// Bowler innings statistics (accumulated from deliveries)
+class _BowlerInningsStats {
+  int legalBalls = 0;
+  int runs = 0;
+  int wickets = 0;
+  int maidens = 0;
+  int wides = 0;
+  int noBalls = 0;
+  int byes = 0;
+  int legByes = 0;
+  
+  double get overs => legalBalls / 6.0;
+  double get economy => overs > 0 ? runs / overs : 0.0;
+  
+  String formatOvers() {
+    final wholeOvers = legalBalls ~/ 6;
+    final balls = legalBalls % 6;
+    return '$wholeOvers.$balls';
+  }
+}
+
+// Extras breakdown
+class _ExtrasBreakdown {
+  int noBalls = 0;
+  int wides = 0;
+  int byes = 0;
+  int legByes = 0;
+  int penalty = 0;
+  
+  _ExtrasBreakdown({
+    this.noBalls = 0,
+    this.wides = 0,
+    this.byes = 0,
+    this.legByes = 0,
+    this.penalty = 0,
+  });
+  
+  int get total => noBalls + wides + byes + legByes + penalty;
+  
+  String format() {
+    final parts = <String>[];
+    if (noBalls > 0) parts.add('nb $noBalls');
+    if (wides > 0) parts.add('wd $wides');
+    if (byes > 0) parts.add('b $byes');
+    if (legByes > 0) parts.add('lb $legByes');
+    if (penalty > 0) parts.add('penalty $penalty');
+    return parts.isEmpty ? '0' : parts.join(', ');
+  }
+}
+
+// Complete innings data structure
+class _InningsData {
+  final String teamName;
+  final int runs;
+  final int wickets;
+  final double overs;
+  final List<_PlayerBattingStats> battingStats;
+  final _ExtrasBreakdown extras;
+  final List<_BowlerScorecardRow> bowlerStats;
+  final bool isComplete;
+
+  _InningsData({
+    required this.teamName,
+    required this.runs,
+    required this.wickets,
+    required this.overs,
+    required this.battingStats,
+    required this.extras,
+    required this.bowlerStats,
+    this.isComplete = false,
+  });
+}
+
+// Bowler scorecard row data
+class _BowlerScorecardRow {
+  final String bowlerName;
+  final double overs;
+  final int maidens;
+  final int runs;
+  final int wickets;
+  final double economy;
+  
+  _BowlerScorecardRow({
+    required this.bowlerName,
+    required this.overs,
+    required this.maidens,
+    required this.runs,
+    required this.wickets,
+    required this.economy,
+  });
+}
+
 // Ball data structure for undo functionality
 class _BallData {
   final int runs;
@@ -213,6 +349,28 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   int _firstInningsRuns = 0;
   int _firstInningsWickets = 0;
   double _firstInningsOvers = 0.0;
+  _InningsData? _firstInningsData; // Store complete first innings data
+  
+  // Track 4s and 6s per player (per innings)
+  Map<String, int> _playerFours = {}; // Player name -> count of 4s
+  Map<String, int> _playerSixes = {}; // Player name -> count of 6s
+  Map<String, DateTime> _playerStartTime = {}; // Track when player started batting (for minutes calculation)
+  
+  // SINGLE SOURCE OF TRUTH: Complete delivery history per innings
+  List<_Delivery> _deliveries = []; // All deliveries for current innings
+  List<_Delivery> _firstInningsDeliveries = []; // All deliveries for first innings (when second starts)
+  
+  // Track complete batting stats per player (accumulated from deliveries)
+  Map<String, _PlayerInningsStats> _playerStatsMap = {}; // Player -> complete stats for current innings
+  Map<String, _PlayerInningsStats> _firstInningsPlayerStats = {}; // First innings stats (when second starts)
+  
+  // Track complete bowler stats per bowler (accumulated from deliveries)
+  Map<String, _BowlerInningsStats> _bowlerStatsMap = {}; // Bowler -> complete stats for current innings
+  Map<String, _BowlerInningsStats> _firstInningsBowlerStats = {}; // First innings bowler stats
+  
+  // Track extras per innings
+  Map<String, int> _extrasMap = {}; // 'nb', 'wd', 'b', 'lb', 'penalty' -> count
+  Map<String, int> _firstInningsExtras = {}; // First innings extras
   
   // Special run states
   bool _isDeclaredRun = false;
@@ -228,6 +386,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   
   // Match completion flag
   bool _matchCompleted = false;
+  
+  // UI State for expandable innings
+  bool _firstInningsExpanded = false; // Previous innings starts collapsed
   
   // YouTube Player
   YoutubePlayerController? _youtubeController;
@@ -264,17 +425,21 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     if (widget.initialStriker != null && widget.initialStriker!.isNotEmpty) {
       _striker = widget.initialStriker!;
       _batsmenWhoHaveBatted.add(_striker);
+      _trackPlayerStartTime(_striker);
     } else if (_battingTeamPlayers.isNotEmpty) {
       _striker = _battingTeamPlayers[0];
       _batsmenWhoHaveBatted.add(_striker);
+      _trackPlayerStartTime(_striker);
     }
     
     if (widget.initialNonStriker != null && widget.initialNonStriker!.isNotEmpty) {
       _nonStriker = widget.initialNonStriker!;
       _batsmenWhoHaveBatted.add(_nonStriker);
+      _trackPlayerStartTime(_nonStriker);
     } else if (_battingTeamPlayers.length > 1) {
       _nonStriker = _battingTeamPlayers[1];
       _batsmenWhoHaveBatted.add(_nonStriker);
+      _trackPlayerStartTime(_nonStriker);
     }
     
     // Show batting type selection for opening batsmen if not already set (after data load)
@@ -452,6 +617,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     
     final lastState = _undoStack.removeLast();
     
+    // Remove last delivery from history
+    if (_deliveries.isNotEmpty) {
+      _deliveries.removeLast();
+      // Recalculate all stats from remaining deliveries
+      _recalculateStatsFromDeliveries();
+    }
+    
     // Delete commentary entry if it exists
     if (lastState.commentaryId != null && widget.matchId != null) {
       try {
@@ -548,6 +720,493 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _bowlerOversMap[_bowler] = _bowlerOvers;
   }
 
+  // Track 4s and 6s when runs are scored off the bat
+  void _trackBoundaries(String player, int runs) {
+    if (runs == 4) {
+      _playerFours[player] = (_playerFours[player] ?? 0) + 1;
+    } else if (runs == 6) {
+      _playerSixes[player] = (_playerSixes[player] ?? 0) + 1;
+    }
+  }
+  
+  // Track when a player starts batting (for minutes calculation)
+  void _trackPlayerStartTime(String player) {
+    if (!_playerStartTime.containsKey(player)) {
+      _playerStartTime[player] = DateTime.now();
+    }
+  }
+  
+  // Calculate minutes at crease for a player
+  int _calculateMinutes(String player) {
+    final startTime = _playerStartTime[player];
+    if (startTime == null) return 0;
+    final duration = DateTime.now().difference(startTime);
+    return duration.inMinutes;
+  }
+  
+  // Record a delivery (single source of truth)
+  void _recordDelivery({
+    required int over,
+    required int ball,
+    required String striker,
+    required String nonStriker,
+    required String bowler,
+    required int runs,
+    required int teamTotal,
+    required int strikerRuns,
+    required int strikerBalls,
+    required int bowlerRuns,
+    required int bowlerLegalBalls,
+    required int wickets,
+    String? wicketType,
+    String? extraType,
+    int? extraRuns,
+    required bool isLegalBall,
+    required bool isShortRun,
+    String? commentaryId,
+    String? shotDirection,
+    String? shotType,
+  }) {
+    final delivery = _Delivery(
+      deliveryNumber: _deliveries.length + 1,
+      over: over,
+      ball: ball,
+      striker: striker,
+      nonStriker: nonStriker,
+      bowler: bowler,
+      runs: runs,
+      teamTotal: teamTotal,
+      strikerRuns: strikerRuns,
+      strikerBalls: strikerBalls,
+      bowlerRuns: bowlerRuns,
+      bowlerLegalBalls: bowlerLegalBalls,
+      wickets: wickets,
+      wicketType: wicketType,
+      extraType: extraType,
+      extraRuns: extraRuns,
+      isLegalBall: isLegalBall,
+      isShortRun: isShortRun,
+      commentaryId: commentaryId,
+      shotDirection: shotDirection,
+      shotType: shotType,
+      timestamp: DateTime.now(),
+    );
+    
+    _deliveries.add(delivery);
+    
+    // Update player stats from delivery
+    _updatePlayerStatsFromDelivery(delivery);
+    
+    // Update bowler stats from delivery
+    _updateBowlerStatsFromDelivery(delivery);
+    
+    // Update extras from delivery
+    _updateExtrasFromDelivery(delivery);
+  }
+  
+  // Update player stats from a delivery
+  void _updatePlayerStatsFromDelivery(_Delivery delivery) {
+    // Initialize player stats if not exists
+    if (!_playerStatsMap.containsKey(delivery.striker)) {
+      _playerStatsMap[delivery.striker] = _PlayerInningsStats();
+      if (_playerStartTime[delivery.striker] != null) {
+        _playerStatsMap[delivery.striker]!.startTime = _playerStartTime[delivery.striker];
+      }
+    }
+    
+    final playerStats = _playerStatsMap[delivery.striker]!;
+    
+    // Update runs - use the strikerRuns from delivery (this is cumulative)
+    // Only count runs off the bat (not extras)
+    if (delivery.extraType == null) {
+      // Regular ball: runs off bat
+      playerStats.runs = delivery.strikerRuns;
+    } else if (delivery.extraType == 'NB') {
+      // No-ball: runs off bat count (additionalRuns in no-ball)
+      playerStats.runs = delivery.strikerRuns;
+    }
+    // For wides, byes, leg-byes: strikerRuns doesn't change, so don't update
+    
+    // Update balls (only legal balls)
+    if (delivery.isLegalBall) {
+      playerStats.balls = delivery.strikerBalls;
+    }
+    
+    // Track boundaries (only if runs are off the bat)
+    if (delivery.extraType == null || delivery.extraType == 'NB') {
+      // Check if this delivery added a 4 or 6
+      // We need to compare with previous delivery to see if it's a new boundary
+      final previousDelivery = _deliveries.length > 1 
+          ? _deliveries[_deliveries.length - 2] 
+          : null;
+      final previousRuns = previousDelivery?.strikerRuns ?? 0;
+      final runsThisBall = delivery.strikerRuns - previousRuns;
+      
+      if (runsThisBall == 4) {
+        playerStats.fours++;
+      } else if (runsThisBall == 6) {
+        playerStats.sixes++;
+      }
+    }
+  }
+  
+  // Update bowler stats from a delivery
+  void _updateBowlerStatsFromDelivery(_Delivery delivery) {
+    if (!_bowlerStatsMap.containsKey(delivery.bowler)) {
+      _bowlerStatsMap[delivery.bowler] = _BowlerInningsStats();
+    }
+    
+    final bowlerStats = _bowlerStatsMap[delivery.bowler]!;
+    
+    // Update legal balls
+    bowlerStats.legalBalls = delivery.bowlerLegalBalls;
+    
+    // Update runs conceded (includes extras)
+    bowlerStats.runs = delivery.bowlerRuns;
+    
+    // Update wickets
+    if (delivery.wicketType != null && delivery.wicketType != 'Run Out') {
+      bowlerStats.wickets = delivery.wickets;
+    }
+    
+    // Track extras by type
+    if (delivery.extraType == 'WD') {
+      bowlerStats.wides += (delivery.extraRuns ?? 0);
+    } else if (delivery.extraType == 'NB') {
+      bowlerStats.noBalls += (delivery.extraRuns ?? 0);
+    } else if (delivery.extraType == 'B') {
+      bowlerStats.byes += (delivery.extraRuns ?? 0);
+    } else if (delivery.extraType == 'LB') {
+      bowlerStats.legByes += (delivery.extraRuns ?? 0);
+    }
+  }
+  
+  // Update extras from a delivery
+  void _updateExtrasFromDelivery(_Delivery delivery) {
+    if (delivery.extraType != null && delivery.extraRuns != null) {
+      final extraKey = delivery.extraType!.toLowerCase();
+      _extrasMap[extraKey] = (_extrasMap[extraKey] ?? 0) + delivery.extraRuns!;
+    }
+  }
+  
+  // Recalculate all stats from deliveries (for undo/editing)
+  void _recalculateStatsFromDeliveries() {
+    // Reset all stats
+    _playerStatsMap.clear();
+    _bowlerStatsMap.clear();
+    _extrasMap.clear();
+    
+    // Recalculate from all deliveries - build up incrementally
+    for (final delivery in _deliveries) {
+      // Initialize player stats if not exists
+      if (!_playerStatsMap.containsKey(delivery.striker)) {
+        _playerStatsMap[delivery.striker] = _PlayerInningsStats();
+        if (_playerStartTime[delivery.striker] != null) {
+          _playerStatsMap[delivery.striker]!.startTime = _playerStartTime[delivery.striker];
+        }
+      }
+      
+      final playerStats = _playerStatsMap[delivery.striker]!;
+      
+      // Update runs - only if off the bat (not extras)
+      if (delivery.extraType == null) {
+        // Regular ball: runs off bat
+        playerStats.runs = delivery.strikerRuns;
+      } else if (delivery.extraType == 'NB') {
+        // No-ball: runs off bat count
+        playerStats.runs = delivery.strikerRuns;
+      }
+      // For wides, byes, leg-byes: strikerRuns doesn't change
+      
+      // Update balls (only legal balls)
+      if (delivery.isLegalBall) {
+        playerStats.balls = delivery.strikerBalls;
+      }
+      
+      // Track boundaries incrementally
+      if (delivery.extraType == null || delivery.extraType == 'NB') {
+        if (delivery.runs == 4) {
+          playerStats.fours++;
+        } else if (delivery.runs == 6) {
+          playerStats.sixes++;
+        }
+      }
+      
+      // Update bowler stats
+      if (!_bowlerStatsMap.containsKey(delivery.bowler)) {
+        _bowlerStatsMap[delivery.bowler] = _BowlerInningsStats();
+      }
+      
+      final bowlerStats = _bowlerStatsMap[delivery.bowler]!;
+      bowlerStats.legalBalls = delivery.bowlerLegalBalls;
+      bowlerStats.runs = delivery.bowlerRuns;
+      
+      if (delivery.wicketType != null && delivery.wicketType != 'Run Out') {
+        bowlerStats.wickets = delivery.wickets;
+      }
+      
+      // Track extras by type
+      if (delivery.extraType == 'WD') {
+        bowlerStats.wides += (delivery.extraRuns ?? 0);
+      } else if (delivery.extraType == 'NB') {
+        bowlerStats.noBalls += (delivery.extraRuns ?? 0);
+      } else if (delivery.extraType == 'B') {
+        bowlerStats.byes += (delivery.extraRuns ?? 0);
+      } else if (delivery.extraType == 'LB') {
+        bowlerStats.legByes += (delivery.extraRuns ?? 0);
+      }
+      
+      // Update extras
+      if (delivery.extraType != null && delivery.extraRuns != null) {
+        final extraKey = delivery.extraType!.toLowerCase();
+        _extrasMap[extraKey] = (_extrasMap[extraKey] ?? 0) + delivery.extraRuns!;
+      }
+    }
+  }
+  
+  // Build batting statistics for current innings from deliveries
+  List<_PlayerBattingStats> _buildCurrentInningsBattingStats() {
+    final stats = <_PlayerBattingStats>[];
+    
+    // Get all players who have batted (from deliveries or current state)
+    final allBatsmen = <String>{};
+    for (final delivery in _deliveries) {
+      allBatsmen.add(delivery.striker);
+      allBatsmen.add(delivery.nonStriker);
+    }
+    // Also include current striker/non-striker if they haven't faced a ball yet
+    if (_striker.isNotEmpty) allBatsmen.add(_striker);
+    if (_nonStriker.isNotEmpty) allBatsmen.add(_nonStriker);
+    
+    // CRITICAL: Ensure stats map is synced with current state for active players
+    // This handles cases where deliveries exist but map wasn't updated
+    if (_striker.isNotEmpty) {
+      if (!_playerStatsMap.containsKey(_striker)) {
+        _playerStatsMap[_striker] = _PlayerInningsStats();
+      }
+      _playerStatsMap[_striker]!.runs = _strikerRuns;
+      _playerStatsMap[_striker]!.balls = _strikerBalls;
+    }
+    if (_nonStriker.isNotEmpty) {
+      if (!_playerStatsMap.containsKey(_nonStriker)) {
+        _playerStatsMap[_nonStriker] = _PlayerInningsStats();
+      }
+      _playerStatsMap[_nonStriker]!.runs = _nonStrikerRuns;
+      _playerStatsMap[_nonStriker]!.balls = _nonStrikerBalls;
+    }
+    
+    for (final player in allBatsmen) {
+      // Get stats from map (calculated from deliveries)
+      // If not in map, create new but ensure it's populated from current state if active
+      if (!_playerStatsMap.containsKey(player)) {
+        _playerStatsMap[player] = _PlayerInningsStats();
+        // If this is current striker/non-striker, use current state
+        if (player == _striker) {
+          _playerStatsMap[player]!.runs = _strikerRuns;
+          _playerStatsMap[player]!.balls = _strikerBalls;
+        } else if (player == _nonStriker) {
+          _playerStatsMap[player]!.runs = _nonStrikerRuns;
+          _playerStatsMap[player]!.balls = _nonStrikerBalls;
+        }
+      }
+      
+      final playerStats = _playerStatsMap[player]!;
+      
+      // ALWAYS sync with current state for active players (real source of truth)
+      if (player == _striker) {
+        playerStats.runs = _strikerRuns;
+        playerStats.balls = _strikerBalls;
+      } else if (player == _nonStriker) {
+        playerStats.runs = _nonStrikerRuns;
+        playerStats.balls = _nonStrikerBalls;
+      }
+      
+      // Check if dismissed
+      final isDismissed = _dismissedPlayers.contains(player);
+      final dismissal = _dismissalTypes[player];
+      
+      // Only add if player has actually batted (has runs or balls) or is dismissed
+      if (playerStats.runs > 0 || playerStats.balls > 0 || isDismissed) {
+        stats.add(_PlayerBattingStats(
+          playerName: player,
+          runs: playerStats.runs,
+          balls: playerStats.balls,
+          fours: playerStats.fours,
+          sixes: playerStats.sixes,
+          strikeRate: playerStats.strikeRate,
+          minutes: playerStats.minutes,
+          dismissal: dismissal,
+          isNotOut: !isDismissed,
+        ));
+      }
+    }
+    
+    // Sort by batting order (first to bat appears first)
+    stats.sort((a, b) {
+      final aIndex = _batsmenWhoHaveBatted.toList().indexOf(a.playerName);
+      final bIndex = _batsmenWhoHaveBatted.toList().indexOf(b.playerName);
+      if (aIndex == -1 && bIndex == -1) return 0;
+      if (aIndex == -1) return 1;
+      if (bIndex == -1) return -1;
+      return aIndex.compareTo(bIndex);
+    });
+    
+    return stats;
+  }
+  
+  // Build extras breakdown for current innings
+  _ExtrasBreakdown _buildExtrasBreakdown() {
+    return _ExtrasBreakdown(
+      noBalls: _extrasMap['nb'] ?? 0,
+      wides: _extrasMap['wd'] ?? 0,
+      byes: _extrasMap['b'] ?? 0,
+      legByes: _extrasMap['lb'] ?? 0,
+      penalty: _extrasMap['penalty'] ?? 0,
+    );
+  }
+  
+  // Build bowler stats for current innings
+  // REAL SOURCE OF TRUTH: State variables (_bowlerRuns, _bowlerLegalBallsMap, etc.)
+  List<_BowlerScorecardRow> _buildBowlerStats() {
+    final bowlerRows = <_BowlerScorecardRow>[];
+    
+    // CRITICAL: Ensure current bowler stats are synced with state
+    if (_bowler.isNotEmpty) {
+      if (!_bowlerStatsMap.containsKey(_bowler)) {
+        _bowlerStatsMap[_bowler] = _BowlerInningsStats();
+      }
+      final currentBowlerStats = _bowlerStatsMap[_bowler]!;
+      currentBowlerStats.legalBalls = _bowlerLegalBallsMap[_bowler] ?? 0;
+      currentBowlerStats.runs = _bowlerRuns;
+      currentBowlerStats.wickets = _bowlerWickets;
+    }
+    
+    for (final entry in _bowlerStatsMap.entries) {
+      final bowlerName = entry.key;
+      final stats = entry.value;
+      
+      // Sync with current state if this is the active bowler
+      if (bowlerName == _bowler) {
+        stats.legalBalls = _bowlerLegalBallsMap[_bowler] ?? 0;
+        stats.runs = _bowlerRuns;
+        stats.wickets = _bowlerWickets;
+      }
+      
+      bowlerRows.add(_BowlerScorecardRow(
+        bowlerName: bowlerName,
+        overs: stats.overs,
+        maidens: stats.maidens,
+        runs: stats.runs,
+        wickets: stats.wickets,
+        economy: stats.economy,
+      ));
+    }
+    
+    // Sort by overs bowled (most first)
+    bowlerRows.sort((a, b) => b.overs.compareTo(a.overs));
+    
+    return bowlerRows;
+  }
+  
+  // Build current innings data
+  _InningsData _buildCurrentInningsData() {
+    final overs = _currentOver + (_currentBall / 6);
+    return _InningsData(
+      teamName: _battingTeam,
+      runs: _totalRuns,
+      wickets: _wickets,
+      overs: overs,
+      battingStats: _buildCurrentInningsBattingStats(),
+      extras: _buildExtrasBreakdown(),
+      bowlerStats: _buildBowlerStats(),
+      isComplete: _shouldEndInnings,
+    );
+  }
+  
+  // Save first innings data when switching to second innings
+  void _saveFirstInningsData() {
+    // Save deliveries
+    _firstInningsDeliveries = List<_Delivery>.from(_deliveries);
+    
+    // Save player stats
+    _firstInningsPlayerStats = Map<String, _PlayerInningsStats>.from(
+      _playerStatsMap.map((k, v) => MapEntry(k, _PlayerInningsStats()
+        ..runs = v.runs
+        ..balls = v.balls
+        ..fours = v.fours
+        ..sixes = v.sixes
+        ..startTime = v.startTime)),
+    );
+    
+    // Save bowler stats
+    _firstInningsBowlerStats = Map<String, _BowlerInningsStats>.from(
+      _bowlerStatsMap.map((k, v) => MapEntry(k, _BowlerInningsStats()
+        ..legalBalls = v.legalBalls
+        ..runs = v.runs
+        ..wickets = v.wickets
+        ..maidens = v.maidens
+        ..wides = v.wides
+        ..noBalls = v.noBalls
+        ..byes = v.byes
+        ..legByes = v.legByes)),
+    );
+    
+    // Save extras
+    _firstInningsExtras = Map<String, int>.from(_extrasMap);
+    
+    // Build first innings data
+    final firstInningsExtras = _ExtrasBreakdown(
+      noBalls: _firstInningsExtras['nb'] ?? 0,
+      wides: _firstInningsExtras['wd'] ?? 0,
+      byes: _firstInningsExtras['b'] ?? 0,
+      legByes: _firstInningsExtras['lb'] ?? 0,
+      penalty: _firstInningsExtras['penalty'] ?? 0,
+    );
+    
+    final firstInningsBowlerRows = _firstInningsBowlerStats.entries.map((e) {
+      final stats = e.value;
+      return _BowlerScorecardRow(
+        bowlerName: e.key,
+        overs: stats.overs,
+        maidens: stats.maidens,
+        runs: stats.runs,
+        wickets: stats.wickets,
+        economy: stats.economy,
+      );
+    }).toList();
+    firstInningsBowlerRows.sort((a, b) => b.overs.compareTo(a.overs));
+    
+    final firstInningsBattingStats = _firstInningsPlayerStats.entries.map((e) {
+      final player = e.key;
+      final stats = e.value;
+      final isDismissed = _dismissedPlayers.contains(player);
+      final dismissal = _dismissalTypes[player];
+      
+      return _PlayerBattingStats(
+        playerName: player,
+        runs: stats.runs,
+        balls: stats.balls,
+        fours: stats.fours,
+        sixes: stats.sixes,
+        strikeRate: stats.strikeRate,
+        minutes: stats.minutes,
+        dismissal: dismissal,
+        isNotOut: !isDismissed,
+      );
+    }).toList();
+    
+    _firstInningsData = _InningsData(
+      teamName: _currentInnings == 1 ? _battingTeam : _bowlingTeam,
+      runs: _firstInningsRuns,
+      wickets: _firstInningsWickets,
+      overs: _firstInningsOvers,
+      battingStats: firstInningsBattingStats,
+      extras: firstInningsExtras,
+      bowlerStats: firstInningsBowlerRows,
+      isComplete: true,
+    );
+  }
+  
   // Helper function to increment bowler's legal balls and update overs
   void _incrementBowlerLegalBalls() {
     if (_bowler.isEmpty) return;
@@ -1040,6 +1699,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _strikerBalls = 0;
         _strikerSR = 0.0;
         _batsmenWhoHaveBatted.add(selectedBatsman);
+        _trackPlayerStartTime(selectedBatsman);
       });
       _saveScorecardToSupabase();
       
@@ -1378,6 +2038,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   
   // Start second innings
   void _startSecondInnings() {
+    // Save first innings data before resetting
+    _saveFirstInningsData();
+    
     setState(() {
       _currentInnings = 2;
       // Swap teams
@@ -1403,6 +2066,21 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _nonStrikerRuns = 0;
       _nonStrikerBalls = 0;
       _nonStrikerSR = 0.0;
+      
+      // Reset tracking for second innings
+      _playerFours = {};
+      _playerSixes = {};
+      _playerStartTime = {};
+      
+      // Reset deliveries and stats for second innings
+      _deliveries.clear();
+      _playerStatsMap.clear();
+      _bowlerStatsMap.clear();
+      _extrasMap.clear();
+      
+      // Track start time for new batsmen
+      if (_striker.isNotEmpty) _trackPlayerStartTime(_striker);
+      if (_nonStriker.isNotEmpty) _trackPlayerStartTime(_nonStriker);
       _crr = 0.0;
       _projected = 0;
       _currentOverBalls = [];
@@ -1941,6 +2619,30 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
       
+      // Record delivery (single source of truth)
+      _recordDelivery(
+        over: _currentOver,
+        ball: _currentBall,
+        striker: dismissedStriker, // Striker before dismissal
+        nonStriker: _nonStriker,
+        bowler: _bowler,
+        runs: isRunOut ? runsCompleted : 0,
+        teamTotal: _totalRuns,
+        strikerRuns: _strikerRuns,
+        strikerBalls: _strikerBalls,
+        bowlerRuns: _bowlerRuns,
+        bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
+        wickets: _wickets,
+        wicketType: outType,
+        extraType: null,
+        extraRuns: null,
+        isLegalBall: true, // Wicket counts as legal ball
+        isShortRun: false,
+        commentaryId: null,
+        shotDirection: null,
+        shotType: null,
+      );
+      
       // Check if all out (only if not Retired Hurt)
       if (!isRetiredHurt && _wickets >= _maxWickets) {
         _endInnings();
@@ -2314,268 +3016,41 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_youtubeController != null) const SizedBox(height: 16),
-                    // Live Scorecard Header
-                    if (_youtubeController != null)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          'Live Scorecard',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
+                    // Scorecard Header
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'Scorecard',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textMain,
+                          fontFamily: 'Inter',
                         ),
                       ),
-                    // Main Scorecard Card - Fixed height constraint removed
-                    Container(
-                      constraints: BoxConstraints(
-                        minHeight: 200,
+                    ),
+                    const SizedBox(height: 8),
+                    // Innings Scorecards
+                    // Show first innings if it exists (collapsible)
+                    if (_firstInningsData != null)
+                      _InningsScorecardWidget(
+                        inningsData: _firstInningsData!,
+                        isExpanded: _firstInningsExpanded,
+                        isCurrentInnings: false,
+                        onToggle: () {
+                          setState(() {
+                            _firstInningsExpanded = !_firstInningsExpanded;
+                          });
+                        },
                       ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: _isDeclaredRun || _isShortRun
-                              ? const Color(0xFF14B8A6) // Cool teal for declared/short run
-                              : AppColors.borderLight,
-                          width: _isDeclaredRun || _isShortRun ? 2 : 1,
-                        ),
-                        boxShadow: [
-                          AppShadows.card,
-                          if (_isDeclaredRun || _isShortRun)
-                            BoxShadow(
-                              color: const Color(0xFF14B8A6).withOpacity(0.2),
-                              blurRadius: 8,
-                              spreadRadius: 1,
-                            ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: Stack(
-                          children: [
-                            // Blurry cricket ground background
-                            Positioned.fill(
-                              child: ImageFiltered(
-                                imageFilter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                                child: Image.asset(
-                                  'assets/images/Screenshot 2025-12-26 at 4.44.26 PM.png',
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(color: AppColors.surface);
-                                  },
-                                ),
-                              ),
-                            ),
-                            // Dark overlay for readability
-                            Positioned.fill(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.85),
-                                ),
-                              ),
-                            ),
-                            // Content
-                            Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '1ST INNINGS',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.textSec,
-                                      letterSpacing: 1.2,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _battingTeam,
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.urgent,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.urgent.withOpacity(0.3),
-                                          blurRadius: 8,
-                                        ),
-                                      ],
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: 6,
-                                          height: 6,
-                                          decoration: const BoxDecoration(
-                                            color: AppColors.textMain,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Text(
-                                          'LIVE',
-                                          style: TextStyle(
-                                            color: AppColors.textMain,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'CRR: ${_crr.toStringAsFixed(2)}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSec,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                '$_totalRuns',
-                                style: const TextStyle(
-                                  fontSize: 48,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                  letterSpacing: -1,
-                                ),
-                              ),
-                              Text(
-                                '/$_wickets',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey[400],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Text(
-                                '$_currentOver.$_currentBall',
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              Text(
-                                ' Ov',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.normal,
-                                  color: Colors.grey[400],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Vs $_bowlingTeam',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                              Text(
-                                'Projected: $_projected',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          // Ball-by-Ball Display (Current Over - ALL balls including extras)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Current Over',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textSec,
-                                      fontFamily: 'Inter',
-                                    ),
-                                  ),
-                                  Text(
-                                    'Over ${_currentOver + 1}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textSec.withOpacity(0.7),
-                                      fontFamily: 'Inter',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              // Show ALL balls in current over (legal + extras)
-                              Wrap(
-                                spacing: 10,
-                                runSpacing: 10,
-                                alignment: WrapAlignment.start,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: _currentOverBalls.isEmpty
-                                    ? List.generate(6, (index) => _buildEmptyBallSlot())
-                                    : [
-                                        // Show all actual balls
-                                        ..._currentOverBalls.map((ball) => _buildBallIndicator(ball)),
-                                        // Show empty slots only if less than 6 legal balls
-                                        if (_currentBall < 6)
-                                          ...List.generate(
-                                            (6 - _currentBall).clamp(0, 6),
-                                            (index) => _buildEmptyBallSlot(),
-                                          ),
-                                      ],
-                              ),
-                            ],
-                          ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    // Show current innings (always expanded)
+                    _InningsScorecardWidget(
+                      inningsData: _buildCurrentInningsData(),
+                      isExpanded: true,
+                      isCurrentInnings: true,
+                      onToggle: () {
+                        // Current innings is always expanded, but allow toggle for consistency
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -4095,6 +4570,30 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       final totalOvers = _currentOver + (_currentBall / 6);
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
+      
+      // Record delivery (single source of truth)
+      _recordDelivery(
+        over: _currentOver,
+        ball: _currentBall,
+        striker: strikerForCommentary,
+        nonStriker: _nonStriker,
+        bowler: _bowler,
+        runs: runsCompleted, // Only runs completed, not the automatic wide
+        teamTotal: _totalRuns,
+        strikerRuns: _strikerRuns, // No change for wide
+        strikerBalls: _strikerBalls, // No change for wide
+        bowlerRuns: _bowlerRuns,
+        bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
+        wickets: _wickets,
+        wicketType: null,
+        extraType: 'WD',
+        extraRuns: totalRuns,
+        isLegalBall: false, // Wide is not a legal ball
+        isShortRun: false,
+        commentaryId: null,
+        shotDirection: null,
+        shotType: null,
+      );
     });
     _saveScorecardToSupabase();
     
@@ -4191,6 +4690,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       // If byes/leg-byes, they should be handled separately
       if (runsOffBat > 0) {
         _strikerRuns += runsOffBat;
+        _trackBoundaries(_striker, runsOffBat);
         // Note: Balls faced is NOT incremented for no-ball (not a legal delivery)
       }
       
@@ -4209,6 +4709,30 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       final totalOvers = _currentOver + (_currentBall / 6);
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
+      
+      // Record delivery (single source of truth)
+      _recordDelivery(
+        over: _currentOver,
+        ball: _currentBall,
+        striker: strikerForCommentary,
+        nonStriker: _nonStriker,
+        bowler: _bowler,
+        runs: runsOffBat, // Runs off the bat
+        teamTotal: _totalRuns,
+        strikerRuns: _strikerRuns,
+        strikerBalls: _strikerBalls, // No change for no-ball
+        bowlerRuns: _bowlerRuns,
+        bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
+        wickets: _wickets,
+        wicketType: null,
+        extraType: 'NB',
+        extraRuns: totalRuns,
+        isLegalBall: false, // No-ball is not a legal ball
+        isShortRun: false,
+        commentaryId: null,
+        shotDirection: null,
+        shotType: null,
+      );
     });
     _saveScorecardToSupabase();
     
@@ -4330,6 +4854,30 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       final totalOvers = _currentOver + (_currentBall / 6);
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
+      
+      // Record delivery (single source of truth)
+      _recordDelivery(
+        over: _currentOver,
+        ball: _currentBall,
+        striker: strikerForCommentary,
+        nonStriker: _nonStriker,
+        bowler: _bowler,
+        runs: 0, // Byes don't count as runs off bat
+        teamTotal: _totalRuns,
+        strikerRuns: _strikerRuns, // No change for byes
+        strikerBalls: _strikerBalls,
+        bowlerRuns: _bowlerRuns, // No change for byes
+        bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
+        wickets: _wickets,
+        wicketType: null,
+        extraType: 'B',
+        extraRuns: runs,
+        isLegalBall: true, // Byes count as legal ball
+        isShortRun: false,
+        commentaryId: null,
+        shotDirection: null,
+        shotType: null,
+      );
       
       // Check if max overs reached
       if (widget.overs != null && _currentOver >= widget.overs!) {
@@ -4935,6 +5483,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _totalRuns += actualRuns;
       // ICC Rule: Credit batsman only if off the bat (declared runs are off the bat)
       _strikerRuns += actualRuns;
+      _trackBoundaries(_striker, actualRuns);
       // ICC Rule: Declared runs and short runs count as legal deliveries
       // Increment balls faced and legal ball count
       _strikerBalls += 1;
@@ -4978,6 +5527,30 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       final totalOvers = _currentOver + (_currentBall / 6);
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
+      
+      // Record delivery (single source of truth)
+      _recordDelivery(
+        over: _currentOver,
+        ball: _currentBall,
+        striker: strikerForCommentary, // Use striker before swap
+        nonStriker: _nonStriker,
+        bowler: _bowler,
+        runs: actualRuns,
+        teamTotal: _totalRuns,
+        strikerRuns: _strikerRuns,
+        strikerBalls: _strikerBalls,
+        bowlerRuns: _bowlerRuns,
+        bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
+        wickets: _wickets,
+        wicketType: null, // No wicket on regular scoring
+        extraType: null, // Regular ball
+        extraRuns: null,
+        isLegalBall: true,
+        isShortRun: wasShortRun,
+        commentaryId: null, // Will be updated after commentary generation
+        shotDirection: direction,
+        shotType: shotType,
+      );
       
       // Check if max overs reached
       if (widget.overs != null && _currentOver >= widget.overs!) {
@@ -5104,6 +5677,849 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
 }
 
 // Match Result Screen Widget
+// Expandable Innings Scorecard Widget
+class _InningsScorecardWidget extends StatefulWidget {
+  final _InningsData inningsData;
+  final bool isExpanded;
+  final bool isCurrentInnings;
+  final VoidCallback onToggle;
+
+  const _InningsScorecardWidget({
+    required this.inningsData,
+    required this.isExpanded,
+    required this.isCurrentInnings,
+    required this.onToggle,
+  });
+
+  @override
+  State<_InningsScorecardWidget> createState() => _InningsScorecardWidgetState();
+}
+
+class _InningsScorecardWidgetState extends State<_InningsScorecardWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _expandAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _expandAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+    if (widget.isExpanded) {
+      _animationController.value = 1.0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(_InningsScorecardWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isExpanded != oldWidget.isExpanded) {
+      if (widget.isExpanded) {
+        _animationController.forward();
+      } else {
+        _animationController.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  String _formatOvers(double overs) {
+    final wholeOvers = overs.floor();
+    final balls = ((overs - wholeOvers) * 6).round();
+    if (balls == 6) {
+      return '${wholeOvers + 1}.0';
+    }
+    return '$wholeOvers.$balls';
+  }
+  
+  Widget _buildExtrasRow(_ExtrasBreakdown extras) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.borderLight.withOpacity(0.5),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Extras:',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMain,
+              fontFamily: 'Inter',
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${extras.total} (${extras.format()})',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSec,
+              fontFamily: 'Inter',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildTotalRow(_InningsData inningsData) {
+    final crr = inningsData.overs > 0 
+        ? (inningsData.runs / inningsData.overs) 
+        : 0.0;
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.borderLight.withOpacity(0.5),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Total ${inningsData.runs}/${inningsData.wickets} (${_formatOvers(inningsData.overs)} Ov)',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMain,
+              fontFamily: 'Inter',
+            ),
+          ),
+          Text(
+            'CRR ${crr.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSec,
+              fontFamily: 'Inter',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildBowlersSection(List<_BowlerScorecardRow> bowlerStats) {
+    if (bowlerStats.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.borderLight.withOpacity(0.5),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.elevated.withOpacity(0.6),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              border: Border(
+                bottom: BorderSide(
+                  color: AppColors.borderLight.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Bowlers',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSec.withOpacity(0.8),
+                      fontFamily: 'Inter',
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 35,
+                  child: Text(
+                    'O',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSec.withOpacity(0.8),
+                      fontFamily: 'Inter',
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 35,
+                  child: Text(
+                    'M',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSec.withOpacity(0.8),
+                      fontFamily: 'Inter',
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 35,
+                  child: Text(
+                    'R',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSec.withOpacity(0.8),
+                      fontFamily: 'Inter',
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 35,
+                  child: Text(
+                    'W',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSec.withOpacity(0.8),
+                      fontFamily: 'Inter',
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 50,
+                  child: Text(
+                    'Eco.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSec.withOpacity(0.8),
+                      fontFamily: 'Inter',
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Bowler rows
+          ...bowlerStats.asMap().entries.map((entry) {
+            final index = entry.key;
+            final bowler = entry.value;
+            final isLast = index == bowlerStats.length - 1;
+            return _buildBowlerRow(bowler, isLast);
+          }),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildBowlerRow(_BowlerScorecardRow bowler, bool isLast) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : Border(
+                bottom: BorderSide(
+                  color: AppColors.borderLight.withOpacity(0.3),
+                  width: 0.5,
+                ),
+              ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              bowler.bowlerName,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textMain,
+                fontFamily: 'Inter',
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 35,
+            child: Text(
+              _formatOvers(bowler.overs),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textMain,
+                fontFamily: 'Inter',
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 35,
+            child: Text(
+              '${bowler.maidens}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textMain,
+                fontFamily: 'Inter',
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 35,
+            child: Text(
+              '${bowler.runs}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textMain,
+                fontFamily: 'Inter',
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 35,
+            child: Text(
+              '${bowler.wickets}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textMain,
+                fontFamily: 'Inter',
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 50,
+            child: Text(
+              bowler.economy.toStringAsFixed(2),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textMain,
+                fontFamily: 'Inter',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: widget.isCurrentInnings
+              ? AppColors.primary.withOpacity(0.2)
+              : AppColors.borderLight.withOpacity(0.5),
+          width: widget.isCurrentInnings ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+            spreadRadius: 0,
+          ),
+          if (widget.isCurrentInnings)
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 1),
+              spreadRadius: 0,
+            ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Innings Header (Always Visible)
+          InkWell(
+            onTap: widget.onToggle,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              decoration: BoxDecoration(
+                color: widget.isCurrentInnings
+                    ? AppColors.primary.withOpacity(0.04)
+                    : AppColors.elevated.withOpacity(0.5),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              widget.isCurrentInnings ? 'CURRENT INNINGS' : 'FIRST INNINGS',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: widget.isCurrentInnings
+                                    ? AppColors.primary
+                                    : AppColors.textSec.withOpacity(0.7),
+                                letterSpacing: 1.5,
+                                fontFamily: 'Inter',
+                              ),
+                            ),
+                            if (widget.isCurrentInnings) ...[
+                              const SizedBox(width: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.urgent,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'LIVE',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    fontFamily: 'Inter',
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          widget.inningsData.teamName,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textMain,
+                            fontFamily: 'Inter',
+                            height: 1.2,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // Score section - right-aligned
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            '${widget.inningsData.runs}',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: widget.isCurrentInnings
+                                  ? AppColors.primary
+                                  : AppColors.textMain,
+                              fontFamily: 'Inter',
+                              letterSpacing: -0.5,
+                              height: 1.0,
+                            ),
+                          ),
+                          Text(
+                            '/${widget.inningsData.wickets}',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSec.withOpacity(0.8),
+                              fontFamily: 'Inter',
+                              height: 1.0,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${_formatOvers(widget.inningsData.overs)} Ov',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSec.withOpacity(0.7),
+                          fontFamily: 'Inter',
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 16),
+                  // Expand/collapse arrow
+                  RotationTransition(
+                    turns: Tween<double>(begin: 0.0, end: 0.5).animate(_expandAnimation),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.textSec.withOpacity(0.6),
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Expandable Content
+          SizeTransition(
+            sizeFactor: _expandAnimation,
+            child: Column(
+              children: [
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: AppColors.borderLight.withOpacity(0.3),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Batting Scorecard
+                      _BattingScorecardTable(
+                        battingStats: widget.inningsData.battingStats,
+                      ),
+                      const SizedBox(height: 16),
+                      // Extras
+                      _buildExtrasRow(widget.inningsData.extras),
+                      const SizedBox(height: 12),
+                      // Total
+                      _buildTotalRow(widget.inningsData),
+                      const SizedBox(height: 16),
+                      // Bowlers
+                      _buildBowlersSection(widget.inningsData.bowlerStats),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Batting Scorecard Table Widget
+class _BattingScorecardTable extends StatelessWidget {
+  final List<_PlayerBattingStats> battingStats;
+
+  const _BattingScorecardTable({required this.battingStats});
+
+  // Fixed column widths for perfect alignment
+  static const double _batterNameWidth = double.infinity; // Flexible
+  static const double _statColumnWidth = 40.0; // Fixed width for R, B, 4s, 6s
+  static const double _srColumnWidth = 50.0; // Slightly wider for SR
+  static const double _minColumnWidth = 45.0; // Width for Min
+
+  @override
+  Widget build(BuildContext context) {
+    if (battingStats.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48),
+        child: Center(
+          child: Text(
+            'No batting data available',
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.textSec,
+              fontFamily: 'Inter',
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.borderLight.withOpacity(0.5),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Table Header - Perfect alignment with fixed widths
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.elevated.withOpacity(0.6),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              border: Border(
+                bottom: BorderSide(
+                  color: AppColors.borderLight.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                // Batter name column - flexible
+                Expanded(
+                  child: Text(
+                    'Batters',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSec.withOpacity(0.8),
+                      fontFamily: 'Inter',
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                // Fixed-width stat columns
+                SizedBox(
+                  width: _statColumnWidth,
+                  child: _buildHeaderCell('R'),
+                ),
+                SizedBox(
+                  width: _statColumnWidth,
+                  child: _buildHeaderCell('B'),
+                ),
+                SizedBox(
+                  width: _statColumnWidth,
+                  child: _buildHeaderCell('4s'),
+                ),
+                SizedBox(
+                  width: _statColumnWidth,
+                  child: _buildHeaderCell('6s'),
+                ),
+                SizedBox(
+                  width: _srColumnWidth,
+                  child: _buildHeaderCell('SR'),
+                ),
+                SizedBox(
+                  width: _minColumnWidth,
+                  child: _buildHeaderCell('Min'),
+                ),
+              ],
+            ),
+          ),
+          // Table Rows
+          ...battingStats.asMap().entries.map((entry) {
+            final index = entry.key;
+            final stat = entry.value;
+            final isLast = index == battingStats.length - 1;
+            return _buildBattingRow(stat, isLast);
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderCell(String text) {
+    return Text(
+      text,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textSec.withOpacity(0.8),
+        fontFamily: 'Inter',
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  Widget _buildBattingRow(_PlayerBattingStats stat, bool isLast) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : Border(
+                bottom: BorderSide(
+                  color: AppColors.borderLight.withOpacity(0.3),
+                  width: 0.5,
+                ),
+              ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Batter name column - flexible, left-aligned
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        stat.playerName,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textMain,
+                          fontFamily: 'Inter',
+                          height: 1.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (stat.isCaptain) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        '(c)',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSec.withOpacity(0.7),
+                          fontFamily: 'Inter',
+                        ),
+                      ),
+                    ],
+                    if (stat.isWicketKeeper) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        '(wk)',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSec.withOpacity(0.7),
+                          fontFamily: 'Inter',
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (stat.dismissal != null) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    stat.dismissal!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSec.withOpacity(0.75),
+                      fontFamily: 'Inter',
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ] else if (stat.isNotOut) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    'not out',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.success.withOpacity(0.8),
+                      fontFamily: 'Inter',
+                      fontStyle: FontStyle.italic,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Fixed-width stat columns - center-aligned
+          SizedBox(
+            width: _statColumnWidth,
+            child: _buildDataCell(
+              stat.runs.toString(),
+              isHighlight: true,
+            ),
+          ),
+          SizedBox(
+            width: _statColumnWidth,
+            child: _buildDataCell(stat.balls.toString()),
+          ),
+          SizedBox(
+            width: _statColumnWidth,
+            child: _buildDataCell(stat.fours.toString()),
+          ),
+          SizedBox(
+            width: _statColumnWidth,
+            child: _buildDataCell(stat.sixes.toString()),
+          ),
+          SizedBox(
+            width: _srColumnWidth,
+            child: _buildDataCell(
+              stat.strikeRate.toStringAsFixed(1),
+              isStrikeRate: true,
+            ),
+          ),
+          SizedBox(
+            width: _minColumnWidth,
+            child: _buildDataCell(stat.minutes.toString()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataCell(String text, {bool isHighlight = false, bool isStrikeRate = false}) {
+    return Text(
+      text,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: isHighlight ? FontWeight.w600 : FontWeight.w500,
+        color: isStrikeRate
+            ? AppColors.primary.withOpacity(0.8)
+            : isHighlight
+                ? AppColors.textMain
+                : AppColors.textSec,
+        fontFamily: 'Inter',
+        height: 1.3,
+      ),
+    );
+  }
+}
+
 class _MatchResultScreen extends StatelessWidget {
   final String winningTeam;
   final String result;
