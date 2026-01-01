@@ -44,6 +44,8 @@ import '../../features/mycricket/presentation/pages/opponent_team_squad_page.dar
 import '../../features/mycricket/presentation/pages/toss_page.dart';
 import '../../features/mycricket/presentation/pages/initial_players_setup_page.dart';
 import '../../features/live/presentation/pages/live_screen.dart';
+import '../../features/live/presentation/pages/go_live_screen.dart';
+import '../../features/live/presentation/pages/watch_live_screen.dart';
 import '../../features/match/presentation/pages/commentary_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../core/providers/auth_provider.dart';
@@ -397,6 +399,24 @@ final routerProvider = Provider<GoRouter>((ref) {
             channelHandle: channelHandle,
             videoId: videoId,
           );
+        },
+      ),
+      GoRoute(
+        path: '/go-live',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return GoLiveScreen(
+            matchId: extra?['matchId'] ?? '',
+            matchTitle: extra?['matchTitle'] ?? 'Live Match',
+            isDraft: extra?['isDraft'] ?? false,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/watch-live/:matchId',
+        builder: (context, state) {
+          final matchId = state.pathParameters['matchId']!;
+          return WatchLiveScreen(matchId: matchId);
         },
       ),
       // Commentary Route

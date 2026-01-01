@@ -8,6 +8,7 @@ import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'commentary_page.dart';
+import '../../../live/presentation/pages/go_live_screen.dart';
 
 /// Provider for match data
 final matchDetailProvider = FutureProvider.family<MatchModel?, String>((ref, matchId) async {
@@ -104,7 +105,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
           return Column(
             children: [
               // Match Header Card
-              _buildMatchHeader(match),
+              _buildMatchHeader(match, currentUserId),
               
               // Tabs
               Container(
@@ -181,7 +182,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
     );
   }
 
-  Widget _buildMatchHeader(MatchModel match) {
+  Widget _buildMatchHeader(MatchModel match, String? currentUserId) {
     final statusColor = _getStatusColor(match.status);
     final statusText = match.status.toUpperCase();
 
@@ -317,6 +318,40 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          
+          // Go Live Button (only for match creator)
+          if (currentUserId != null && match.createdBy == currentUserId)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  context.push(
+                    '/go-live',
+                    extra: {
+                      'matchId': match.id,
+                      'matchTitle': '${match.team1Name ?? 'Team 1'} vs ${match.team2Name ?? 'Team 2'}',
+                    },
+                  );
+                },
+                icon: const Icon(Icons.videocam, color: Colors.white),
+                label: const Text(
+                  'GO LIVE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
