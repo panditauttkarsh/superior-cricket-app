@@ -663,10 +663,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _strikerSR = _strikerBalls > 0 ? (_strikerRuns / _strikerBalls) * 100 : 0.0;
       _nonStrikerSR = _nonStrikerBalls > 0 ? (_nonStrikerRuns / _nonStrikerBalls) * 100 : 0.0;
       
-      // Remove last ball from current over balls
-      if (_currentOverBalls.isNotEmpty) {
-        _currentOverBalls.removeLast();
-      }
+      // CRITICAL: Reconstruct _currentOverBalls from delivery history
+      // This ensures Current Over display is NEVER incorrectly empty after undo
+      _reconstructCurrentOverBalls();
       
       // Remove last ball from over data if it exists
       if (_currentOverBallData.isNotEmpty) {
@@ -691,6 +690,61 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Last ball undone'), duration: Duration(seconds: 1)),
     );
+  }
+
+  // CRITICAL: Reconstruct Current Over display from delivery history
+  // This method rebuilds _currentOverBalls based on the active _currentOver
+  // Ensures the UI always shows accurate ball-by-ball data after any state change
+  void _reconstructCurrentOverBalls() {
+    _currentOverBalls.clear();
+    
+    // If no deliveries, current over is empty
+    if (_deliveries.isEmpty) return;
+    
+    // Get all deliveries for the current over
+    for (final delivery in _deliveries) {
+      if (delivery.over == _currentOver) {
+        // Build ball notation based on delivery type
+        String ballNotation;
+        
+        if (delivery.wicketType != null) {
+          // Wicket
+          if (delivery.wicketType == 'Run Out') {
+            ballNotation = 'RO${delivery.runs}';
+          } else if (delivery.wicketType == 'Retired Hurt') {
+            ballNotation = 'RH';
+          } else {
+            ballNotation = 'W';
+          }
+        } else if (delivery.extraType == 'WD') {
+          // Wide
+          final extraRuns = delivery.extraRuns ?? 1;
+          ballNotation = extraRuns > 1 ? 'WD+${extraRuns - 1}' : 'WD';
+        } else if (delivery.extraType == 'NB') {
+          // No Ball
+          final extraRuns = delivery.extraRuns ?? 1;
+          ballNotation = extraRuns > 1 ? 'NB+${extraRuns - 1}' : 'NB';
+        } else if (delivery.extraType == 'B') {
+          // Byes
+          ballNotation = delivery.runs > 0 ? 'B${delivery.runs}' : 'B';
+        } else if (delivery.extraType == 'LB') {
+          // Leg Byes
+          ballNotation = delivery.runs > 0 ? 'LB${delivery.runs}' : 'LB';
+        } else {
+          // Regular runs
+          ballNotation = delivery.runs.toString();
+          if (delivery.isShortRun) ballNotation += ' (SR)';
+        }
+        
+        _currentOverBalls.add(ballNotation);
+      }
+    }
+    
+    // Also update _overHistory if needed - remove the current over if it exists
+    // (since we're reconstructing from scratch)
+    while (_overHistory.length > _currentOver) {
+      _overHistory.removeLast();
+    }
   }
 
   // Helper function to format bowler overs display (ICC rule)
@@ -2598,7 +2652,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _currentOverBalls = [];
+        // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
+        // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
       }
@@ -3179,44 +3234,49 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                           ),
                           const SizedBox(height: 20),
                           
-                          // Current Over Section
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Current Over',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey[600],
-                                  fontFamily: 'Inter',
-                                ),
-                              ),
-                              Text(
-                                'Over ${_currentOver + 1}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey[500],
-                                  fontFamily: 'Inter',
-                                ),
-                              ),
-                            ],
+                          // Current Over Section - STRICT ICC CHRONOLOGICAL ORDER
+                          // Wide/No Ball appears inline at exact position it occurred
+                          Text(
+                            'Current Over',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                              fontFamily: 'Inter',
+                            ),
                           ),
                           const SizedBox(height: 12),
                           
-                          // Ball-by-ball display
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              ..._currentOverBalls.map((ball) => _buildBallIndicator(ball)),
-                              // Show empty slots for remaining balls
-                              ...List.generate(
-                                6 - _currentOverBalls.length,
-                                (index) => _buildEmptyBallSlot(),
-                              ),
-                            ],
+                          // Ball-by-ball display - CHRONOLOGICAL ORDER
+                          // Deliveries appear exactly in the sequence they occurred
+                          // Empty buckets appended at end for remaining legal balls
+                          Builder(
+                            builder: (context) {
+                              // Count legal balls (excluding Wide/No Ball)
+                              int legalBallCount = 0;
+                              for (final ball in _currentOverBalls) {
+                                if (!ball.startsWith('WD') && !ball.startsWith('NB')) {
+                                  legalBallCount++;
+                                }
+                              }
+                              
+                              // Calculate empty slots needed (6 - legal balls bowled)
+                              final emptySlots = 6 - legalBallCount;
+                              
+                              return Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  // Show ALL deliveries in chronological order (legal + illegal inline)
+                                  ..._currentOverBalls.map((ball) => _buildBallIndicator(ball)),
+                                  // Append empty slots for remaining legal balls
+                                  ...List.generate(
+                                    emptySlots > 0 ? emptySlots : 0,
+                                    (index) => _buildEmptyBallSlot(),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -5156,7 +5216,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _currentOverBalls = [];
+        // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
+        // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
       }
@@ -5314,7 +5375,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _currentOverBalls = [];
+        // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
+        // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
       }
@@ -5827,7 +5889,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _currentOverBalls = [];
+        // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
+        // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
       }
