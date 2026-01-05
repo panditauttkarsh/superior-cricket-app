@@ -509,7 +509,13 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
         
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
-          child: _buildMatchCard(matchData),
+          child: GestureDetector(
+            onTap: () {
+              // Navigate to match details page with real-time data
+              context.go('/matches/${match.id}');
+            },
+            child: _buildMatchCard(matchData),
+          ),
         );
       }).toList(),
     );
@@ -601,6 +607,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     final overs = match['overs'] as int? ?? 20;
     final team1Name = match['team1Name'] as String? ?? 'Team 1';
     final team2Name = match['team2Name'] as String? ?? 'Team 2';
+    final matchId = match['id'] as String?;
     
     return Container(
       decoration: BoxDecoration(
@@ -614,7 +621,17 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
           ),
         ],
       ),
-      child: Padding(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            // Navigate to match details with real-time data
+            if (matchId != null) {
+              context.go('/matches/$matchId');
+            }
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -730,6 +747,8 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
             ),
           ],
         ),
+          ),
+        ),
       ),
     );
   }
@@ -800,6 +819,8 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     final isTeam1Winner = winnerId != null && winnerId == team1Id;
     final isTeam2Winner = winnerId != null && winnerId == team2Id;
     
+    final matchId = match['id'] as String?;
+    
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -812,9 +833,19 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            // Navigate to match details with real-time data
+            if (matchId != null) {
+              context.go('/matches/$matchId');
+            }
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           // Header Section
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
@@ -948,7 +979,9 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
               ],
             ),
           ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

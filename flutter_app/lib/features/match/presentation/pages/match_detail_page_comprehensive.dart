@@ -1486,4 +1486,3 @@ class _BattingScorecardTable extends StatelessWidget {
     );
   }
 }
-

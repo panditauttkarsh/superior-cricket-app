@@ -40,17 +40,23 @@ class MatchPlayerRepository {
     String? addedBy,
   }) async {
     try {
+      print('MatchPlayer: addPlayersToMatch called - matchId: $matchId, teamType: $teamType, players count: ${players is List ? (players as List).length : "N/A"}');
+      
       List<Map<String, dynamic>> playersData = [];
       
       if (players is List<Map<String, dynamic>>) {
-        // Players from squad pages (have id, role, etc.)
-        playersData = players.map((player) {
+        print('MatchPlayer: Processing ${players.length} players from List<Map>');
+        // Players from squad pages (should have id, role, etc.)
+        for (var player in players) {
           final playerId = player['id'] as String?;
+          final playerName = player['name'] as String? ?? 'Unknown';
+          
           if (playerId == null || playerId.isEmpty) {
-            print('MatchPlayer: Skipping player without ID: ${player['name']}');
-            return null;
+            print('MatchPlayer: ⚠️ Skipping player "$playerName" - missing ID. Player data: $player');
+            continue; // Skip players without IDs
           }
-          return {
+          
+          final playerData = {
             'match_id': matchId,
             'player_id': playerId,
             'team_type': teamType,
@@ -59,23 +65,31 @@ class MatchPlayerRepository {
             'is_wicket_keeper': player['isWicketKeeper'] as bool? ?? false,
             'added_by': addedBy,
           };
-        }).whereType<Map<String, dynamic>>().toList();
+          
+          playersData.add(playerData);
+          print('MatchPlayer: ✓ Added player "$playerName" (ID: $playerId) to $teamType');
+        }
       } else if (players is List<String>) {
         // Just player names - need to look up by username/name
         // For now, skip these as we need profile IDs
-        print('MatchPlayer: Cannot add players by name only. Need profile IDs.');
+        print('MatchPlayer: ⚠️ Cannot add players by name only. Need profile IDs.');
+        return;
+      } else {
+        print('MatchPlayer: ⚠️ Invalid players type: ${players.runtimeType}');
         return;
       }
       
       if (playersData.isEmpty) {
-        print('MatchPlayer: No valid players to add');
+        print('MatchPlayer: ⚠️ No valid players to add after processing');
         return;
       }
 
+      print('MatchPlayer: Inserting ${playersData.length} players into match_players table...');
       await _supabase.from('match_players').insert(playersData);
-      print('MatchPlayer: Added ${playersData.length} players to match $matchId (team: $teamType)');
-    } catch (e) {
-      print('Error adding players to match: $e');
+      print('MatchPlayer: ✅ Successfully added ${playersData.length} players to match $matchId (team: $teamType)');
+    } catch (e, stackTrace) {
+      print('MatchPlayer: ❌ Error adding players to match: $e');
+      print('MatchPlayer: Stack trace: $stackTrace');
       // Don't rethrow - allow match creation to continue even if player saving fails
     }
   }
@@ -83,23 +97,80 @@ class MatchPlayerRepository {
   /// Get all players for a match
   Future<List<Map<String, dynamic>>> getMatchPlayers(String matchId) async {
     try {
-      final response = await _supabase
+      print('MatchPlayer: Fetching players for match: $matchId');
+      
+      // First, get all match_players records
+      final matchPlayersResponse = await _supabase
           .from('match_players')
-          .select('''
-            *,
-            profiles:player_id (
-              id,
-              username,
-              full_name,
-              email,
-              avatar_url
-            )
-          ''')
+          .select('*')
           .eq('match_id', matchId);
 
-      return (response as List).cast<Map<String, dynamic>>();
-    } catch (e) {
+      print('MatchPlayer: Found ${(matchPlayersResponse as List).length} match_players records');
+      
+      if ((matchPlayersResponse as List).isEmpty) {
+        return [];
+      }
+
+      final matchPlayers = (matchPlayersResponse as List).cast<Map<String, dynamic>>();
+      
+      // Get all unique player IDs
+      final playerIds = matchPlayers
+          .map((mp) => mp['player_id'] as String)
+          .whereType<String>()
+          .toSet()
+          .toList();
+      
+      print('MatchPlayer: Fetching profiles for ${playerIds.length} players');
+      
+      // Fetch profiles for all players using OR query
+      List<Map<String, dynamic>> profiles = [];
+      if (playerIds.isNotEmpty) {
+        // Select all columns from profiles (Supabase will only return existing ones)
+        // This avoids errors if columns don't exist
+        // The UI code handles both name/full_name and avatar_url/profile_image_url as fallbacks
+        dynamic query = _supabase
+            .from('profiles')
+            .select();
+        
+        if (playerIds.length == 1) {
+          query = query.eq('id', playerIds[0]);
+        } else {
+          // Build OR condition: id = id1 OR id = id2 OR ...
+          final orConditions = playerIds.map((id) => 'id.eq.$id').join(',');
+          query = query.or(orConditions);
+        }
+        
+        final profilesResponse = await query;
+        profiles = (profilesResponse as List).cast<Map<String, dynamic>>();
+      }
+      final profilesMap = {
+        for (var profile in profiles)
+          profile['id'] as String: profile
+      };
+      
+      print('MatchPlayer: Found ${profiles.length} profiles');
+      
+      // Combine match_players with profiles
+      final result = matchPlayers.map((mp) {
+        final playerId = mp['player_id'] as String;
+        final profile = profilesMap[playerId];
+        
+        return {
+          ...mp,
+          'profiles': profile,
+        };
+      }).toList();
+      
+      // Debug: Print player data structure
+      for (var player in result) {
+        print('MatchPlayer: Player data - team_type: ${player['team_type']}, player_id: ${player['player_id']}');
+        print('MatchPlayer: Has profile: ${player['profiles'] != null}');
+      }
+      
+      return result;
+    } catch (e, stackTrace) {
       print('Error fetching match players: $e');
+      print('Stack trace: $stackTrace');
       return [];
     }
   }

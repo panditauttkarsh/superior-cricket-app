@@ -8,6 +8,7 @@ import '../../features/auth/presentation/pages/signup_page.dart';
 import '../../features/auth/presentation/pages/email_verification_callback_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../core/widgets/loading_screen.dart';
+import '../../core/widgets/splash_screen.dart';
 import '../../features/player/presentation/pages/player_dashboard_page.dart';
 import '../../features/player/presentation/pages/scorecards_page.dart';
 import '../../features/player/presentation/pages/leaderboards_page.dart';
@@ -101,10 +102,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      // Loading Route
+      // Splash Screen Route (shows first on app launch)
       GoRoute(
         path: '/loading',
-        builder: (context, state) => const LoadingScreen(),
+        builder: (context, state) => const SplashScreen(),
       ),
       // Auth Routes
       GoRoute(
