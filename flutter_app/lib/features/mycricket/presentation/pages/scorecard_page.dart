@@ -2992,11 +2992,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: AppColors.textMain),
                     onPressed: () {
-                      if (context.canPop()) {
-                        context.pop();
-                      } else {
-                        context.go('/');
-                      }
+                      // Directly navigate to dashboard, not back through navigation stack
+                      context.go('/');
                     },
                   ),
                   const Text(

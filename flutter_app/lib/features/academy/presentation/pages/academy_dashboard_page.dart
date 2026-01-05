@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/theme/app_colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/repository_providers.dart';
@@ -72,7 +73,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF205A28),
+                    color: AppColors.primary,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -179,7 +180,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Academy registered successfully!'),
-                                backgroundColor: Color(0xFF205A28),
+                                backgroundColor: AppColors.primary,
                               ),
                             );
                           } catch (e) {
@@ -193,7 +194,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF205A28),
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                       ),
                       child: const Text('Register'),
@@ -225,12 +226,12 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF205A28),
+                color: AppColors.primary,
               ),
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.info, color: Color(0xFF205A28)),
+              leading: const Icon(Icons.info, color: AppColors.primary),
               title: const Text('New student registered'),
               subtitle: const Text('John Doe registered for Academy 1'),
               trailing: Text(
@@ -239,7 +240,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.payment, color: Color(0xFF205A28)),
+              leading: const Icon(Icons.payment, color: AppColors.primary),
               title: const Text('Payment received'),
               subtitle: const Text('₹5,000 received from Jane Smith'),
               trailing: Text(
@@ -312,7 +313,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF205A28)),
+                icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.primary),
                 onPressed: () {
                   if (context.canPop()) {
                     context.pop();
@@ -329,7 +330,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF205A28),
+                      color: AppColors.primary,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -339,7 +340,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF205A28).withOpacity(0.8),
+                      color: AppColors.primary.withOpacity(0.8),
                     ),
                   ),
                 ],
@@ -366,7 +367,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
                 children: [
                   const Icon(
                     Icons.notifications_none,
-                    color: Color(0xFF205A28),
+                    color: AppColors.primary,
                     size: 24,
                   ),
                   Positioned(
@@ -407,15 +408,15 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
       children: [
         _buildStatCard(
           icon: Icons.groups,
-          iconColor: const Color(0xFF205A28),
+          iconColor: AppColors.primary,
           value: '${totalStudents + 45}',
           label: 'Total Students',
           badge: '+12%',
-          badgeColor: const Color(0xFF205A28),
+          badgeColor: AppColors.primary,
         ),
         _buildStatCard(
           icon: Icons.calendar_month,
-          iconColor: const Color(0xFF205A28),
+          iconColor: AppColors.primary,
           value: '8',
           label: 'Active Programs',
         ),
@@ -453,7 +454,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
         border: Border.all(color: Colors.grey[50]!),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF205A28).withOpacity(0.06),
+            color: AppColors.primary.withOpacity(0.06),
             blurRadius: 30,
             offset: const Offset(0, 4),
           ),
@@ -483,7 +484,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: (badgeColor ?? const Color(0xFF205A28)).withOpacity(0.1),
+                    color: (badgeColor ?? AppColors.primary).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -491,7 +492,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: badgeColor ?? const Color(0xFF205A28),
+                      color: badgeColor ?? AppColors.primary,
                     ),
                   ),
                 )
@@ -512,7 +513,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
             style: const TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF205A28),
+              color: AppColors.primary,
               letterSpacing: -1,
               height: 1.1,
             ),
@@ -538,7 +539,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
         child: Padding(
           padding: EdgeInsets.all(40.0),
           child: CircularProgressIndicator(
-            color: Color(0xFF205A28),
+            color: AppColors.primary,
           ),
         ),
       );
@@ -561,7 +562,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
               ElevatedButton(
                 onPressed: _loadAcademies,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF205A28),
+                  backgroundColor: AppColors.primary,
                 ),
                 child: const Text('Retry'),
               ),
@@ -601,7 +602,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF205A28),
+                color: AppColors.primary,
               ),
             ),
             TextButton(
@@ -652,7 +653,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
 
     final borderColor = isWarning 
         ? const Color(0xFFC72B32)
-        : const Color(0xFF205A28);
+        : AppColors.primary;
     
     return GestureDetector(
       onTap: () {
@@ -722,7 +723,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
                           style: const TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF205A28),
+                            color: AppColors.primary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -733,7 +734,7 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
                               size: 14,
                               color: isWarning 
                                   ? const Color(0xFFC72B32)
-                                  : const Color(0xFF205A28).withOpacity(0.6),
+                                  : AppColors.primary.withOpacity(0.6),
                             ),
                             const SizedBox(width: 4),
                             Expanded(
@@ -791,14 +792,14 @@ class _AcademyDashboardPageState extends ConsumerState<AcademyDashboardPage> {
             ),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF205A28),
+            backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(25),
             ),
             elevation: 15,
-            shadowColor: const Color(0xFF205A28).withOpacity(0.35),
+            shadowColor: AppColors.primary.withOpacity(0.35),
           ),
         ),
       ),

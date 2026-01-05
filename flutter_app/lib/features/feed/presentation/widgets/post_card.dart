@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/theme/app_colors.dart';
 import 'dart:io';
 import '../../domain/models/post_model.dart';
 
@@ -59,7 +60,7 @@ class PostCard extends StatelessWidget {
           TextSpan(
             text: isLast ? word : '$word ',
             style: const TextStyle(
-              color: Color(0xFF205A28),
+              color: AppColors.primary,
               fontWeight: FontWeight.bold,
               fontSize: 15,
             ),
@@ -71,7 +72,7 @@ class PostCard extends StatelessWidget {
           TextSpan(
             text: isLast ? word : '$word ',
             style: const TextStyle(
-              color: Color(0xFF205A28),
+              color: AppColors.primary,
               fontSize: 15,
               height: 1.5,
             ),
@@ -93,7 +94,7 @@ class PostCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF205A28).withOpacity(0.08),
+            color: AppColors.primary.withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -118,7 +119,7 @@ class PostCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: const Color(0xFF205A28),
+                      color: AppColors.primary,
                       width: 2,
                     ),
                   ),
@@ -146,14 +147,14 @@ class PostCard extends StatelessWidget {
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: Color(0xFF205A28),
+                          color: AppColors.primary,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         _getTimeAgo(post.timestamp),
                         style: TextStyle(
-                          color: const Color(0xFF205A28).withOpacity(0.6),
+                          color: AppColors.primary.withOpacity(0.6),
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -165,7 +166,7 @@ class PostCard extends StatelessWidget {
                 IconButton(
                   icon: Icon(
                     Icons.more_horiz,
-                    color: const Color(0xFF205A28).withOpacity(0.6),
+                    color: AppColors.primary.withOpacity(0.6),
                   ),
                   onPressed: () {},
                 ),
@@ -205,7 +206,7 @@ class PostCard extends StatelessWidget {
                     _buildActionButton(
                       icon: post.isLiked ? Icons.favorite : Icons.favorite_border,
                       iconSize: 24,
-                      color: post.isLiked ? const Color(0xFFC72B32) : const Color(0xFF205A28),
+                      color: post.isLiked ? const Color(0xFFC72B32) : AppColors.primary,
                       label: _formatNumber(post.likes),
                       onTap: onLike,
                     ),
@@ -213,7 +214,7 @@ class PostCard extends StatelessWidget {
                     _buildActionButton(
                       icon: Icons.chat_bubble_outline,
                       iconSize: 24,
-                      color: const Color(0xFF205A28),
+                      color: AppColors.primary,
                       label: post.comments.toString(),
                       onTap: onComment,
                     ),
@@ -221,7 +222,7 @@ class PostCard extends StatelessWidget {
                     _buildActionButton(
                       icon: Icons.ios_share,
                       iconSize: 24,
-                      color: const Color(0xFF205A28),
+                      color: AppColors.primary,
                       label: 'Share',
                       onTap: onShare,
                     ),
@@ -231,7 +232,7 @@ class PostCard extends StatelessWidget {
                 IconButton(
                   icon: Icon(
                     post.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                    color: const Color(0xFF205A28).withOpacity(0.6),
+                    color: AppColors.primary.withOpacity(0.6),
                     size: 24,
                   ),
                   onPressed: onBookmark,
@@ -406,7 +407,7 @@ class PostCard extends StatelessWidget {
                 color: Colors.grey[50],
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: const Color(0xFF205A28).withOpacity(0.2),
+                  color: AppColors.primary.withOpacity(0.2),
                 ),
               ),
               child: Stack(
@@ -418,7 +419,7 @@ class PostCard extends StatelessWidget {
                       widthFactor: option.percentage / 100,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF205A28).withOpacity(0.1),
+                          color: AppColors.primary.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
@@ -433,7 +434,7 @@ class PostCard extends StatelessWidget {
                         Text(
                           option.text,
                           style: TextStyle(
-                            color: const Color(0xFF205A28),
+                            color: AppColors.primary,
                             fontSize: 15,
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                           ),
@@ -441,7 +442,7 @@ class PostCard extends StatelessWidget {
                         Text(
                           '${option.percentage.toStringAsFixed(0)}%',
                           style: TextStyle(
-                            color: const Color(0xFF205A28),
+                            color: AppColors.primary,
                             fontSize: 15,
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                           ),

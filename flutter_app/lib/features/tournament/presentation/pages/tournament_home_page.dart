@@ -100,7 +100,7 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => context.pop(),
+                    onPressed: () => context.go('/'),
                   ),
                   Expanded(
                     child: Text(
@@ -245,6 +245,8 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
       child: TabBar(
         controller: _tabController,
         isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        padding: EdgeInsets.zero,
         labelColor: AppColors.primary,
         unselectedLabelColor: AppColors.textSec,
         indicatorColor: AppColors.primary,

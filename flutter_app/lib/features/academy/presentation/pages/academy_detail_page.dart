@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/theme/app_colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -71,7 +72,7 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF205A28),
+                      color: AppColors.primary,
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -149,7 +150,7 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF205A28),
+                                color: AppColors.primary,
                               ),
                             ),
                           ],
@@ -161,7 +162,7 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
                               hasPaid = value ?? false;
                             });
                           },
-                          activeColor: const Color(0xFF205A28),
+                          activeColor: AppColors.primary,
                         ),
                       ],
                     ),
@@ -200,13 +201,13 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
                                       ? 'Student registered and payment confirmed!'
                                       : 'Student registered. Payment pending.',
                                 ),
-                                backgroundColor: const Color(0xFF205A28),
+                                backgroundColor: AppColors.primary,
                               ),
                             );
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF205A28),
+                          backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                         ),
                         child: const Text('Register'),
@@ -244,7 +245,7 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Student removed'),
-                  backgroundColor: Color(0xFF205A28),
+                  backgroundColor: AppColors.primary,
                 ),
               );
             },
@@ -266,13 +267,13 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF205A28)),
+          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.primary),
           onPressed: () => context.pop(),
         ),
         title: Text(
           _academy['name'] ?? 'Academy Details',
           style: const TextStyle(
-            color: Color(0xFF205A28),
+            color: AppColors.primary,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -307,7 +308,7 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Academy deleted'),
-                            backgroundColor: Color(0xFF205A28),
+                            backgroundColor: AppColors.primary,
                           ),
                         );
                       },
@@ -367,7 +368,7 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
                               style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF205A28),
+                                color: AppColors.primary,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -416,7 +417,7 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF205A28),
+                              color: AppColors.primary,
                             ),
                           ),
                         ],
@@ -467,7 +468,7 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF205A28),
+                    color: AppColors.primary,
                   ),
                 ),
                 ElevatedButton.icon(
@@ -475,7 +476,7 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add Student'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF205A28),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
