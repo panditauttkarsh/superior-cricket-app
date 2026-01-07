@@ -205,7 +205,15 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        // Go Live
+                        // Navigate to Go Live screen with tournament context
+                        context.push(
+                          '/go-live',
+                          extra: {
+                            'matchId': tournament.id, // Using tournament ID as context
+                            'matchTitle': tournament.name,
+                            'isDraft': false,
+                          },
+                        );
                       },
                       icon: const Icon(Icons.play_arrow, color: Colors.white),
                       label: const Text('Go Live', style: TextStyle(color: Colors.white)),
@@ -219,10 +227,35 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        // Steps/Help
+                        // Show Help Dialog
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Tournament Help'),
+                            content: const Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('• Use "Go Live" to stream matches for this tournament.'),
+                                SizedBox(height: 8),
+                                Text('• Check "Matches" tab for schedule.'),
+                                SizedBox(height: 8),
+                                Text('• "Teams" tab shows all participating squads.'),
+                                SizedBox(height: 8),
+                                Text('• Detailed stats are available in "Stats" tab.'),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Close'),
+                              ),
+                            ],
+                          ),
+                        );
                       },
                       icon: const Icon(Icons.help_outline),
-                      label: const Text('Steps/help'),
+                      label: const Text('Help'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: AppColors.primary,

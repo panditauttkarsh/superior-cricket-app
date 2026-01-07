@@ -11,18 +11,23 @@ class MuxService {
     required String matchId,
     required String matchTitle,
     String? youtubeStreamKey, // Optional: if provided, will restream to YouTube
+    bool shouldRecord = true, // Control recording/VOD creation
   }) async {
     try {
       final url = Uri.parse('${MuxConfig.apiBaseUrl}/video/v1/live-streams');
       
-      final body = {
+      final Map<String, dynamic> body = {
         'playback_policy': ['public'], // Public playback
-        'new_asset_settings': {
-          'playback_policy': ['public'],
-        },
         'reduced_latency': true, // Enable low latency
         'test': false,
       };
+
+      // Add recording settings only if shouldRecord is true
+      if (shouldRecord) {
+        body['new_asset_settings'] = {
+          'playback_policy': ['public'],
+        };
+      }
       
       // If YouTube stream key is provided, add simulcast target
       if (youtubeStreamKey != null && youtubeStreamKey.isNotEmpty) {

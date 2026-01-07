@@ -46,6 +46,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         'battingStyle': 'Right-handed',
         'bowlingStyle': 'Right-arm Medium',
         'jerseyNumber': '7',
+        'subscription': user?.subscriptionPlan ?? 'basic',
       };
       _nameController.text = _profileData['name']!;
       _emailController.text = _profileData['email']!;
@@ -101,13 +102,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F2A20),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
         title: const Text(
           'Edit Profile',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         content: SingleChildScrollView(
           child: Column(
@@ -122,6 +123,34 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               _buildEditField('Batting Style', _battingStyleController),
               _buildEditField('Bowling Style', _bowlingStyleController),
               _buildEditField('Jersey Number', _jerseyNumberController),
+              // Read-only Subscription Plan Indicator
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: TextField(
+                  controller: TextEditingController(text: _profileData['subscription']?.toUpperCase() ?? 'BASIC'),
+                  readOnly: true,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Subscription Plan',
+                    labelStyle: TextStyle(color: Colors.grey[600]),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                    ),
+                    suffixIcon: Icon(
+                      Icons.verified,
+                      color: _profileData['subscription'] == 'pro' ? Colors.amber : Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -136,9 +165,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               _saveProfile();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00D26A),
+              backgroundColor: AppColors.primary,
             ),
-            child: const Text('Save', style: TextStyle(color: Colors.black)),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -150,17 +179,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
         controller: controller,
-        style: const TextStyle(color: Colors.white),
+        style: const TextStyle(color: Colors.black),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: Colors.grey),
+          labelStyle: TextStyle(color: Colors.grey[600]),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey[700]!),
+            borderSide: BorderSide(color: Colors.grey[300]!),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF00D26A), width: 2),
+            borderSide: const BorderSide(color: AppColors.primary, width: 2),
           ),
         ),
       ),
@@ -266,6 +295,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                   _buildProfileField(
                     'Username',
                     ref.read(authStateProvider).user?.username ?? _profileData['name'] ?? 'User Name',
+                  ),
+                  _buildDivider(),
+                  _buildProfileField(
+                    'Subscription Plan',
+                    _profileData['subscription']?.toUpperCase() ?? 'BASIC',
                   ),
                   _buildDivider(),
                   _buildProfileField(

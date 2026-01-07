@@ -49,6 +49,7 @@ import '../../features/live/presentation/pages/go_live_screen.dart';
 import '../../features/live/presentation/pages/watch_live_screen.dart';
 import '../../features/match/presentation/pages/commentary_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
+import '../../features/subscription/presentation/pages/subscription_page.dart';
 import '../../core/providers/auth_provider.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -427,6 +428,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final matchId = state.pathParameters['matchId']!;
           return CommentaryPage(matchId: matchId, showAppBar: true);
         },
+      ),
+      // Subscription Route
+      GoRoute(
+        path: '/subscription',
+        builder: (context, state) => const SubscriptionPage(),
       ),
       // Notifications Route
       GoRoute(

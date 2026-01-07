@@ -8,6 +8,7 @@ class ProfileModel {
   final String? email;
   final String? profileImageUrl;
   final String? role; // 'player', 'coach', 'admin', etc.
+  final String? subscriptionPlan;
 
   ProfileModel({
     required this.id,
@@ -16,6 +17,7 @@ class ProfileModel {
     this.email,
     this.profileImageUrl,
     this.role,
+    this.subscriptionPlan,
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class ProfileModel {
       email: json['email'] as String?,
       profileImageUrl: json['avatar_url'] as String? ?? json['profile_image_url'] as String?,
       role: json['role'] as String?,
+      subscriptionPlan: json['subscription_plan'] as String?,
     );
   }
 
@@ -40,12 +43,29 @@ class ProfileModel {
       'email': email,
       'profile_image_url': profileImageUrl,
       'role': role,
+      'subscription_plan': subscriptionPlan,
     };
   }
 }
 
 class ProfileRepository {
   final _supabase = SupabaseConfig.client;
+
+  Future<ProfileModel?> getProfileById(String id) async {
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', id)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return ProfileModel.fromJson(response);
+    } catch (e) {
+      print('Error getting profile by id: $e');
+      return null;
+    }
+  }
 
   /// Fetch profile by username (case-insensitive)
   /// Also tries email and name as fallbacks
@@ -164,6 +184,18 @@ class ProfileRepository {
     } catch (e) {
       print('Profile: Error searching profiles: $e');
       return [];
+    }
+  }
+
+  Future<void> updateSubscriptionPlan(String userId, String plan) async {
+    try {
+      await _supabase
+          .from('profiles')
+          .update({'subscription_plan': plan})
+          .eq('id', userId);
+    } catch (e) {
+      print('Error updating subscription plan: $e');
+      // rethrow; // Optional: suppress or rethrow. I'll print.
     }
   }
 }

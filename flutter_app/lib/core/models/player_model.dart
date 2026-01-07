@@ -8,6 +8,7 @@ class PlayerModel {
   final String? city;
   final String? state;
   final String? role; // 'batsman', 'bowler', 'all-rounder', 'wicket-keeper'
+  final String? subscriptionPlan; // 'basic', 'pro'
   final Map<String, dynamic>? battingStats;
   final Map<String, dynamic>? bowlingStats;
   final int? totalMatches;
@@ -25,6 +26,7 @@ class PlayerModel {
     this.city,
     this.state,
     this.role,
+    this.subscriptionPlan,
     this.battingStats,
     this.bowlingStats,
     this.totalMatches,
@@ -44,6 +46,7 @@ class PlayerModel {
       city: json['city'] as String?,
       state: json['state'] as String?,
       role: json['role'] as String?,
+      subscriptionPlan: json['subscription_plan'] as String?,
       battingStats: json['batting_stats'] as Map<String, dynamic>?,
       bowlingStats: json['bowling_stats'] as Map<String, dynamic>?,
       totalMatches: json['total_matches'] as int?,
@@ -64,6 +67,7 @@ class PlayerModel {
       'city': city,
       'state': state,
       'role': role,
+      'subscription_plan': subscriptionPlan,
       'batting_stats': battingStats,
       'bowling_stats': bowlingStats,
       'total_matches': totalMatches,

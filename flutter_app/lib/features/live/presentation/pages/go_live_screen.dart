@@ -6,6 +6,8 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../../core/services/mux_service.dart';
 import '../../../../core/config/supabase_config.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/providers/repository_providers.dart';
+import '../../../../core/providers/auth_provider.dart';
 import 'package:go_router/go_router.dart';
 
 /// Go Live Screen
@@ -32,6 +34,7 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
   bool _isInitialized = false;
   bool _isStreaming = false;
   bool _isLoading = false;
+  String _userPlan = 'loading';
   String? _errorMessage;
   String? _muxStreamId;
   String? _rtmpUrl;
@@ -42,6 +45,32 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
   void initState() {
     super.initState();
     _initializeCamera();
+    _fetchUserPlan();
+  }
+
+  Future<void> _fetchUserPlan() async {
+    try {
+      final userId = SupabaseConfig.client.auth.currentUser?.id;
+      if (userId != null) {
+        final profile = await ref.read(profileRepositoryProvider).getProfileById(userId);
+        if (mounted) {
+          setState(() {
+            _userPlan = profile?.subscriptionPlan ?? 'basic';
+          });
+        }
+      } else {
+         setState(() {
+            _userPlan = 'basic';
+          });
+      }
+    } catch (e) {
+      print('Error fetching plan: $e');
+      if (mounted) {
+        setState(() {
+          _userPlan = 'basic'; // Default
+        });
+      }
+    }
   }
 
   @override
@@ -103,6 +132,43 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
       return;
     }
 
+    // Check Plan Logic
+    bool shouldRecord = false;
+    
+    // Refresh plan just in case
+    await _fetchUserPlan();
+
+    if (_userPlan != 'pro') {
+         // Show Upgrade Dialog for Basic users
+         final continueBasic = await _showUpgradeDialog();
+         
+         // If continueBasic is null, user cancelled (tapped outside or back)
+         if (continueBasic == null) return;
+         
+         // If continueBasic is false, user chose "Upgrade to Pro"
+         if (!continueBasic) {
+           if (mounted) {
+             final upgraded = await context.push<bool>('/subscription');
+             if (upgraded == true) {
+                await _fetchUserPlan(); // Refresh after upgrade
+                await ref.read(authStateProvider.notifier).refreshAuth(); // Refresh global user state
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('You are now Pro! Tap Go Live again.')),
+                  );
+                }
+             }
+           }
+           return;
+         }
+         
+         // User chose "Continue as Basic" - Disable recording
+         shouldRecord = false;
+      } else {
+        // Pro User - Enable recording
+        shouldRecord = true;
+      }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -123,6 +189,7 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
         matchId: widget.matchId,
         matchTitle: widget.matchTitle,
         youtubeStreamKey: youtubeStreamKey,
+        shouldRecord: shouldRecord,
       );
 
       setState(() {
@@ -167,7 +234,7 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
       
       // Handle specific Mux errors
       if (e.toString().contains('unavailable on the free plan')) {
-        errorMessage = 'Live streaming requires a paid Mux plan. Please upgrade your Mux account or use a different streaming service.';
+        errorMessage = 'System Config Error: The DEVELOPER Mux account is on a free tier which does not support live streaming. This is not related to your App Subscription.';
       } else if (e.toString().contains('401') || e.toString().contains('Unauthorized')) {
         errorMessage = 'Mux authentication failed. Please check your Mux credentials in mux_config.dart';
       } else if (e.toString().contains('400')) {
@@ -327,9 +394,45 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Go Live'),
+        title: Row(
+          children: [
+             const Text('Go Live'),
+             const SizedBox(width: 12),
+             if (_userPlan != 'loading')
+               Container(
+                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                 decoration: BoxDecoration(
+                   color: _userPlan == 'pro' ? AppColors.primary : Colors.grey,
+                   borderRadius: BorderRadius.circular(4),
+                 ),
+                 child: Text(
+                   _userPlan.toUpperCase(),
+                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                 ),
+               ),
+          ],
+        ),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        actions: [
+          // Debug: Reset Plan Button
+          IconButton(
+            icon: const Icon(Icons.restart_alt, color: Colors.orange),
+            tooltip: 'Debug: Reset to Basic Plan',
+            onPressed: () async {
+              final userId = SupabaseConfig.client.auth.currentUser?.id;
+              if (userId != null) {
+                await ref.read(profileRepositoryProvider).updateSubscriptionPlan(userId, 'basic');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Debug: Reset to Basic Plan')),
+                  );
+                }
+                await _fetchUserPlan();
+              }
+            },
+          ),
+        ],
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () {
@@ -573,6 +676,61 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
                     ),
                   ],
                 ),
+    );
+  }
+
+  Future<bool?> _showUpgradeDialog() async {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Upgrade to Pro?', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Pro Plan Features:',
+              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            _buildFeatureItem('Run Live Stream Recording (VOD)'),
+            _buildFeatureItem('Scorecard Overlays'),
+            _buildFeatureItem('PDF/CSV Export'),
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white24),
+            const SizedBox(height: 8),
+            const Text(
+              'Basic Plan: Live Only (No Recording)',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), // Continue as Basic
+            child: const Text('Continue as Basic', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, false), // Upgrade
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Upgrade to Pro'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildFeatureItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 16),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: const TextStyle(color: Colors.white))),
+        ],
+      ),
     );
   }
 
