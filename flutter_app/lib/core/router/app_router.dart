@@ -8,6 +8,7 @@ import '../../features/auth/presentation/pages/signup_page.dart';
 import '../../features/auth/presentation/pages/email_verification_callback_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../core/widgets/loading_screen.dart';
+import '../../core/widgets/splash_screen.dart';
 import '../../features/player/presentation/pages/player_dashboard_page.dart';
 import '../../features/player/presentation/pages/scorecards_page.dart';
 import '../../features/player/presentation/pages/leaderboards_page.dart';
@@ -40,8 +41,11 @@ import '../../features/mycricket/presentation/pages/opponent_team_squad_page.dar
 import '../../features/mycricket/presentation/pages/toss_page.dart';
 import '../../features/mycricket/presentation/pages/initial_players_setup_page.dart';
 import '../../features/live/presentation/pages/live_screen.dart';
+import '../../features/live/presentation/pages/go_live_screen.dart';
+import '../../features/live/presentation/pages/watch_live_screen.dart';
 import '../../features/match/presentation/pages/commentary_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
+import '../../features/subscription/presentation/pages/subscription_page.dart';
 import '../../core/providers/auth_provider.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -95,10 +99,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      // Loading Route
+      // Splash Screen Route (shows first on app launch)
       GoRoute(
         path: '/loading',
-        builder: (context, state) => const LoadingScreen(),
+        builder: (context, state) => const SplashScreen(),
       ),
       // Auth Routes
       GoRoute(
@@ -374,6 +378,24 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      GoRoute(
+        path: '/go-live',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return GoLiveScreen(
+            matchId: extra?['matchId'] ?? '',
+            matchTitle: extra?['matchTitle'] ?? 'Live Match',
+            isDraft: extra?['isDraft'] ?? false,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/watch-live/:matchId',
+        builder: (context, state) {
+          final matchId = state.pathParameters['matchId']!;
+          return WatchLiveScreen(matchId: matchId);
+        },
+      ),
       // Commentary Route
       GoRoute(
         path: '/commentary/:matchId',
@@ -381,6 +403,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final matchId = state.pathParameters['matchId']!;
           return CommentaryPage(matchId: matchId, showAppBar: true);
         },
+      ),
+      // Subscription Route
+      GoRoute(
+        path: '/subscription',
+        builder: (context, state) => const SubscriptionPage(),
       ),
       // Notifications Route
       GoRoute(

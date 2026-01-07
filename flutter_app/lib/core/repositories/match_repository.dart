@@ -111,6 +111,40 @@ class MatchRepository {
     }
   }
 
+  // Stream match by ID for real-time updates
+  Stream<MatchModel?> streamMatchById(String matchId) {
+    try {
+      return _supabase
+          .from('matches')
+          .stream(primaryKey: ['id'])
+          .eq('id', matchId)
+          .map((data) {
+            if (data.isEmpty) return null;
+            try {
+              return MatchModel.fromJson(data[0] as Map<String, dynamic>);
+            } catch (e) {
+              print('Error parsing match data: $e');
+              return null;
+            }
+          })
+          .handleError((error) {
+            print('Error in match stream: $error');
+            return null;
+          });
+    } catch (e) {
+      print('Error creating stream for match $matchId: $e');
+      // Fallback: return a stream that fetches once
+      return Stream.value(null).asyncMap((_) async {
+        try {
+          return await getMatchById(matchId);
+        } catch (e) {
+          print('Error fetching match: $e');
+          return null;
+        }
+      });
+    }
+  }
+
   // Create a new match
   Future<MatchModel> createMatch(Map<String, dynamic> matchData) async {
     try {

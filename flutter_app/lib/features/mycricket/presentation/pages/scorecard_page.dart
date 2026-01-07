@@ -663,10 +663,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _strikerSR = _strikerBalls > 0 ? (_strikerRuns / _strikerBalls) * 100 : 0.0;
       _nonStrikerSR = _nonStrikerBalls > 0 ? (_nonStrikerRuns / _nonStrikerBalls) * 100 : 0.0;
       
-      // Remove last ball from current over balls
-      if (_currentOverBalls.isNotEmpty) {
-        _currentOverBalls.removeLast();
-      }
+      // CRITICAL: Reconstruct _currentOverBalls from delivery history
+      // This ensures Current Over display is NEVER incorrectly empty after undo
+      _reconstructCurrentOverBalls();
       
       // Remove last ball from over data if it exists
       if (_currentOverBallData.isNotEmpty) {
@@ -691,6 +690,61 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Last ball undone'), duration: Duration(seconds: 1)),
     );
+  }
+
+  // CRITICAL: Reconstruct Current Over display from delivery history
+  // This method rebuilds _currentOverBalls based on the active _currentOver
+  // Ensures the UI always shows accurate ball-by-ball data after any state change
+  void _reconstructCurrentOverBalls() {
+    _currentOverBalls.clear();
+    
+    // If no deliveries, current over is empty
+    if (_deliveries.isEmpty) return;
+    
+    // Get all deliveries for the current over
+    for (final delivery in _deliveries) {
+      if (delivery.over == _currentOver) {
+        // Build ball notation based on delivery type
+        String ballNotation;
+        
+        if (delivery.wicketType != null) {
+          // Wicket
+          if (delivery.wicketType == 'Run Out') {
+            ballNotation = 'RO${delivery.runs}';
+          } else if (delivery.wicketType == 'Retired Hurt') {
+            ballNotation = 'RH';
+          } else {
+            ballNotation = 'W';
+          }
+        } else if (delivery.extraType == 'WD') {
+          // Wide
+          final extraRuns = delivery.extraRuns ?? 1;
+          ballNotation = extraRuns > 1 ? 'WD+${extraRuns - 1}' : 'WD';
+        } else if (delivery.extraType == 'NB') {
+          // No Ball
+          final extraRuns = delivery.extraRuns ?? 1;
+          ballNotation = extraRuns > 1 ? 'NB+${extraRuns - 1}' : 'NB';
+        } else if (delivery.extraType == 'B') {
+          // Byes
+          ballNotation = delivery.runs > 0 ? 'B${delivery.runs}' : 'B';
+        } else if (delivery.extraType == 'LB') {
+          // Leg Byes
+          ballNotation = delivery.runs > 0 ? 'LB${delivery.runs}' : 'LB';
+        } else {
+          // Regular runs
+          ballNotation = delivery.runs.toString();
+          if (delivery.isShortRun) ballNotation += ' (SR)';
+        }
+        
+        _currentOverBalls.add(ballNotation);
+      }
+    }
+    
+    // Also update _overHistory if needed - remove the current over if it exists
+    // (since we're reconstructing from scratch)
+    while (_overHistory.length > _currentOver) {
+      _overHistory.removeLast();
+    }
   }
 
   // Helper function to format bowler overs display (ICC rule)
@@ -2598,7 +2652,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _currentOverBalls = [];
+        // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
+        // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
       }
@@ -2937,11 +2992,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: AppColors.textMain),
                     onPressed: () {
-                      if (context.canPop()) {
-                        context.pop();
-                      } else {
-                        context.go('/');
-                      }
+                      // Directly navigate to dashboard, not back through navigation stack
+                      context.go('/');
                     },
                   ),
                   const Text(
@@ -3016,68 +3068,230 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_youtubeController != null) const SizedBox(height: 16),
-                    // Scorecard Header
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text(
-                        'Scorecard',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textMain,
-                          fontFamily: 'Inter',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // Innings Scorecards
-                    // Show first innings if it exists (collapsible)
-                    if (_firstInningsData != null)
-                      _InningsScorecardWidget(
-                        inningsData: _firstInningsData!,
-                        isExpanded: _firstInningsExpanded,
-                        isCurrentInnings: false,
-                        onToggle: () {
-                          setState(() {
-                            _firstInningsExpanded = !_firstInningsExpanded;
-                          });
-                        },
-                      ),
-                    // Show current innings (always expanded)
-                    _InningsScorecardWidget(
-                      inningsData: _buildCurrentInningsData(),
-                      isExpanded: true,
-                      isCurrentInnings: true,
-                      onToggle: () {
-                        // Current innings is always expanded, but allow toggle for consistency
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Batter and Bowler Card
+                    
+                    // Main Score Card - Matching reference design
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(top: 8, bottom: 16),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: _isDeclaredRun || _isShortRun
-                              ? const Color(0xFF14B8A6).withOpacity(0.3)
-                              : AppColors.borderLight,
-                          width: _isDeclaredRun || _isShortRun ? 2 : 1,
-                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 8,
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Innings Header Row
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _currentInnings == 1 ? '1ST INNINGS' : '2ND INNINGS',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[500],
+                                      letterSpacing: 1.0,
+                                      fontFamily: 'Inter',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _battingTeam,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                      fontFamily: 'Inter',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  // LIVE Badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFC72B32),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          width: 6,
+                                          height: 6,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        const Text(
+                                          'LIVE',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'CRR: ${_crr.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey[600],
+                                      fontFamily: 'Inter',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          
+                          // Large Score Display
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                '$_totalRuns',
+                                style: const TextStyle(
+                                  fontSize: 42,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1976D2), // Blue color for runs
+                                  fontFamily: 'Inter',
+                                  height: 1.0,
+                                ),
+                              ),
+                              Text(
+                                '/$_wickets',
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[500],
+                                  fontFamily: 'Inter',
+                                  height: 1.0,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Text(
+                                '$_currentOver.${_currentBall} Ov',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[500],
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Vs and Projected Row
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Vs $_bowlingTeam',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[600],
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                              Text(
+                                'Projected: $_projected',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[600],
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          
+                          // Current Over Section - STRICT ICC CHRONOLOGICAL ORDER
+                          // Wide/No Ball appears inline at exact position it occurred
+                          Text(
+                            'Current Over',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                              fontFamily: 'Inter',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          
+                          // Ball-by-ball display - CHRONOLOGICAL ORDER
+                          // Deliveries appear exactly in the sequence they occurred
+                          // Empty buckets appended at end for remaining legal balls
+                          Builder(
+                            builder: (context) {
+                              // Count legal balls (excluding Wide/No Ball)
+                              int legalBallCount = 0;
+                              for (final ball in _currentOverBalls) {
+                                if (!ball.startsWith('WD') && !ball.startsWith('NB')) {
+                                  legalBallCount++;
+                                }
+                              }
+                              
+                              // Calculate empty slots needed (6 - legal balls bowled)
+                              final emptySlots = 6 - legalBallCount;
+                              
+                              return Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  // Show ALL deliveries in chronological order (legal + illegal inline)
+                                  ..._currentOverBalls.map((ball) => _buildBallIndicator(ball)),
+                                  // Append empty slots for remaining legal balls
+                                  ...List.generate(
+                                    emptySlots > 0 ? emptySlots : 0,
+                                    (index) => _buildEmptyBallSlot(),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Batter Card - Clean design matching reference
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 12,
                             offset: const Offset(0, 2),
                           ),
-                          if (_isDeclaredRun || _isShortRun)
-                            BoxShadow(
-                              color: const Color(0xFF14B8A6).withOpacity(0.15),
-                              blurRadius: 12,
-                              spreadRadius: 1,
-                            ),
                         ],
                       ),
                       child: Column(
@@ -3089,55 +3303,61 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                                 child: Text(
                                   'Batter',
                                   style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[400],
-                                    fontWeight: FontWeight.w500,
+                                    fontSize: 11,
+                                    color: Colors.grey[500],
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'Inter',
+                                    letterSpacing: 0.5,
                                   ),
                                 ),
                               ),
                               SizedBox(
-                                width: 32,
+                                width: 40,
                                 child: Center(
                                   child: Text(
                                     'R',
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[400],
-                                      fontWeight: FontWeight.w500,
+                                      fontSize: 11,
+                                      color: Colors.grey[500],
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: 'Inter',
                                     ),
                                   ),
                                 ),
                               ),
                               SizedBox(
-                                width: 32,
+                                width: 40,
                                 child: Center(
                                   child: Text(
                                     'B',
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[400],
-                                      fontWeight: FontWeight.w500,
+                                      fontSize: 11,
+                                      color: Colors.grey[500],
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: 'Inter',
                                     ),
                                   ),
                                 ),
                               ),
                               SizedBox(
-                                width: 32,
+                                width: 45,
                                 child: Center(
                                   child: Text(
                                     'SR',
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[400],
-                                      fontWeight: FontWeight.w500,
+                                      fontSize: 11,
+                                      color: Colors.grey[500],
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: 'Inter',
                                     ),
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          // Striker - Clickable for manual change
+                          const SizedBox(height: 14),
+                          
+                          // Striker Row
                           InkWell(
                             onTap: _showManualStrikerChange,
                             child: Row(
@@ -3145,164 +3365,188 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                                 Expanded(
                                   child: Row(
                                     children: [
-                                      const Icon(
+                                      Icon(
                                         Icons.sports_cricket,
-                                        color: AppColors.primary,
-                                        size: 16,
+                                        color: const Color(0xFF1976D2),
+                                        size: 18,
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(
-                                        '$_striker *',
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.primary,
+                                      Flexible(
+                                        child: Text(
+                                          '$_striker *',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF1976D2),
+                                            fontFamily: 'Inter',
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              SizedBox(
-                                width: 32,
-                                child: Center(
-                                  child: Text(
-                                    '$_strikerRuns',
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
+                                SizedBox(
+                                  width: 40,
+                                  child: Center(
+                                    child: Text(
+                                      '$_strikerRuns',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                        fontFamily: 'Inter',
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              SizedBox(
-                                width: 32,
-                                child: Center(
-                                  child: Text(
-                                    '$_strikerBalls',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: AppColors.textSec,
+                                SizedBox(
+                                  width: 40,
+                                  child: Center(
+                                    child: Text(
+                                      '$_strikerBalls',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey[600],
+                                        fontFamily: 'Inter',
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              SizedBox(
-                                width: 32,
-                                child: Center(
-                                  child: Text(
-                                    _strikerSR.toStringAsFixed(1),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSec,
+                                SizedBox(
+                                  width: 45,
+                                  child: Center(
+                                    child: Text(
+                                      _strikerSR.toStringAsFixed(1),
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey[600],
+                                        fontFamily: 'Inter',
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 12),
-                          // Non-Striker - Clickable for manual change
+                          
+                          // Non-Striker Row
                           InkWell(
                             onTap: _showManualStrikerChange,
                             child: Row(
                               children: [
                                 Expanded(
                                   child: Padding(
-                                    padding: const EdgeInsets.only(left: 24),
+                                    padding: const EdgeInsets.only(left: 26),
                                     child: Text(
                                       _nonStriker,
                                       style: TextStyle(
                                         fontSize: 14,
-                                        fontWeight: FontWeight.w600,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey[700],
+                                        fontFamily: 'Inter',
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 40,
+                                  child: Center(
+                                    child: Text(
+                                      '$_nonStrikerRuns',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                        fontFamily: 'Inter',
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 40,
+                                  child: Center(
+                                    child: Text(
+                                      '$_nonStrikerBalls',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
                                         color: Colors.grey[600],
+                                        fontFamily: 'Inter',
                                       ),
                                     ),
                                   ),
                                 ),
-                              SizedBox(
-                                width: 32,
-                                child: Center(
-                                  child: Text(
-                                    '$_nonStrikerRuns',
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
+                                SizedBox(
+                                  width: 45,
+                                  child: Center(
+                                    child: Text(
+                                      _nonStrikerSR.toStringAsFixed(1),
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey[600],
+                                        fontFamily: 'Inter',
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              SizedBox(
-                                width: 32,
-                                child: Center(
-                                  child: Text(
-                                    '$_nonStrikerBalls',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: AppColors.textSec,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 32,
-                                child: Center(
-                                  child: Text(
-                                    _nonStrikerSR.toStringAsFixed(1),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSec,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                          ),
+                          
                           const SizedBox(height: 16),
-                          Divider(color: Colors.grey[100], height: 1),
+                          Divider(color: Colors.grey[200], height: 1),
                           const SizedBox(height: 16),
-                          // Bowler
+                          
+                          // Bowler Section
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFC72B32),
-                                      shape: BoxShape.circle,
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFC72B32),
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'BOWLER',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.grey[400],
-                                          letterSpacing: 1.2,
+                                    const SizedBox(width: 10),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'BOWLER',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey[500],
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.8,
+                                            fontFamily: 'Inter',
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        _bowler,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black87,
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _bowler.length > 8 ? '${_bowler.substring(0, 8)}.' : _bowler,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black87,
+                                            fontFamily: 'Inter',
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
+                              // Bowler Stats
                               Row(
                                 children: [
                                   Column(
@@ -3310,8 +3554,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                                       Text(
                                         'O',
                                         style: TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.grey[400],
+                                          fontSize: 11,
+                                          color: Colors.grey[500],
+                                          fontWeight: FontWeight.w600,
+                                          fontFamily: 'Inter',
                                         ),
                                       ),
                                       const SizedBox(height: 4),
@@ -3321,18 +3567,21 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
                                           color: Colors.black87,
+                                          fontFamily: 'Inter',
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(width: 16),
+                                  const SizedBox(width: 20),
                                   Column(
                                     children: [
                                       Text(
                                         'R',
                                         style: TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.grey[400],
+                                          fontSize: 11,
+                                          color: Colors.grey[500],
+                                          fontWeight: FontWeight.w600,
+                                          fontFamily: 'Inter',
                                         ),
                                       ),
                                       const SizedBox(height: 4),
@@ -3342,18 +3591,21 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
                                           color: Colors.black87,
+                                          fontFamily: 'Inter',
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(width: 16),
+                                  const SizedBox(width: 20),
                                   Column(
                                     children: [
                                       Text(
                                         'W',
                                         style: TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.grey[400],
+                                          fontSize: 11,
+                                          color: Colors.grey[500],
+                                          fontWeight: FontWeight.w600,
+                                          fontFamily: 'Inter',
                                         ),
                                       ),
                                       const SizedBox(height: 4),
@@ -3363,6 +3615,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                                           fontSize: 14,
                                           fontWeight: FontWeight.bold,
                                           color: Color(0xFFC72B32),
+                                          fontFamily: 'Inter',
                                         ),
                                       ),
                                     ],
@@ -3375,34 +3628,18 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                       ),
                     ),
 
-                    const SizedBox(height: 16),
-
-                    // Scoring Control
+                    // Scoring Control Card - Clean design matching reference
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(24),
-                        ),
-                        border: Border.all(
-                          color: _isDeclaredRun || _isShortRun
-                              ? const Color(0xFF14B8A6).withOpacity(0.3) // Cool teal for declared/short run
-                              : AppColors.borderLight,
-                          width: _isDeclaredRun || _isShortRun ? 2 : 1,
-                        ),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 20,
-                            offset: const Offset(0, -10),
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 12,
+                            offset: const Offset(0, 2),
                           ),
-                          if (_isDeclaredRun || _isShortRun)
-                            BoxShadow(
-                              color: const Color(0xFF14B8A6).withOpacity(0.15),
-                              blurRadius: 12,
-                              spreadRadius: 1,
-                            ),
                         ],
                       ),
                       child: Column(
@@ -3414,10 +3651,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                               Text(
                                 'SCORING CONTROL',
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey[400],
-                                  letterSpacing: 1.2,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[500],
+                                  letterSpacing: 1.0,
                                   fontFamily: 'Inter',
                                 ),
                               ),
@@ -3425,8 +3662,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF14B8A6).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
+                                    color: const Color(0xFF14B8A6).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: const Text(
                                     'Declared Run',
@@ -3442,8 +3679,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF14B8A6).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
+                                    color: const Color(0xFF14B8A6).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: const Text(
                                     'Short Run',
@@ -3457,73 +3694,103 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                                 ),
                             ],
                           ),
-                          const SizedBox(height: 16),
-                          GridView.count(
-                            crossAxisCount: 4,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                            childAspectRatio: 1.2,
+                          const SizedBox(height: 20),
+                          
+                          // Score Buttons - First row (0, 1, 2, 3)
+                          Row(
                             children: [
-                              _buildScoreButton('0', () => _handleScore(0), false),
-                              _buildScoreButton('1', () => _handleScore(1), false),
-                              _buildScoreButton('2', () => _handleScore(2), false),
-                              _buildScoreButton('3', () => _handleScore(3), false),
-                              _buildScoreButton('4', () => _handleScore(4), true),
-                              _buildScoreButton('6', () => _handleScore(6), true),
-                              _buildExtrasButton('WIDE', () => _showWideBallBottomSheet()),
-                              _buildExtrasButton('NO\nBALL', () => _showNoBallBottomSheet()),
-                              _buildExtrasButton('BYES', () => _showByesBottomSheet(), isGreen: true),
-                              _buildExtrasButton('LEG\nBYES', () => _showLegByesBottomSheet(), isGreen: true),
-                              _buildScoreButton('5/7', () => _showCustomRunsInput(), false),
-                              _buildOutButton(),
+                              Expanded(child: _buildCleanScoreButton('0', () => _handleScore(0))),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildCleanScoreButton('1', () => _handleScore(1))),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildCleanScoreButton('2', () => _handleScore(2))),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildCleanScoreButton('3', () => _handleScore(3))),
                             ],
                           ),
-                          const SizedBox(height: 16),
-                          // Prominent Undo Button
+                          const SizedBox(height: 12),
+                          
+                          // Second row (4, 6, Wide, NB)
+                          Row(
+                            children: [
+                              Expanded(child: _buildCleanScoreButton('4', () => _handleScore(4), isHighlight: true)),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildCleanScoreButton('6', () => _handleScore(6), isHighlight: true)),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildCleanExtrasButton('WD', () => _showWideBallBottomSheet())),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildCleanExtrasButton('NB', () => _showNoBallBottomSheet())),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          
+                          // Third row (Byes, LB, 5/7, OUT)
+                          Row(
+                            children: [
+                              Expanded(child: _buildCleanExtrasButton('B', () => _showByesBottomSheet(), isGreen: true)),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildCleanExtrasButton('LB', () => _showLegByesBottomSheet(), isGreen: true)),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildCleanScoreButton('5/7', () => _showCustomRunsInput())),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildCleanOutButton()),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          
+                          // Undo Button
                           SizedBox(
                             width: double.infinity,
-                            child: ElevatedButton.icon(
+                            child: OutlinedButton.icon(
                               onPressed: _undoLastBall,
-                              icon: const Icon(Icons.undo, size: 20),
-                              label: const Text(
+                              icon: Icon(Icons.undo, size: 18, color: Colors.grey[600]),
+                              label: Text(
                                 'Undo Last Ball',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w600,
+                                  color: Colors.grey[700],
+                                  fontFamily: 'Inter',
                                 ),
                               ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.textSec,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                side: BorderSide(color: Colors.grey[300]!),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                elevation: 2,
                               ),
                             ),
                           ),
                           const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              TextButton.icon(
-                                onPressed: () {
-                                  _showFullScorecard();
-                                },
-                                icon: const Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
-                                label: const Text(
-                                  'View Full Scorecard',
-                                  style: TextStyle(color: Colors.grey, fontSize: 12),
-                                ),
+                          
+                          // View Full Scorecard
+                          Center(
+                            child: TextButton(
+                              onPressed: _showFullScorecard,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'View Full Scorecard',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey[600],
+                                      fontFamily: 'Inter',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward, size: 14, color: Colors.grey[600]),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
                     ),
+                    
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -3778,6 +4045,113 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       ),
     );
   }
+
+  // Clean score button matching reference design
+  Widget _buildCleanScoreButton(String label, VoidCallback onTap, {bool isHighlight = false}) {
+    // ICC Rule: Disable scoring when waiting for bowler selection (end-of-over lock)
+    final isDisabled = _waitingForBowlerSelection;
+    return InkWell(
+      onTap: isDisabled ? null : onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: isHighlight ? const Color(0xFFFFF3E0) : const Color(0xFFF5F5F5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isHighlight 
+                ? const Color(0xFFFFB74D).withOpacity(0.5) 
+                : Colors.grey[300]!,
+            width: 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isHighlight ? const Color(0xFFF57C00) : Colors.grey[800],
+              fontFamily: 'Inter',
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Clean extras button matching reference design
+  Widget _buildCleanExtrasButton(String label, VoidCallback onTap, {bool isGreen = false}) {
+    // ICC Rule: Disable scoring when waiting for bowler selection (end-of-over lock)
+    final isDisabled = _waitingForBowlerSelection;
+    return InkWell(
+      onTap: isDisabled ? null : onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: isGreen 
+              ? const Color(0xFFE8F5E9) 
+              : const Color(0xFFFFF3E0),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isGreen 
+                ? const Color(0xFF66BB6A).withOpacity(0.5) 
+                : const Color(0xFFFFB74D).withOpacity(0.5),
+            width: 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isGreen ? const Color(0xFF388E3C) : const Color(0xFFF57C00),
+              fontFamily: 'Inter',
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Clean OUT button matching reference design
+  Widget _buildCleanOutButton() {
+    // ICC Rule: Disable scoring when waiting for bowler selection (end-of-over lock)
+    final isDisabled = _waitingForBowlerSelection;
+    return InkWell(
+      onTap: isDisabled ? null : _showOutTypeSelection,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: const Color(0xFFC72B32),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFC72B32).withOpacity(0.25),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Text(
+            'OUT',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontFamily: 'Inter',
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
 
   void _showFullScorecard() {
     showModalBottomSheet(
@@ -4839,7 +5213,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _currentOverBalls = [];
+        // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
+        // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
       }
@@ -4997,7 +5372,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _currentOverBalls = [];
+        // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
+        // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
       }
@@ -5510,7 +5886,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _currentBall = 0;
         _currentOver += 1;
         overComplete = true;
-        _currentOverBalls = [];
+        // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
+        // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
       }

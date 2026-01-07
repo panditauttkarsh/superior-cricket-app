@@ -505,11 +505,19 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
           'winnerId': match.winnerId,
           'resultText': resultText,
           'winningTeam': winningTeam,
+          'createdBy': match.createdBy,
+          'currentUserId': user?.id,
         };
         
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
-          child: _buildMatchCard(matchData),
+          child: GestureDetector(
+            onTap: () {
+              // Navigate to match details page with real-time data
+              context.go('/matches/${match.id}');
+            },
+            child: _buildMatchCard(matchData),
+          ),
         );
       }).toList(),
     );
@@ -585,10 +593,16 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     final status = match['status'] as String? ?? 'upcoming';
     final isCompleted = status == 'completed';
     final isUpcoming = status == 'upcoming';
+    final isLive = status == 'live';
     
     // For upcoming matches, show the new design
     if (isUpcoming) {
       return _buildUpcomingMatchCard(match);
+    }
+    
+    // For live matches, show live card with Score button for creator
+    if (isLive) {
+      return _buildLiveMatchCard(match);
     }
     
     // For completed matches, show the detailed design
@@ -601,6 +615,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     final overs = match['overs'] as int? ?? 20;
     final team1Name = match['team1Name'] as String? ?? 'Team 1';
     final team2Name = match['team2Name'] as String? ?? 'Team 2';
+    final matchId = match['id'] as String?;
     
     return Container(
       decoration: BoxDecoration(
@@ -614,7 +629,17 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
           ),
         ],
       ),
-      child: Padding(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            // Navigate to match details with real-time data
+            if (matchId != null) {
+              context.go('/matches/$matchId');
+            }
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -730,6 +755,8 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
             ),
           ],
         ),
+          ),
+        ),
       ),
     );
   }
@@ -768,6 +795,189 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     );
   }
   
+  Widget _buildLiveMatchCard(Map<String, dynamic> match) {
+    final venue = match['venue'] as String? ?? 'Venue TBA';
+    final date = match['date'] as String? ?? 'Date TBA';
+    final overs = match['overs'] as int? ?? 20;
+    
+    final team1Name = match['team1Name'] as String? ?? 'Team 1';
+    final team2Name = match['team2Name'] as String? ?? 'Team 2';
+    final team1Runs = (match['team1Runs'] as num?)?.toInt() ?? 0;
+    final team1Wickets = (match['team1Wickets'] as num?)?.toInt() ?? 0;
+    final team1Overs = (match['team1Overs'] as num?)?.toDouble() ?? 0.0;
+    final team2Runs = (match['team2Runs'] as num?)?.toInt() ?? 0;
+    final team2Wickets = (match['team2Wickets'] as num?)?.toInt() ?? 0;
+    final team2Overs = (match['team2Overs'] as num?)?.toDouble() ?? 0.0;
+    
+    final matchId = match['id'] as String?;
+    final createdBy = match['createdBy'] as String?;
+    final currentUserId = match['currentUserId'] as String?;
+    
+    // Check if current user is the scorer (match creator)
+    final isScorer = createdBy != null && currentUserId != null && createdBy == currentUserId;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            // Navigate to match details with real-time data
+            if (matchId != null) {
+              context.go('/matches/$matchId');
+            }
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Section with LIVE badge
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Venue, Date, and Overs
+                          Text(
+                            '$venue | $date | $overs Ov.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textSec,
+                              fontFamily: 'Inter',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // LIVE Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'LIVE',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              fontFamily: 'Inter',
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Teams and Scores Section with more padding
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    // Team 1
+                    _buildTeamRow(
+                      team1Name,
+                      team1Runs,
+                      team1Wickets,
+                      team1Overs,
+                      false,
+                    ),
+                    const SizedBox(height: 16),
+                    // Team 2
+                    _buildTeamRow(
+                      team2Name,
+                      team2Runs,
+                      team2Wickets,
+                      team2Overs,
+                      false,
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Score Button for Scorer (Match Creator)
+              if (isScorer)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        if (matchId != null) {
+                          // Navigate to scorecard page to continue scoring
+                          context.go('/scorecard', extra: {
+                            'matchId': matchId,
+                          });
+                        }
+                      },
+                      icon: const Icon(
+                        Icons.edit_note,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        'Continue Scoring',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          fontFamily: 'Inter',
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
   Widget _buildCompletedMatchCard(Map<String, dynamic> match) {
     final stage = match['stage'] as String?;
     final tournamentName = match['tournamentName'] as String?;
@@ -800,6 +1010,8 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     final isTeam1Winner = winnerId != null && winnerId == team1Id;
     final isTeam2Winner = winnerId != null && winnerId == team2Id;
     
+    final matchId = match['id'] as String?;
+    
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -812,9 +1024,19 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            // Navigate to match details with real-time data
+            if (matchId != null) {
+              context.go('/matches/$matchId');
+            }
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           // Header Section
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
@@ -896,7 +1118,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
                   team1Overs,
                   isTeam1Winner,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 // Team 2
                 _buildTeamRow(
                   team2Name,
@@ -908,6 +1130,9 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
               ],
             ),
           ),
+          
+          // Add bottom padding
+          const SizedBox(height: 16),
           
           // Result Summary
           if (resultText != null) ...[
@@ -933,22 +1158,9 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
               ),
             ),
           ],
-          
-          // Action Links
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _buildActionLink('Insights', () {}),
-                const SizedBox(width: 20),
-                _buildActionLink('Table', () {}),
-                const SizedBox(width: 20),
-                _buildActionLink('Leaderboard', () {}),
-              ],
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

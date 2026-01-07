@@ -11,6 +11,7 @@ class User {
   final String email;
   final String name;
   final String? username;
+  final String? subscriptionPlan;
   final UserRole role;
   final String? avatar;
   final String? phone;
@@ -22,6 +23,7 @@ class User {
     required this.email,
     required this.name,
     this.username,
+    this.subscriptionPlan,
     required this.role,
     this.avatar,
     this.phone,
@@ -35,6 +37,7 @@ class User {
       email: json['email'],
       name: json['name'],
       username: json['username'],
+      subscriptionPlan: json['subscriptionPlan'],
       role: UserRole.values.firstWhere(
         (e) => e.toString().split('.').last == json['role'],
         orElse: () => UserRole.player,
@@ -53,6 +56,7 @@ class User {
       'name': name,
       'username': username,
       'role': role.toString().split('.').last,
+      'subscriptionPlan': subscriptionPlan,
       'avatar': avatar,
       'phone': phone,
       'createdAt': createdAt.toIso8601String(),

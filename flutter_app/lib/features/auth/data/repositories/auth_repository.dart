@@ -148,6 +148,7 @@ class AuthRepository {
           name: profile['full_name'] as String? ?? 
                 normalizedEmail.split('@')[0],
           username: profile['username'] as String?,
+          subscriptionPlan: profile['subscription_plan'] as String?,
           role: role,
           avatar: profile['avatar_url'] as String?,
           phone: null, // Phone not in new schema
@@ -248,6 +249,7 @@ class AuthRepository {
                 user.userMetadata?['name'] ?? 
                 'User',
           username: profile['username'] as String?,
+          subscriptionPlan: profile['subscription_plan'] as String?,
           role: role,
           avatar: profile['avatar_url'] as String? ?? user.userMetadata?['avatar_url'],
           phone: null, // Phone not in new schema
@@ -308,6 +310,7 @@ class AuthRepository {
           email: normalizedEmail,
           name: profile['full_name'] as String? ?? name,
           username: profile['username'] as String?,
+          subscriptionPlan: profile['subscription_plan'] as String?,
           role: role,
           avatar: profile['avatar_url'] as String?,
           phone: profile['phone'] as String?,
@@ -359,6 +362,7 @@ class AuthRepository {
               user.email?.split('@')[0] ?? 
               'User',
         username: profile['username'] as String?,
+        subscriptionPlan: profile['subscription_plan'] as String?,
         role: role,
         avatar: profile['avatar_url'] as String?,
         phone: null, // Phone not in new schema

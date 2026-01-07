@@ -146,7 +146,7 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => context.pop(),
+                    onPressed: () => context.go('/'),
                   ),
                   Expanded(
                     child: Text(
@@ -288,6 +288,66 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        // Navigate to Go Live screen with tournament context
+                        context.push(
+                          '/go-live',
+                          extra: {
+                            'matchId': tournament.id, // Using tournament ID as context
+                            'matchTitle': tournament.name,
+                            'isDraft': false,
+                          },
+                        );
+                      },
+                      icon: const Icon(Icons.play_arrow, color: Colors.white),
+                      label: const Text('Go Live', style: TextStyle(color: Colors.white)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        // Show Help Dialog
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Tournament Help'),
+                            content: const Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('• Use "Go Live" to stream matches for this tournament.'),
+                                SizedBox(height: 8),
+                                Text('• Check "Matches" tab for schedule.'),
+                                SizedBox(height: 8),
+                                Text('• "Teams" tab shows all participating squads.'),
+                                SizedBox(height: 8),
+                                Text('• Detailed stats are available in "Stats" tab.'),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Close'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.help_outline),
+                      label: const Text('Help'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
                   ),
@@ -309,6 +369,8 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
       child: TabBar(
         controller: _tabController,
         isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        padding: EdgeInsets.zero,
         labelColor: AppColors.primary,
         unselectedLabelColor: AppColors.textSec,
         indicatorColor: AppColors.primary,

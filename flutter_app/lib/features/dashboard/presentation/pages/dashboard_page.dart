@@ -23,6 +23,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   List<TournamentModel> _featuredTournaments = [];
   bool _isLoadingMatches = true;
   bool _isLoadingTournaments = true;
+  
+  // Notification toggle states
+  bool _activitiesNotifications = true;
+  bool _emailNotifications = false;
 
   @override
   void initState() {
@@ -194,39 +198,43 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Hamburger Menu - closer to left
-        Padding(
-          padding: const EdgeInsets.only(left: 0),
-          child: IconButton(
-            icon: const Icon(Icons.menu, color: AppColors.textMain),
-            onPressed: () => _showHamburgerMenu(context),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ),
-        const SizedBox(width: 8),
-        // Avatar only (no greeting text)
-        Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.primary,
-              width: 2,
-            ),
-          ),
-          child: ClipOval(
-            child: Image.network(
-              'https://api.dicebear.com/7.x/avataaars/svg?seed=$userName&backgroundColor=ffd5dc',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: AppColors.surface,
-                  child: const Icon(Icons.person, color: AppColors.textMain),
-                );
-              },
-            ),
+        // Left side - Hamburger Menu and Avatar shifted to touch edge
+        Transform.translate(
+          offset: const Offset(-20, 0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.menu, color: AppColors.textMain),
+                onPressed: () => _showHamburgerMenu(context),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.primary,
+                    width: 2,
+                  ),
+                ),
+                child: ClipOval(
+                  child: Image.network(
+                    'https://api.dicebear.com/7.x/avataaars/svg?seed=$userName&backgroundColor=ffd5dc',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: AppColors.surface,
+                        child: const Icon(Icons.person, color: AppColors.textMain),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const Spacer(),
@@ -905,7 +913,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           title: tournament.name,
                           startDate: formattedDate,
                           prizePool: prizePoolText,
-                          onTap: () => context.go('/tournaments/${tournament.id}'),
+                          onTap: () => context.go('/tournament/${tournament.id}'),
                         ),
                       );
                     }).toList(),
@@ -1197,11 +1205,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   void _showHamburgerMenu(BuildContext context) {
     final user = ref.read(authStateProvider).user;
+    // Local state for toggles inside the dialog
+    bool activitiesNotifications = _activitiesNotifications;
+    bool emailNotifications = _emailNotifications;
+    
     showDialog(
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black.withOpacity(0.5),
-      builder: (context) => Align(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Align(
         alignment: Alignment.centerLeft,
         child: Material(
           color: Colors.transparent,
@@ -1306,13 +1319,51 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   const SizedBox(height: 16),
                   
                   // Name
-                  Text(
-                    user?.name ?? 'User Name',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textMain,
-                    ),
+                  // Name and Badge
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          user?.name ?? 'User Name',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textMain,
+                          ),
+                        ),
+                      ),
+                      if (user?.subscriptionPlan == 'pro') ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Colors.amber, Colors.orange],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.amber.withOpacity(0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Text(
+                            'PRO',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   
                   const SizedBox(height: 32),
@@ -1377,14 +1428,28 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                             icon: Icons.bar_chart_outlined,
                             title: 'Activities notifications',
                             subtitle: 'Payment Success, Failed and other activities',
-                            value: true,
-                            onChanged: (value) {},
+                            value: activitiesNotifications,
+                            onChanged: (value) {
+                              setDialogState(() {
+                                activitiesNotifications = value;
+                              });
+                              setState(() {
+                                _activitiesNotifications = value;
+                              });
+                            },
                           ),
                           _buildMenuTileWithToggle(
                             icon: Icons.email_outlined,
                             title: 'Email notification',
-                            value: false,
-                            onChanged: (value) {},
+                            value: emailNotifications,
+                            onChanged: (value) {
+                              setDialogState(() {
+                                emailNotifications = value;
+                              });
+                              setState(() {
+                                _emailNotifications = value;
+                              });
+                            },
                           ),
                           
                           const SizedBox(height: 24),
@@ -1422,6 +1487,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

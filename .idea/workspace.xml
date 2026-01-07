@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="NONE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="3c5367f3-656f-4bf8-aeaa-f4460bb91e9c" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/flutter_app/lib/core/repositories/match_player_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/flutter_app/lib/core/repositories/match_player_repository.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flutter_app/lib/core/repositories/match_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/flutter_app/lib/core/repositories/match_repository.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flutter_app/lib/core/router/app_router.dart" beforeDir="false" afterPath="$PROJECT_DIR$/flutter_app/lib/core/router/app_router.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flutter_app/lib/features/auth/presentation/pages/login_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/flutter_app/lib/features/auth/presentation/pages/login_page.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flutter_app/lib/features/match/presentation/pages/match_detail_page_comprehensive.dart" beforeDir="false" afterPath="$PROJECT_DIR$/flutter_app/lib/features/match/presentation/pages/match_detail_page_comprehensive.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flutter_app/lib/features/mycricket/presentation/pages/my_cricket_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/flutter_app/lib/features/mycricket/presentation/pages/my_cricket_page.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flutter_app/pubspec.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flutter_app/pubspec.yaml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 2
+}]]></component>
+  <component name="ProjectId" id="37nXBZF0qymJXmxpGAriXO6Zw0N" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "RunOnceActivity.readMode.enableVisualFormatting": "true",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "last_opened_file_path": "/Users/shivamganju/superior-cricket-app"
+  }
+}]]></component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="3c5367f3-656f-4bf8-aeaa-f4460bb91e9c" name="Changes" comment="" />
+      <created>1767539674771</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1767539674771</updated>
+    </task>
+    <servers />
+  </component>
+</project>

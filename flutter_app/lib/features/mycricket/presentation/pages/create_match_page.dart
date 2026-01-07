@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -1195,7 +1196,8 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
-                  _showGoLiveOptions();
+                  // Navigate directly to Go Live screen
+                  _startGoLive();
                 },
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
@@ -1426,15 +1428,15 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 16),
-              // Option 1: Go Live on Pitch Point Channel
+              // Option 1: Start Live Stream (Go Live)
               ElevatedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
-                  // Open Pitch Point YouTube channel for live streaming
-                  _openPitchPointChannel();
+                  // Navigate to Go Live screen to start streaming
+                  _startGoLive();
                 },
-                icon: const Icon(Icons.live_tv, color: Colors.white),
-                label: const Text('Go Live on Pitch Point Channel'),
+                icon: const Icon(Icons.videocam, color: Colors.white),
+                label: const Text('Start Live Stream'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFC72B32),
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1473,6 +1475,28 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
           ),
         ],
       ),
+    );
+  }
+
+  void _startGoLive() {
+    // Create a temporary match ID or use existing match if available
+    // For now, we'll create a draft match first, then go live
+    // Or navigate to Go Live with a temporary ID that will be updated after match creation
+    
+    // Get match title from form
+    final matchTitle = '${_myTeamController.text} vs ${_opponentTeamController.text}';
+    
+    // Generate temporary match ID (will be replaced with actual match ID after creation)
+    final tempMatchId = const Uuid().v4();
+    
+    // Navigate to Go Live screen
+    context.push(
+      '/go-live',
+      extra: {
+        'matchId': tempMatchId,
+        'matchTitle': matchTitle.isNotEmpty ? matchTitle : 'Live Match',
+        'isDraft': true, // Flag to indicate this is a draft match
+      },
     );
   }
 

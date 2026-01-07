@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/repository_providers.dart';
+import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/models/shop_item_model.dart';
+import '../../../../core/theme/app_colors.dart';
 
 class ShopPage extends ConsumerStatefulWidget {
   const ShopPage({super.key});
@@ -93,7 +95,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('$name added to cart!'),
-        backgroundColor: const Color(0xFF205A28),
+        backgroundColor: AppColors.primary,
         duration: const Duration(seconds: 1),
       ),
     );
@@ -116,7 +118,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF205A28),
+                color: AppColors.primary,
               ),
             ),
             const SizedBox(height: 16),
@@ -154,10 +156,10 @@ class _ShopPageState extends ConsumerState<ShopPage> {
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: const Color(0xFF205A28).withOpacity(0.1),
+          color: AppColors.primary.withOpacity(0.1),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: const Color(0xFF205A28), size: 20),
+        child: Icon(icon, color: AppColors.primary, size: 20),
       ),
       title: Text(
         title,
@@ -182,7 +184,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Your cart is empty'),
-          backgroundColor: Color(0xFF205A28),
+          backgroundColor: AppColors.primary,
         ),
       );
       return;
@@ -211,7 +213,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF205A28),
+                      color: AppColors.primary,
                     ),
                   ),
                   IconButton(
@@ -286,7 +288,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                                       style: const TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: Color(0xFF205A28),
+                                        color: AppColors.primary,
                                       ),
                                     ),
                                     Row(
@@ -335,7 +337,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF205A28),
+                  color: AppColors.primary,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -367,7 +369,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Your cart is empty'),
-                              backgroundColor: Color(0xFF205A28),
+                              backgroundColor: AppColors.primary,
                             ),
                           );
                           return;
@@ -379,14 +381,14 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Order placed successfully!'),
-                            backgroundColor: Color(0xFF205A28),
+                            backgroundColor: AppColors.primary,
                             duration: Duration(seconds: 2),
                           ),
                         );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF205A28),
+                        foregroundColor: AppColors.primary,
                         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                       ),
                       child: const Text('Checkout'),
@@ -432,7 +434,12 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                       // Banner Section
                       _buildBannerSection(),
                       
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
+                      
+                      // Sell Your Items Section
+                      _buildSellItemsSection(),
+                      
+                      const SizedBox(height: 20),
                       
                       // Categories Section
                       _buildCategoriesSection(),
@@ -481,17 +488,17 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF205A28), // primary
+                      color: AppColors.primary,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF205A28).withOpacity(0.3),
+                          color: AppColors.primary.withOpacity(0.3),
                           blurRadius: 15,
                         ),
                       ],
                     ),
                     child: const Icon(
-                      Icons.sports_cricket,
+                      Icons.storefront,
                       color: Colors.white,
                       size: 18,
                     ),
@@ -501,18 +508,18 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                     text: const TextSpan(
                       children: [
                         TextSpan(
-                          text: 'CRICPLAY ',
+                          text: 'Pitch Point ',
                           style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w400,
-                            color: Color(0xFF205A28),
-                            letterSpacing: 1,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                            letterSpacing: 0.5,
                           ),
                         ),
                         TextSpan(
                           text: 'Store',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w500,
                             color: Colors.grey,
                           ),
@@ -609,120 +616,130 @@ class _ShopPageState extends ConsumerState<ShopPage> {
   }
 
   Widget _buildBannerSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        height: 220, // Increased from 200 to 220 to fix overflow
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          image: const DecorationImage(
-            image: NetworkImage(
-              'https://lh3.googleusercontent.com/aida-public/AB6AXuC9hQ2mrMLAW43LzsFykS8qwBpC2TQ4vMv1eO_mjVu87Ywk8wtMT-ZbI6Xxcls8WTH5-r8m7V5nBTyjG_glldUf_OCz3j-CpxGjTkd9VjNAznx0o22Vyf2a5dpoZM35-U_I1YUFVIs4k8_RoXg1FYqOokjggFby7Y9zbKB-kV6UeyTTFeHJaRtPPQKMemaalyGX5fyIl97i6BgXlKSQ-9stwOIvLQahTz4_bdybB6hrWIzeM84KOShYN9y_od6oXUhwmZ9ruYzvryjh',
+    return Container(
+      width: double.infinity,
+      height: 200,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary,
+            AppColors.primary.withOpacity(0.85),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          // Decorative circles
+          Positioned(
+            top: -30,
+            right: -30,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.1),
+              ),
             ),
-            fit: BoxFit.cover,
           ),
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+          Positioned(
+            bottom: -40,
+            right: 60,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.08),
+              ),
+            ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20), // Reduced vertical padding slightly
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min, // Added to prevent overflow
-            children: [
-              // FLASH SALE badge - red pill shape
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFC72B32),
-                  borderRadius: BorderRadius.circular(20), // Pill shape
-                ),
-                child: const Text(
-                  'FLASH SALE',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
+          // Content
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                // Left side - Text content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // HOT DEALS badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          '🔥 HOT DEALS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // CRICKET SEASON
+                      const Text(
+                        'CRICKET SEASON',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Subtitle
+                      Text(
+                        'Get pro gear at 30% off',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      // Shop Now button
+                      ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'Shop Now',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 10), // Reduced from 12
-              // IPL SEASON - large white text
-              const Text(
-                'IPL SEASON',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 36,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
-                  height: 1.1,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black26,
-                      offset: Offset(0, 2),
-                      blurRadius: 4,
-                    ),
-                  ],
+                // Right side - Cricket icon
+                Icon(
+                  Icons.sports_cricket,
+                  size: 80,
+                  color: Colors.white.withOpacity(0.2),
                 ),
-              ),
-              const SizedBox(height: 6), // Reduced from 8
-              // Subtitle
-              Text(
-                'Get pro gear at 30% off',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.95),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black26,
-                      offset: const Offset(0, 1),
-                      blurRadius: 3,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12), // Reduced from 16
-              // Shop Now button - green
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF205A28),
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF205A28).withOpacity(0.4),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF205A28),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10), // Reduced vertical padding
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Shop Now',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -751,7 +768,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                 child: const Text(
                   'See All',
                   style: TextStyle(
-                    color: Color(0xFF205A28),
+                    color: AppColors.primary,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -778,7 +795,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? const Color(0xFFC72B32)
+                        ? AppColors.primary
                         : Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: isSelected
@@ -787,7 +804,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: const Color(0xFFC72B32).withOpacity(0.2),
+                              color: AppColors.primary.withOpacity(0.3),
                               blurRadius: 8,
                             ),
                           ]
@@ -807,6 +824,382 @@ class _ShopPageState extends ConsumerState<ShopPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSellItemsSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.primary.withOpacity(0.1),
+              AppColors.primary.withOpacity(0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.primary.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.sell_outlined,
+                color: AppColors.primary,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Sell Your Cricket Gear',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textMain,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'List your second-hand items and earn money',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSec,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: _showSellItemDialog,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Sell Now',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSellItemDialog() {
+    final user = ref.read(authStateProvider).user;
+    
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login to sell items'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController priceController = TextEditingController();
+    final TextEditingController descriptionController = TextEditingController();
+    String selectedCategory = 'bat';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'List Your Item',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textMain,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              // Form
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Item Name
+                      const Text(
+                        'Item Name',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textMain,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: nameController,
+                        decoration: InputDecoration(
+                          hintText: 'e.g., MRF Cricket Bat',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      // Category
+                      const Text(
+                        'Category',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textMain,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          _buildCategoryChip('bat', '🏏 Bat', selectedCategory, (val) {
+                            setModalState(() => selectedCategory = val);
+                          }),
+                          _buildCategoryChip('apparel', '👕 Jersey', selectedCategory, (val) {
+                            setModalState(() => selectedCategory = val);
+                          }),
+                          _buildCategoryChip('protection', '🛡️ Protection', selectedCategory, (val) {
+                            setModalState(() => selectedCategory = val);
+                          }),
+                          _buildCategoryChip('shoes', '👟 Shoes', selectedCategory, (val) {
+                            setModalState(() => selectedCategory = val);
+                          }),
+                          _buildCategoryChip('gloves', '🧤 Gloves', selectedCategory, (val) {
+                            setModalState(() => selectedCategory = val);
+                          }),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      // Price
+                      const Text(
+                        'Price (\$)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textMain,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: priceController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          hintText: 'Enter your asking price',
+                          prefixIcon: const Icon(Icons.attach_money),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      // Description
+                      const Text(
+                        'Description',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textMain,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: descriptionController,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          hintText: 'Describe your item condition, usage, etc.',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      // Add Photo Box
+                      Container(
+                        width: double.infinity,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.grey[50],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add_a_photo, size: 36, color: Colors.grey[400]),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Add Photos',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      
+                      // Submit Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            if (nameController.text.isEmpty || priceController.text.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please fill in item name and price'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                              return;
+                            }
+                            
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('${nameController.text} listed for sale!'),
+                                backgroundColor: AppColors.primary,
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'List Item for Sale',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip(String value, String label, String selected, Function(String) onTap) {
+    final isSelected = value == selected;
+    return GestureDetector(
+      onTap: () => onTap(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : Colors.grey[300]!,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.grey[700],
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 
@@ -830,7 +1223,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
         child: Padding(
           padding: EdgeInsets.all(40.0),
           child: CircularProgressIndicator(
-            color: Color(0xFF205A28),
+            color: AppColors.primary,
           ),
         ),
       );
@@ -853,7 +1246,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
               ElevatedButton(
                 onPressed: _loadProducts,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF205A28),
+                  backgroundColor: AppColors.primary,
                 ),
                 child: const Text('Retry'),
               ),
@@ -1068,7 +1461,7 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF205A28),
+                    color: AppColors.primary,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -1120,11 +1513,11 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF205A28),
+                        color: AppColors.primary,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF205A28).withOpacity(0.3),
+                            color: AppColors.primary.withOpacity(0.3),
                             blurRadius: 8,
                           ),
                         ],
@@ -1217,10 +1610,10 @@ class _ShopPageState extends ConsumerState<ShopPage> {
           Icon(
             icon,
             color: isStore && isActive
-                ? const Color(0xFF205A28) // Dark green for store when active
+                ? AppColors.primary // Dark green for store when active
                 : isGreen 
                     ? const Color(0xFF00D26A) 
-                    : (isActive ? const Color(0xFF205A28) : Colors.grey[400]),
+                    : (isActive ? AppColors.primary : Colors.grey[400]),
             size: 24,
           ),
           const SizedBox(height: 4),
@@ -1230,10 +1623,10 @@ class _ShopPageState extends ConsumerState<ShopPage> {
               fontSize: 10,
               fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
               color: isStore && isActive
-                  ? const Color(0xFF205A28) // Dark green for store when active
+                  ? AppColors.primary // Dark green for store when active
                   : isGreen 
                       ? const Color(0xFF00D26A) 
-                      : (isActive ? const Color(0xFF205A28) : Colors.grey[400]),
+                      : (isActive ? AppColors.primary : Colors.grey[400]),
             ),
           ),
         ],

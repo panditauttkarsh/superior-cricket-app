@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/theme/app_colors.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../domain/models/post_model.dart';
@@ -185,7 +186,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                     child: const Text(
                       'Cancel',
                       style: TextStyle(
-                        color: Color(0xFF205A28),
+                        color: AppColors.primary,
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
                       ),
@@ -196,21 +197,21 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF205A28),
+                      color: AppColors.primary,
                       letterSpacing: -0.5,
                     ),
                   ),
                   ElevatedButton(
                     onPressed: _createPost,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF205A28),
+                      backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
                       elevation: 4,
-                      shadowColor: const Color(0xFF205A28).withOpacity(0.2),
+                      shadowColor: AppColors.primary.withOpacity(0.2),
                     ),
                     child: const Text(
                       'Post',
@@ -240,7 +241,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: const Color(0xFF205A28),
+                              color: AppColors.primary,
                               width: 2,
                             ),
                           ),
@@ -269,7 +270,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF205A28),
+                                  color: AppColors.primary,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -286,7 +287,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                                     const Icon(
                                       Icons.public,
                                       size: 14,
-                                      color: Color(0xFF205A28),
+                                      color: AppColors.primary,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
@@ -294,14 +295,14 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF205A28).withOpacity(0.6),
+                                        color: AppColors.primary.withOpacity(0.6),
                                       ),
                                     ),
                                     const SizedBox(width: 2),
                                     Icon(
                                       Icons.arrow_drop_down,
                                       size: 14,
-                                      color: const Color(0xFF205A28).withOpacity(0.6),
+                                      color: AppColors.primary.withOpacity(0.6),
                                     ),
                                   ],
                                 ),
@@ -322,13 +323,13 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF205A28),
+                        color: AppColors.primary,
                         height: 1.5,
                       ),
                       decoration: InputDecoration(
                         hintText: "What's on your mind?",
                         hintStyle: TextStyle(
-                          color: const Color(0xFF205A28).withOpacity(0.4),
+                          color: AppColors.primary.withOpacity(0.4),
                           fontSize: 20,
                           fontWeight: FontWeight.w500,
                         ),
@@ -350,7 +351,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                             color: Colors.grey[50],
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: const Color(0xFF205A28).withOpacity(0.2),
+                              color: AppColors.primary.withOpacity(0.2),
                               width: 2,
                               style: BorderStyle.solid,
                             ),
@@ -402,7 +403,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                                       shape: BoxShape.circle,
                                       boxShadow: [
                                         BoxShadow(
-                                          color: const Color(0xFF205A28).withOpacity(0.08),
+                                          color: AppColors.primary.withOpacity(0.08),
                                           blurRadius: 20,
                                           offset: const Offset(0, 4),
                                         ),
@@ -410,7 +411,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                                     ),
                                     child: const Icon(
                                       Icons.add_photo_alternate,
-                                      color: Color(0xFF205A28),
+                                      color: AppColors.primary,
                                       size: 28,
                                     ),
                                   ),
@@ -418,7 +419,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                                   const Text(
                                     'Upload Picture from Gallery',
                                     style: TextStyle(
-                                      color: Color(0xFF205A28),
+                                      color: AppColors.primary,
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -436,7 +437,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                         border: Border(
                           bottom: BorderSide(
                             color: _hashtagFocusNode.hasFocus
-                                ? const Color(0xFF205A28)
+                                ? AppColors.primary
                                 : Colors.grey[100]!,
                             width: 1,
                           ),
@@ -446,7 +447,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                         children: [
                           const Icon(
                             Icons.tag,
-                            color: Color(0xFF205A28),
+                            color: AppColors.primary,
                             size: 20,
                           ),
                           const SizedBox(width: 8),
@@ -457,12 +458,12 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFF205A28),
+                                color: AppColors.primary,
                               ),
                               decoration: InputDecoration(
                                 hintText: 'AddHashtags',
                                 hintStyle: TextStyle(
-                                  color: const Color(0xFF205A28).withOpacity(0.4),
+                                  color: AppColors.primary.withOpacity(0.4),
                                   fontSize: 18,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -570,13 +571,13 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF205A28).withOpacity(0.1),
+          color: AppColors.primary.withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           hashtag,
           style: const TextStyle(
-            color: Color(0xFF205A28),
+            color: AppColors.primary,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -591,7 +592,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF205A28).withOpacity(0.1),
+          color: AppColors.primary.withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -600,7 +601,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
             Text(
               hashtag,
               style: const TextStyle(
-                color: Color(0xFF205A28),
+                color: AppColors.primary,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
@@ -609,7 +610,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
             Icon(
               Icons.close,
               size: 16,
-              color: const Color(0xFF205A28).withOpacity(0.6),
+              color: AppColors.primary.withOpacity(0.6),
             ),
           ],
         ),
@@ -624,7 +625,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
         children: [
           Icon(
             icon,
-            color: const Color(0xFF205A28),
+            color: AppColors.primary,
             size: 24,
           ),
           if (hasNotification)

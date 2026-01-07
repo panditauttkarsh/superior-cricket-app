@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/repository_providers.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../widgets/post_card.dart';
 import '../widgets/create_post_dialog.dart';
 import '../../domain/models/post_model.dart';
@@ -113,7 +114,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.share, color: Color(0xFF205A28)),
+              leading: const Icon(Icons.share, color: AppColors.primary),
               title: const Text('Share to WhatsApp'),
               onTap: () {
                 Navigator.pop(context);
@@ -123,7 +124,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.share, color: Color(0xFF205A28)),
+              leading: const Icon(Icons.share, color: AppColors.primary),
               title: const Text('Share to Twitter'),
               onTap: () {
                 Navigator.pop(context);
@@ -133,7 +134,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.link, color: Color(0xFF205A28)),
+              leading: const Icon(Icons.link, color: AppColors.primary),
               title: const Text('Copy Link'),
               onTap: () {
                 Navigator.pop(context);
@@ -216,11 +217,11 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF205A28),
+                      color: AppColors.primary,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Color(0xFF205A28)),
+                    icon: const Icon(Icons.close, color: AppColors.primary),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -264,7 +265,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
           Expanded(
             child: TextField(
               controller: commentController,
-              style: const TextStyle(color: Color(0xFF205A28)),
+              style: const TextStyle(color: AppColors.primary),
               decoration: InputDecoration(
                 hintText: 'Add a comment...',
                 hintStyle: TextStyle(color: Colors.grey[600]),
@@ -274,7 +275,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
-                  borderSide: const BorderSide(color: Color(0xFF205A28), width: 2),
+                  borderSide: const BorderSide(color: AppColors.primary, width: 2),
                 ),
                 filled: true,
                 fillColor: Colors.grey[50],
@@ -284,7 +285,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
           ),
           const SizedBox(width: 8),
           IconButton(
-            icon: const Icon(Icons.send, color: Color(0xFF205A28)),
+            icon: const Icon(Icons.send, color: AppColors.primary),
             onPressed: () async {
               if (commentController.text.isNotEmpty) {
                 final user = ref.read(authStateProvider).user;
@@ -360,13 +361,13 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: Color(0xFF205A28),
+                          color: AppColors.primary,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         comment.content,
-                        style: const TextStyle(fontSize: 14, color: Color(0xFF205A28)),
+                        style: const TextStyle(fontSize: 14, color: AppColors.primary),
                       ),
                     ],
                   ),
@@ -468,7 +469,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                   IconButton(
                     icon: const Icon(
                       Icons.arrow_back,
-                      color: Color(0xFF205A28),
+                      color: AppColors.primary,
                       size: 24,
                     ),
                     onPressed: () {
@@ -480,14 +481,14 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF205A28),
+                      color: AppColors.primary,
                       letterSpacing: -0.5,
                     ),
                   ),
                   IconButton(
                     icon: const Icon(
                       Icons.filter_list,
-                      color: Color(0xFF205A28),
+                      color: AppColors.primary,
                       size: 28,
                     ),
                     onPressed: () {
@@ -502,11 +503,11 @@ class _FeedPageState extends ConsumerState<FeedPage> {
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _loadPosts,
-                color: const Color(0xFF205A28),
+                color: AppColors.primary,
                 child: _isLoading
                     ? const Center(
                         child: CircularProgressIndicator(
-                          color: Color(0xFF205A28),
+                          color: AppColors.primary,
                         ),
                       )
                     : _error != null
@@ -514,7 +515,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                                Icon(Icons.error_outline, size: 64, color: AppColors.primary.withOpacity(0.6)),
                                 const SizedBox(height: 16),
                                 Text(
                                   'Error loading posts',
@@ -524,7 +525,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                                 ElevatedButton(
                                   onPressed: _loadPosts,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF205A28),
+                                    backgroundColor: AppColors.primary,
                                   ),
                                   child: const Text('Retry'),
                                 ),
@@ -577,7 +578,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showCreatePostDialog,
-        backgroundColor: const Color(0xFF205A28),
+        backgroundColor: AppColors.primary,
         child: const Icon(Icons.add, color: Colors.white, size: 32),
       ),
     );

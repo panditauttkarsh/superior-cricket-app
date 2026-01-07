@@ -18,7 +18,14 @@
 -dontwarn com.google.android.play.core.splitinstall.**
 -dontwarn com.google.android.play.core.tasks.**
 
+
 # Keep Flutter classes
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }
+
+# Razorpay
+-keep class com.razorpay.** { *; }
+-dontwarn com.razorpay.**
+-keepattributes Signature
+-keepattributes *Annotation*
 
