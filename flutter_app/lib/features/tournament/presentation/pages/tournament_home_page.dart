@@ -11,6 +11,7 @@ import 'points_table_tab.dart';
 import 'leaderboard_tab.dart';
 import 'stats_tab.dart';
 import '../providers/tournament_providers.dart';
+import '../../services/test_data_seeder.dart';
 
 class TournamentHomePage extends ConsumerStatefulWidget {
   final String tournamentId;
@@ -83,16 +84,61 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
 
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.primary, // Fallback color
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
+      child: Stack(
+        children: [
+          // Tournament Banner Background
+          if (tournament.bannerUrl != null && tournament.bannerUrl!.isNotEmpty)
+            Positioned.fill(
+              child: Image.network(
+                tournament.bannerUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  // Fallback to gradient if image fails
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+          else
+            // Fallback to gradient if no banner
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+            ),
+          // Light overlay for text readability (brighter banner)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.2), // Lighter at top (brighter)
+                    Colors.black.withOpacity(0.35), // Lighter at bottom (brighter)
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Content
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
             // App Bar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -113,11 +159,37 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
                       textAlign: TextAlign.center,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.share, color: Colors.white),
-                    onPressed: () {
-                      // Share tournament
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.white),
+                    onSelected: (value) {
+                      if (value == 'seed_test_data') {
+                        _seedIntoKPL(context, ref);
+                      } else if (value == 'share') {
+                        // Share tournament
+                      }
                     },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'seed_test_data',
+                        child: Row(
+                          children: [
+                            Icon(Icons.science, size: 20),
+                            SizedBox(width: 8),
+                            Text('Seed Test Data (KPL)'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'share',
+                        child: Row(
+                          children: [
+                            Icon(Icons.share, size: 20),
+                            SizedBox(width: 8),
+                            Text('Share'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -197,9 +269,25 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
                 ],
               ),
             ),
-            // Action Buttons
+            // Action Buttons - Only Go Live (centered)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Center(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      // Go Live functionality
+                    },
+                    icon: const Icon(Icons.play_arrow, color: AppColors.primary, size: 20),
+                    label: const Text('Go Live', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 16)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white, // Bright white background
+                      foregroundColor: AppColors.primary,
+                      elevation: 3, // Slight elevation for brightness
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
               child: Row(
                 children: [
                   Expanded(
@@ -263,11 +351,13 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ],
-        ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -275,6 +365,7 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
   Widget _buildTabs() {
     return Container(
       color: AppColors.surface,
+      padding: const EdgeInsets.only(top: 8, left: 16, right: 16, bottom: 4),
       child: TabBar(
         controller: _tabController,
         isScrollable: true,
@@ -283,6 +374,7 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
         labelColor: AppColors.primary,
         unselectedLabelColor: AppColors.textSec,
         indicatorColor: AppColors.primary,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 16),
         tabs: const [
           Tab(text: 'Matches'),
           Tab(text: 'Teams'),
@@ -308,6 +400,48 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
         return StatsTab(tournamentId: tournament.id);
       default:
         return TeamsTab(tournamentId: tournament.id);
+    }
+  }
+
+  Future<void> _seedIntoKPL(BuildContext context, WidgetRef ref) async {
+    final seeder = TournamentTestDataSeeder();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final tournamentId = await seeder.seedIntoExistingTournament(ref, 'KPL');
+      
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Test data seeded successfully into KPL! Check the Points Table tab.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+        
+        // Refresh the current page
+        setState(() {});
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to seed test data: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 

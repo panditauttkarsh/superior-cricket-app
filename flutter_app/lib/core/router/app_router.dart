@@ -20,10 +20,6 @@ import '../../features/tournament/presentation/pages/tournament_details_page.dar
 import '../../features/tournament/presentation/pages/fixtures_page.dart';
 import '../../features/tournament/presentation/pages/points_table_page.dart';
 import '../../features/tournament/presentation/pages/tournaments_arena_page.dart';
-import '../../features/tournament/presentation/pages/add_tournament_page.dart';
-import '../../features/tournament/presentation/pages/tournament_home_page.dart';
-import '../../features/tournament/presentation/pages/add_teams_page.dart';
-import '../../features/tournament/presentation/pages/tournament_entry_page.dart';
 import '../../features/academy/presentation/pages/academy_dashboard_page.dart';
 import '../../features/academy/presentation/pages/academy_detail_page.dart';
 import '../../features/academy/presentation/pages/training_programs_page.dart';
@@ -278,35 +274,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Tournament Routes
       GoRoute(
         path: '/tournament',
-        redirect: (context, state) {
-          // Redirect to My Cricket Tournaments tab (the first screen)
-          return '/my-cricket?tab=Tournaments';
-        },
-      ),
-      GoRoute(
-        path: '/tournament/add',
-        builder: (context, state) => const AddTournamentPage(),
-      ),
-      GoRoute(
-        path: '/tournament/:id',
-        builder: (context, state) {
-          final tournamentId = state.pathParameters['id']!;
-          return TournamentHomePage(tournamentId: tournamentId);
-        },
-      ),
-      GoRoute(
-        path: '/tournament/:id/add-teams',
-        builder: (context, state) {
-          final tournamentId = state.pathParameters['id']!;
-          return AddTeamsPage(tournamentId: tournamentId);
-        },
+        builder: (context, state) => const TournamentListPage(),
       ),
       GoRoute(
         path: '/tournaments-arena',
         builder: (context, state) => const TournamentsArenaPage(),
       ),
       GoRoute(
-        path: '/tournament/:id/details',
+        path: '/tournament/:id',
         builder: (context, state) {
           final tournamentId = state.pathParameters['id']!;
           return TournamentDetailsPage(tournamentId: tournamentId);

@@ -761,7 +761,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               _buildActionItem(
                 customIcon: _buildTrophyIcon(),
                 label: 'Tournaments',
-                onTap: () => context.go('/tournament'),
+                onTap: () => context.go('/my-cricket?tab=Tournaments'),
               ),
               _buildActionItem(
                 customIcon: _buildAcademyIcon(),
@@ -1391,7 +1391,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                             title: 'Tournaments',
                             onTap: () {
                               Navigator.pop(context);
-                              context.go('/tournament');
+                              context.go('/my-cricket?tab=Tournaments');
                             },
                           ),
                           _buildMenuTile(
