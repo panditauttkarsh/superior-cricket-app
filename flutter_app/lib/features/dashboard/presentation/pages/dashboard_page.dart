@@ -7,8 +7,11 @@ import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/models/match_model.dart';
 import '../../../../core/models/tournament_model.dart';
 import '../../../mycricket/presentation/widgets/enhanced_create_match_dialog.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import '../widgets/notifications_dialog.dart';
 import '../../../notifications/presentation/pages/notifications_page.dart';
+import '../../../../core/providers/theme_provider.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -140,45 +143,50 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final capitalizedName = _getCapitalizedName(user?.email);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.background,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
         child: SafeArea(
           child: Column(
             children: [
               Expanded(
-                child: SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 430),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 30),
-                          
-                          // Header
-                          _buildHeader(capitalizedName),
-                          
-                          const SizedBox(height: 30),
-                          
-                          // Live Matches Section
-                          _buildLiveMatchesSection(),
-                          
-                          const SizedBox(height: 30),
-                          
-                          // Quick Actions Section
-                          _buildQuickActionsSection(),
-                          
-                          const SizedBox(height: 30),
-                          
-                          // Featured Tournaments Section
-                          _buildFeaturedTournamentsSection(),
-                          
-                          const SizedBox(height: 100), // Space for bottom nav
-                        ],
+                child: RefreshIndicator(
+                  color: AppColors.primary,
+                  onRefresh: _loadData,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 430),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 30),
+                            
+                            // Header
+                            _buildHeader(capitalizedName),
+                            
+                            const SizedBox(height: 30),
+                            
+                            // Live Matches Section
+                            _buildLiveMatchesSection(),
+                            
+                            const SizedBox(height: 30),
+                            
+                            // Quick Actions Section
+                            _buildQuickActionsSection(),
+                            
+                            const SizedBox(height: 30),
+                            
+                            // Featured Tournaments Section
+                            _buildFeaturedTournamentsSection(),
+                            
+                            const SizedBox(height: 100), // Space for bottom nav
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -195,6 +203,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 
   Widget _buildHeader(String userName) {
+    final user = ref.read(authStateProvider).user;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -223,7 +232,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
                 child: ClipOval(
                   child: Image.network(
-                    'https://api.dicebear.com/7.x/avataaars/svg?seed=$userName&backgroundColor=ffd5dc',
+                    user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/svg?seed=$userName&backgroundColor=ffd5dc',
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
@@ -295,17 +304,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   Positioned(
                     top: 8,
                     right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
                       child: Text(
                         unreadCount > 9 ? '9+' : '$unreadCount',
                         style: const TextStyle(
@@ -332,16 +340,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'My Matches',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textMain,
+                color: Theme.of(context).textTheme.headlineMedium?.color ?? AppColors.textMain,
               ),
             ),
             TextButton(
-              onPressed: () => context.go('/match-center'),
+              onPressed: () => context.go('/my-cricket?tab=Matches'),
               style: TextButton.styleFrom(
                 padding: EdgeInsets.zero,
                 minimumSize: Size.zero,
@@ -350,7 +358,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               child: const Text(
                 'See All',
                 style: TextStyle(
-                  color: AppColors.primary,
+                  color: Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -387,25 +395,57 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.only(right: 20),
-                      children: _liveMatches.map((match) {
+                      children: _liveMatches.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final match = entry.value;
                         final scorecard = match.scorecard ?? {};
                         final team1Score = scorecard['team1_score'] ?? {};
                         final team2Score = scorecard['team2_score'] ?? {};
-                        final team1Runs = team1Score['runs'] ?? 0;
-                        final team1Wickets = team1Score['wickets'] ?? 0;
-                        final team1Overs = team1Score['overs'] ?? 0.0;
-                        final team2Runs = team2Score['runs'] ?? 0;
-                        final team2Wickets = team2Score['wickets'] ?? 0;
-                        final team2Overs = team2Score['overs'] ?? 0.0;
                         
-                        // Determine which team is batting (simplified logic)
-                        final isTeam1Batting = team1Overs < team2Overs || 
-                                             (team1Overs == team2Overs && team1Runs < team2Runs);
-                        final battingScore = isTeam1Batting ? team1Score : team2Score;
-                        final battingRuns = battingScore['runs'] ?? 0;
-                        final battingWickets = battingScore['wickets'] ?? 0;
-                        final battingOvers = battingScore['overs'] ?? 0.0;
+                        // Extract raw values
+                        final t1Runs = (team1Score['runs'] as num?)?.toInt() ?? 0;
+                        final t1Wickets = (team1Score['wickets'] as num?)?.toInt() ?? 0;
+                        final t1Overs = (team1Score['overs'] as num?)?.toDouble() ?? 0.0;
                         
+                        final t2Runs = (team2Score['runs'] as num?)?.toInt() ?? 0;
+                        final t2Wickets = (team2Score['wickets'] as num?)?.toInt() ?? 0;
+                        final t2Overs = (team2Score['overs'] as num?)?.toDouble() ?? 0.0;
+
+                        // Format strings
+                        final team1ScoreStr = '$t1Runs/$t1Wickets';
+                        final team1OversStr = '${t1Overs.toStringAsFixed(1)} Ov';
+                        
+                        final team2ScoreStr = '$t2Runs/$t2Wickets';
+                        final team2OversStr = '${t2Overs.toStringAsFixed(1)} Ov';
+                        
+                        String statusText = match.status == 'live' ? 'Live' : 
+                                          match.status == 'upcoming' ? 'Upcoming' : 
+                                          match.status == 'completed' ? 'Completed' : 'Match';
+                                          
+                        // Calculate Result logic if completed
+                        if (match.status == 'completed' && match.winnerId != null) {
+                           if (match.winnerId == match.team1Id) {
+                             final runsDiff = t1Runs - t2Runs;
+                             final wicketsDiff = 10 - t1Wickets; // Assuming 10 wickets roughly, but usually calculated from chasing team logic
+                             // Simplified result text based solely on runs for batting first or wickets if chasing. 
+                             // Since we don't have accurate 'who batted first' easily here without parsing logic:
+                             // We will just use generic "Won" text or run diff if huge
+                             // Better: Reuse standard logic.
+                             if (runsDiff > 0) {
+                               statusText = '${match.team1Name ?? "Team 1"} won by $runsDiff runs';
+                             } else {
+                               statusText = '${match.team1Name ?? "Team 1"} won';
+                             }
+                           } else {
+                             final runsDiff = t2Runs - t1Runs;
+                             if (runsDiff > 0) {
+                               statusText = '${match.team2Name ?? "Team 2"} won by $runsDiff runs';
+                             } else {
+                               statusText = '${match.team2Name ?? "Team 2"} won'; 
+                             }
+                           }
+                        }
+
                         return Padding(
                           padding: const EdgeInsets.only(right: 12),
                           child: GestureDetector(
@@ -413,11 +453,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                             child: _buildLiveMatchCard(
                               team1: match.team1Name ?? 'Team 1',
                               team2: match.team2Name ?? 'Team 2',
-                              score: '$battingRuns/$battingWickets',
-                              overs: '${battingOvers.toStringAsFixed(1)} Ov',
-                              status: match.status == 'live' ? 'Live' : 
-                                      match.status == 'upcoming' ? 'Upcoming' : 
-                                      match.status == 'completed' ? 'Completed' : 'Match',
+                              team1Score: team1ScoreStr,
+                              team1Overs: team1OversStr,
+                              team2Score: team2ScoreStr,
+                              team2Overs: team2OversStr,
+                              status: statusText,
+                              matchStatus: match.status,
+                              index: index,
                             ),
                           ),
                         );
@@ -429,42 +471,50 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 
   Widget _buildLiveMatchCard({
-    String team1 = 'IND',
-    String team2 = 'AUS',
-    String score = '142/3',
-    String overs = '18.2 Ov',
-    String status = 'India need 24 runs in 10 balls',
+    required String team1,
+    required String team2,
+    required String team1Score,
+    required String team1Overs,
+    required String team2Score,
+    required String team2Overs,
+    required String status,
+    required String matchStatus,
+    int index = 0,
   }) {
-    // Night cricket stadium banner image
-    const bannerImagePath = 'assets/images/night cricket.webp';
+    // List of available stadium/cricket background images
+    final backgroundImages = [
+      'assets/images/DD66A1F5-EBCD-4452-9B72-7E3F5E0C7CA9.jpeg',
+      'assets/images/CA1BF7B6-0C33-4D59-AEC3-5518ACCB1354.png',
+      'assets/images/86AC2243-B5A7-413E-84A3-634401C99C23_4_5005_c.jpeg',
+    ];
+    
+    final imageIndex = index % backgroundImages.length;
+    final bannerImagePath = backgroundImages[imageIndex];
+    final isLive = matchStatus.toLowerCase() == 'live';
     
     return Container(
       width: 280,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.borderLight,
-        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: Stack(
           children: [
-            // Night Cricket Stadium Background Banner
+            // Background
             Positioned.fill(
               child: Image.asset(
                 bannerImagePath,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
-                  // Fallback to gradient if image not found
                   return Container(
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          Color(0xFF1a4d2e), // Dark green like cricket field
-                          Color(0xFF0d2818), // Darker green
+                          Color(0xFF1a4d2e),
+                          Color(0xFF0d2818), 
                         ],
                       ),
                     ),
@@ -472,8 +522,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 },
               ),
             ),
-            // Dark gradient overlay for text readability
-            // Top opacity ~0.35, Bottom opacity ~0.75
+            // Overlay
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -493,32 +542,36 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Match Header
+                  // Header (Badge + Title)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Live Badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.urgent.withOpacity(0.9),
+                          color: isLive ? AppColors.urgent.withOpacity(0.9) : Colors.black.withOpacity(0.6),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
+                            if (isLive) ...[ 
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Text(
-                              'LIVE',
-                              style: TextStyle(
+                              const SizedBox(width: 6),
+                            ],
+                            Text(
+                              // Show winning team name for completed matches, otherwise show status
+                              matchStatus.toLowerCase() == 'completed' && status.contains('won') 
+                                ? status.split(' won')[0] // Extract team name before "won"
+                                : matchStatus.toUpperCase(),
+                              style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
@@ -534,7 +587,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'T20 World Cup',
+                          'T20 Match',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.white.withOpacity(0.9),
@@ -544,8 +597,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  // Match Content
+                  const SizedBox(height: 20),
+                  
+                  // Teams and Scores
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -553,14 +607,23 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       Column(
                         children: [
                           Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppColors.textMain.withOpacity(0.1),
+                            padding: const EdgeInsets.symmetric(horizontal: 0),
+                            child: Text(
+                              team1Score,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
-                            child: Center(
-                              child: Text(_getFlagEmoji(team1), style: const TextStyle(fontSize: 24)),
+                          ),
+                          const SizedBox(height: 4),
+                           Text(
+                            team1Overs,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.8),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -574,43 +637,49 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           ),
                         ],
                       ),
-                      // Score
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            score,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w700,
+                      
+                      // VS Center
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.2),
+                          border: Border.all(color: Colors.white.withOpacity(0.3)),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'VS',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
                           ),
-                          Text(
-                            overs,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF00D26A),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
+                      
                       // Team 2
                       Column(
                         children: [
                           Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppColors.textMain.withOpacity(0.1),
+                            padding: const EdgeInsets.symmetric(horizontal: 0),
+                            child: Text(
+                              team2Score,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
-                            child: Center(
-                              child: Text(_getFlagEmoji(team2), style: const TextStyle(fontSize: 24)),
+                          ),
+                          const SizedBox(height: 4),
+                           Text(
+                            team2Overs,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.8),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -626,9 +695,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  // Match Status
+                  
+                  const Spacer(),
+                  
+                  // Bottom Status Bar
                   Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.only(top: 12),
                     decoration: BoxDecoration(
                       border: Border(
@@ -645,6 +717,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         color: Colors.white.withOpacity(0.9),
                         fontWeight: FontWeight.w500,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -728,7 +802,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
@@ -741,12 +815,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Quick Actions',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
-              color: Colors.black,
+              color: Theme.of(context).textTheme.headlineMedium?.color ?? Colors.black,
             ),
           ),
           const SizedBox(height: 16),
@@ -771,7 +845,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               _buildActionItem(
                 customIcon: Icon(
                   Icons.shopping_bag,
-                  color: AppColors.primary,
+                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white : AppColors.primary,
                   size: 24,
                 ),
                 label: 'Store',
@@ -799,11 +873,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: Theme.of(context).cardTheme.color,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.divider,
-                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
@@ -815,7 +886,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               child: customIcon ?? (icon != null
                   ? Icon(
                       icon,
-                      color: AppColors.primary,
+                      color: Colors.white,
                       size: 24,
                     )
                   : const SizedBox()),
@@ -825,7 +896,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               label,
               style: TextStyle(
                 fontSize: 11,
-                color: AppColors.textSec,
+                color: Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey,
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.center,
@@ -840,7 +911,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
@@ -853,12 +924,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Featured Tournaments',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
-              color: Colors.black,
+              color: Theme.of(context).textTheme.headlineMedium?.color ?? Colors.black,
             ),
           ),
         const SizedBox(height: 16),
@@ -886,19 +957,38 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   )
                 : Column(
                     children: _featuredTournaments.map((tournament) {
-                      final statusText = tournament.status == 'registration_open'
-                          ? 'REGISTRATION OPEN'
-                          : tournament.status == 'ongoing'
-                              ? 'ONGOING'
-                              : 'COMPLETED';
-                      final statusColor = tournament.status == 'registration_open'
-                          ? AppColors.primary
-                          : tournament.status == 'ongoing'
-                              ? AppColors.urgent
-                              : AppColors.textSec;
+                      final now = DateTime.now();
+                      // Logic based on dates
+                      String statusText;
+                      Color statusColor;
+                      
+                      final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+                      
+                      if (tournament.status == 'ongoing') {
+                        statusText = 'ONGOING';
+                        statusColor = AppColors.urgent;
+                      } else if (tournament.status == 'completed') {
+                        statusText = 'COMPLETED';
+                        statusColor = isDarkMode ? Colors.white : AppColors.textSec;
+                      } else {
+                        // Check if tournament actually ended based on date
+                        if (tournament.endDate != null && now.isAfter(tournament.endDate!)) {
+                          statusText = 'ENDED';
+                          statusColor = isDarkMode ? Colors.white : AppColors.textSec;
+                        } else if (now.isBefore(tournament.startDate)) {
+                          statusText = 'REGISTRATION OPEN';
+                          statusColor = AppColors.primary;
+                        } else {
+                          statusText = 'REGISTRATION CLOSED';
+                          statusColor = AppColors.error; 
+                        }
+                      }
                       
                       final startDate = tournament.startDate;
-                      final formattedDate = '${startDate.day} ${_getMonthName(startDate.month)}';
+                      final isCurrentYear = startDate.year == now.year;
+                      final formattedDate = '${startDate.day} ${_getMonthName(startDate.month)}' + 
+                          (isCurrentYear ? '' : ' ${startDate.year}');
+                      
                       final prizePoolText = tournament.prizePool != null
                           ? '₹${tournament.prizePool!.toStringAsFixed(0)} Prize Pool'
                           : 'Prize Pool TBA';
@@ -906,7 +996,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: _buildTournamentCard(
-                          imageUrl: tournament.imageUrl ?? '',
+                          imageUrl: tournament.bannerUrl ?? tournament.imageUrl ?? '',
                           status: statusText,
                           statusColor: statusColor,
                           teams: tournament.registeredTeams ?? tournament.totalTeams ?? 0,
@@ -980,11 +1070,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       onTap: onTap ?? () => context.go('/my-cricket?tab=Tournaments'),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: Theme.of(context).cardTheme.color,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppColors.divider,
-          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
@@ -1002,30 +1089,24 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               height: 64,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                image: DecorationImage(
-                  image: NetworkImage(imageUrl),
+                image: imageUrl.trim().isNotEmpty ? DecorationImage(
+                  image: (imageUrl.startsWith('http') 
+                      ? NetworkImage(imageUrl) 
+                      : AssetImage(imageUrl.startsWith('assets/') 
+                          ? imageUrl 
+                          : 'assets/images/$imageUrl')) as ImageProvider,
                   fit: BoxFit.cover,
-                  onError: (exception, stackTrace) {},
-                ),
+                  onError: (exception, stackTrace) {
+                    debugPrint('Error loading image $imageUrl: $exception');
+                  },
+                ) : null,
               ),
-              child: imageUrl.isEmpty
+              child: imageUrl.trim().isEmpty
                   ? Container(
                       color: Colors.grey[900],
                       child: const Icon(Icons.image, color: Colors.white),
                     )
-                  : Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withOpacity(0.6),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+                  : null,
             ),
             const SizedBox(width: 14),
             // Tournament Info
@@ -1050,27 +1131,28 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                             fontSize: 9,
                             fontWeight: FontWeight.bold,
                             color: statusColor,
-                            letterSpacing: 0.5,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '• $teams Teams',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textMeta,
+                      if (teams > 0) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '• $teams Teams',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textMeta,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textMain,
+                      color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.textMain,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1080,7 +1162,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     'Starts $startDate • $prizePool',
                     style: TextStyle(
                       fontSize: 11,
-                      color: AppColors.textSec,
+                      color: Theme.of(context).brightness == Brightness.dark ? Colors.white : AppColors.textSec,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1112,7 +1194,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   Widget _buildBottomNavBar() {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: Theme.of(context).scaffoldBackgroundColor,
         border: Border(
           top: BorderSide(
             color: AppColors.borderLight,
@@ -1186,7 +1268,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         children: [
           Icon(
             icon,
-            color: isActive ? AppColors.primary : AppColors.textSec,
+            color: isActive 
+                ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : AppColors.primary)
+                : (Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey),
             size: 24,
           ),
           const SizedBox(height: 4),
@@ -1195,12 +1279,92 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w500,
-              color: isActive ? AppColors.primary : AppColors.textSec,
+              color: isActive 
+                  ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : AppColors.primary)
+                  : (Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _handleProfileImageUpdate(BuildContext context, WidgetRef ref) async {
+    final picker = ImagePicker();
+    
+    // Show dialog to choose source
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Update Profile Picture'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    
+    if (source == null) return;
+    
+    try {
+      final pickedFile = await picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      
+      if (pickedFile == null) return;
+      
+      // Show loading
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Uploading profile picture...')),
+        );
+      }
+      
+      final authState = ref.read(authStateProvider);
+      final userId = authState.user?.id;
+      
+      if (userId == null) return;
+      
+      final imageFile = File(pickedFile.path);
+      final repo = ref.read(profileRepositoryProvider);
+      
+      // Upload execution
+      final imageUrl = await repo.uploadProfileImage(userId, imageFile);
+      await repo.updateProfileImage(userId, imageUrl);
+      
+      // Refresh Auth State to reflect changes
+      await ref.read(authStateProvider.notifier).refreshAuth();
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile picture updated successfully!')),
+        );
+        
+        // Close the hamburger menu to refresh the view (as it uses local state from when it was built)
+        // Or trigger a rebuild. Since we refreshed auth state, closing and reopening is cleanest for UX.
+        Navigator.pop(context); 
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating profile picture: $e')),
+        );
+      }
+    }
   }
 
   void _showHamburgerMenu(BuildContext context) {
@@ -1219,10 +1383,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         child: Material(
           color: Colors.transparent,
           child: Container(
-            width: MediaQuery.of(context).size.width * 0.75,
+            width: MediaQuery.of(context).size.width * 0.85,
             height: double.infinity,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).cardTheme.color,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.5),
@@ -1240,141 +1404,183 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     child: Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.arrow_back, color: AppColors.textMain),
+                          icon: Icon(Icons.arrow_back, color: Theme.of(context).iconTheme.color),
                           onPressed: () => Navigator.pop(context),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
                         const SizedBox(width: 16),
-                        const Text(
+                        Text(
                           'Profile',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.textMain,
+                            color: Theme.of(context).textTheme.bodyLarge?.color,
                           ),
                         ),
                       ],
                     ),
                   ),
                   
-                  // Profile Picture - Centered
-                  Center(
-                    child: Stack(
-                      children: [
-                        Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ClipOval(
-                            child: Image.network(
-                              'https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email ?? 'User'}',
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: AppColors.surface,
-                                  child: Icon(
-                                    Icons.person,
-                                    color: AppColors.textSec,
-                                    size: 50,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                        // Camera icon overlay - top right
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            child: const Icon(
-                              Icons.camera_alt,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Name
-                  // Name and Badge
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          user?.name ?? 'User Name',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textMain,
-                          ),
-                        ),
-                      ),
-                      if (user?.subscriptionPlan == 'pro') ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Colors.amber, Colors.orange],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.amber.withOpacity(0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Text(
-                            'PRO',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Menu Items in Sections
+                  // Menu Items in Sections - Now includes profile header
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Profile Header - Horizontal Layout
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade100,
+                            ),
+                            child: Row(
+                              children: [
+                                // Profile Picture
+                                Stack(
+                                  children: [
+                                    Container(
+                                      width: 80,
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.white,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.1),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ClipOval(
+                                        child: Image.network(
+                                          user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email ?? 'User'}',
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Container(
+                                              color: AppColors.surface,
+                                              child: Icon(
+                                                Icons.person,
+                                                color: AppColors.textSec,
+                                                size: 40,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    // Camera icon overlay
+                                    Positioned(
+                                      bottom: 0,
+                                      right: 0,
+                                      child: GestureDetector(
+                                        onTap: () => _handleProfileImageUpdate(context, ref),
+                                        child: Container(
+                                          width: 28,
+                                          height: 28,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: Colors.white, width: 2),
+                                          ),
+                                          child: const Icon(
+                                            Icons.camera_alt,
+                                            color: Colors.white,
+                                            size: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                
+                                const SizedBox(width: 16),
+                                
+                                // User Info
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Name
+                                      Text(
+                                        (user?.name ?? user?.email?.split('@')[0] ?? 'User Name').toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Theme.of(context).textTheme.displayLarge?.color ?? AppColors.textMain,
+                                          letterSpacing: 0.8,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      
+                                      const SizedBox(height: 4),
+                                      
+                                      // Email
+                                      Text(
+                                        user?.email ?? 'user@example.com',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7) ?? AppColors.textSec,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      
+                                      const SizedBox(height: 8),
+                                      
+                                      // Subscription Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: user?.subscriptionPlan == 'pro' 
+                                              ? Colors.amber.withOpacity(0.2)
+                                              : Colors.grey.withOpacity(0.2),
+                                          border: Border.all(
+                                            color: user?.subscriptionPlan == 'pro' 
+                                                ? Colors.amber
+                                                : Colors.grey,
+                                            width: 1.5,
+                                          ),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          user?.subscriptionPlan == 'pro' ? 'Pro Member' : 'Basic Member',
+                                          style: TextStyle(
+                                            color: user?.subscriptionPlan == 'pro' 
+                                                ? Colors.amber.shade700
+                                                : Colors.grey.shade700,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.3,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                
+                                // Arrow Icon
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: Theme.of(context).iconTheme.color?.withOpacity(0.5),
+                                  size: 20,
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Menu Items
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                           // PROFILE Section
                           _buildSectionLabel('PROFILE'),
                           const SizedBox(height: 12),
@@ -1438,17 +1644,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                               });
                             },
                           ),
-                          _buildMenuTileWithToggle(
-                            icon: Icons.email_outlined,
-                            title: 'Email notification',
-                            value: emailNotifications,
-                            onChanged: (value) {
-                              setDialogState(() {
-                                emailNotifications = value;
-                              });
-                              setState(() {
-                                _emailNotifications = value;
-                              });
+                          Consumer(
+                            builder: (context, ref, child) {
+                              final isDarkMode = ref.watch(isDarkModeProvider);
+                              return _buildMenuTileWithToggle(
+                                icon: Icons.dark_mode_outlined,
+                                title: 'Dark Mode',
+                                value: isDarkMode,
+                                onChanged: (value) {
+                                  ref.read(isDarkModeProvider.notifier).state = value;
+                                },
+                              );
                             },
                           ),
                           
@@ -1481,13 +1687,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         ],
                       ),
                     ),
+                  ],
+                ),
+              ),
                   ),
                 ],
               ),
             ),
           ),
+          ),
         ),
-      ),
       ),
     );
   }
@@ -1510,8 +1719,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     required VoidCallback onTap,
     Color? color,
   }) {
-    final iconColor = color ?? AppColors.primary;
-    final textColor = color ?? AppColors.textMain;
+    final iconColor = color ?? Theme.of(context).iconTheme.color ?? Colors.white;
+    final textColor = color ?? Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.textMain;
     
     return InkWell(
       onTap: onTap,
@@ -1556,7 +1765,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     required ValueChanged<bool> onChanged,
     Color? color,
   }) {
-    final iconColor = color ?? AppColors.primary;
+    final iconColor = color ?? Theme.of(context).iconTheme.color ?? Colors.white;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1576,7 +1785,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 Text(
                   title,
                   style: TextStyle(
-                    color: AppColors.textMain,
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),

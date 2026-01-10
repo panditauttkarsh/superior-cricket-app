@@ -11,13 +11,13 @@ import 'commentary_page.dart';
 import '../../../live/presentation/pages/go_live_screen.dart';
 
 /// Provider for match data
-final matchDetailProvider = FutureProvider.family<MatchModel?, String>((ref, matchId) async {
+final matchDetailProvider = StreamProvider.autoDispose.family<MatchModel?, String>((ref, matchId) {
   final repository = ref.watch(matchRepositoryProvider);
-  return await repository.getMatchById(matchId);
+  return repository.streamMatchById(matchId);
 });
 
 /// Provider for match players
-final matchPlayersProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, matchId) async {
+final matchPlayersProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>((ref, matchId) async {
   final repository = ref.watch(matchPlayerRepositoryProvider);
   return await repository.getMatchPlayers(matchId);
 });
@@ -74,6 +74,13 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
           },
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              ref.invalidate(matchDetailProvider(widget.matchId));
+              ref.invalidate(matchPlayersProvider(widget.matchId));
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.share),
             onPressed: () {
@@ -477,63 +484,67 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
   }
 
   Widget _buildSquadSection(String teamName, List<Map<String, dynamic>> players, Color teamColor) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: teamColor.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: teamColor.withOpacity(0.3)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: teamColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                teamName,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: teamColor,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${players.length} Players',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (players.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Center(
-              child: Text(
-                'No players added yet',
-                style: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 14,
-                ),
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: teamColor.withOpacity(0.3)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        backgroundColor: Colors.white,
+        collapsedBackgroundColor: teamColor.withOpacity(0.1),
+        shape: const Border(), // Remove default border
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        childrenPadding: const EdgeInsets.all(16),
+        title: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 24,
+              decoration: BoxDecoration(
+                color: teamColor,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          )
-        else
-          ...players.map((player) => _buildPlayerCard(player)),
-      ],
+            const SizedBox(width: 12),
+            Text(
+              teamName,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: teamColor,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '${players.length} Players',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        children: [
+          if (players.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Center(
+                child: Text(
+                  'No players added yet',
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            )
+          else
+            ...players.map((player) => _buildPlayerCard(player)),
+        ],
+      ),
     );
   }
 
@@ -888,6 +899,93 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
   }) {
     final stats = <_PlayerBattingStat>[];
     
+    // Determine which stats map to use
+    Map<String, dynamic>? statsMap;
+    // If we're displaying the current innings, use 'player_stats_map'
+    // If we're displaying the first innings (and it's not current), use 'first_innings_player_stats'
+    
+    // Note: The scorecard structure saves 'player_stats_map' for the ACTIVE innings.
+    // So if isCurrent is true, we always look at 'player_stats_map'.
+    // If isCurrent is false, it means we are looking at the prev innings, so we check 'first_innings_player_stats'.
+    
+    if (isCurrent) {
+      statsMap = scorecard['player_stats_map'] as Map<String, dynamic>?;
+    } else {
+      statsMap = scorecard['first_innings_player_stats'] as Map<String, dynamic>?;
+    }
+    
+    // If stats map exists, use it as the primary source of truth
+    if (statsMap != null && statsMap.isNotEmpty) {
+      final dismissalTypes = scorecard['dismissal_types'] as Map<String, dynamic>? ?? {};
+      final dismissedPlayers = (scorecard['dismissed_players'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+      
+      // Get all players in the stats map
+      final players = statsMap.keys.toList();
+      
+      for (final player in players) {
+        final playerStats = statsMap[player] as Map<String, dynamic>;
+        final runs = (playerStats['runs'] as num?)?.toInt() ?? 0;
+        final balls = (playerStats['balls'] as num?)?.toInt() ?? 0;
+        final fours = (playerStats['fours'] as num?)?.toInt() ?? 0;
+        final sixes = (playerStats['sixes'] as num?)?.toInt() ?? 0;
+        final strikeRate = balls > 0 ? (runs / balls) * 100 : 0.0;
+        // startTime -> minutes calculation omitted for brevity/simplicity in read-only view
+        
+        final isDismissed = dismissedPlayers.contains(player) || (playerStats['dismissal'] != null);
+        final dismissal = (playerStats['dismissal'] as String?) ?? (isDismissed ? dismissalTypes[player] as String? : null);
+        
+        stats.add(_PlayerBattingStat(
+          playerName: player,
+          runs: runs,
+          balls: balls,
+          fours: fours,
+          sixes: sixes,
+          strikeRate: strikeRate,
+          minutes: 0,
+          dismissal: dismissal,
+          isNotOut: !isDismissed,
+        ));
+      }
+      
+      // Also add striker/non-striker if they are missing from stats map (shouldn't happen but safe fallback)
+      if (isCurrent) {
+        final striker = scorecard['striker'] as String? ?? '';
+        final nonStriker = scorecard['non_striker'] as String? ?? '';
+        
+        if (striker.isNotEmpty && !stats.any((s) => s.playerName == striker)) {
+           // Fallback for striker if somehow missing
+           final strikerRuns = (scorecard['striker_runs'] as num?)?.toInt() ?? 0;
+           final strikerBalls = (scorecard['striker_balls'] as num?)?.toInt() ?? 0;
+           stats.add(_PlayerBattingStat(
+             playerName: striker,
+             runs: strikerRuns,
+             balls: strikerBalls,
+             fours: 0, sixes: 0,
+             strikeRate: strikerBalls > 0 ? (strikerRuns / strikerBalls) * 100 : 0.0,
+             minutes: 0,
+             isNotOut: true
+           ));
+        }
+        if (nonStriker.isNotEmpty && !stats.any((s) => s.playerName == nonStriker)) {
+           // Fallback for non-striker
+           final nonStrikerRuns = (scorecard['non_striker_runs'] as num?)?.toInt() ?? 0;
+           final nonStrikerBalls = (scorecard['non_striker_balls'] as num?)?.toInt() ?? 0;
+           stats.add(_PlayerBattingStat(
+             playerName: nonStriker,
+             runs: nonStrikerRuns,
+             balls: nonStrikerBalls,
+             fours: 0, sixes: 0,
+             strikeRate: nonStrikerBalls > 0 ? (nonStrikerRuns / nonStrikerBalls) * 100 : 0.0,
+             minutes: 0,
+             isNotOut: true
+           ));
+        }
+      }
+      
+      return stats;
+    }
+    
+    // Legacy/Fallback Logic (if map is missing)
     // Get dismissal types
     final dismissalTypes = scorecard['dismissal_types'] as Map<String, dynamic>? ?? {};
     final dismissedPlayers = (scorecard['dismissed_players'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
@@ -964,7 +1062,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
           minutes: 0,
           dismissal: dismissal,
           isNotOut: false,
-        ));
+          ));
       }
     }
     

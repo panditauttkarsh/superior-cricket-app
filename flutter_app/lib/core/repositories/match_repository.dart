@@ -57,6 +57,23 @@ class MatchRepository {
       throw Exception('Failed to fetch matches: $e');
     }
   }
+
+  // Get all matches for a specific tournament
+  Future<List<MatchModel>> getTournamentMatches(String tournamentId) async {
+    try {
+      final response = await _supabase
+          .from('matches')
+          .select()
+          .eq('tournament_id', tournamentId)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((json) => MatchModel.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to fetch tournament matches: $e');
+    }
+  }
   
   // Get matches where user is a player (from match_players table)
   Future<List<MatchModel>> getPlayerMatches(String playerId) async {

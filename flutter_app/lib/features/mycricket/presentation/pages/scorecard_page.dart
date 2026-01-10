@@ -131,6 +131,8 @@ class _PlayerInningsStats {
   int fours = 0;
   int sixes = 0;
   DateTime? startTime;
+  String? dismissal; // New field for persistence
+  bool isNotOut = true; // New field for persistence
   
   double get strikeRate => balls > 0 ? (runs / balls) * 100 : 0.0;
   int get minutes {
@@ -287,6 +289,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   // Match state - Initialize to 0/0/0.0/0
   String _battingTeam = 'Warriors';
   String _bowlingTeam = 'Titans';
+  String? _team1Id; // ID of Team 1
+  String? _team2Id; // ID of Team 2
   int _currentOver = 0;
   int _currentBall = 0;
   int _totalRuns = 0;
@@ -508,54 +512,135 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       try {
         final matchRepo = ref.read(matchRepositoryProvider);
         
-        final scorecard = {
-          'team1_score': {
-            'runs': _totalRuns,
-            'wickets': _wickets,
-            'overs': _currentOver + (_currentBall / 6),
-          },
-          'team2_score': {
-            'runs': 0, // Will be updated when team 2 bats
-            'wickets': 0,
-            'overs': 0,
-          },
-          'current_over': _currentOver,
-          'current_ball': _currentBall,
-          'striker': _striker,
-          'non_striker': _nonStriker,
-          'bowler': _bowler,
-          'striker_runs': _strikerRuns,
-          'striker_balls': _strikerBalls,
-          'non_striker_runs': _nonStrikerRuns,
-          'non_striker_balls': _nonStrikerBalls,
-          'bowler_overs': _bowlerOvers,
-          'bowler_runs': _bowlerRuns,
-          'bowler_wickets': _bowlerWickets,
-          'crr': _crr,
-          'projected': _projected,
-          'current_over_balls': _currentOverBalls,
-          'over_history': _overHistory,
-          'dismissed_players': _dismissedPlayers,
-          'used_bowlers': _usedBowlers,
-          'dismissal_types': _dismissalTypes,
-          'run_out_runs': _runOutRuns,
-          'retired_hurt_players': _retiredHurtPlayers.toList(),
-          'is_declared_run': _isDeclaredRun,
-          'is_short_run': _isShortRun,
-          'bowler_metadata': _bowlerMetadata,
-          'bowler_overs_map': _bowlerOversMap.map((k, v) => MapEntry(k, v)),
-          'bowler_legal_balls_map': _bowlerLegalBallsMap.map((k, v) => MapEntry(k, v)), // Save legal balls for each bowler
-          'total_valid_balls': _totalValidBalls, // Save total valid balls
-          'batting_type_map': _battingTypeMap,
-          'batsmen_who_have_batted': _batsmenWhoHaveBatted.toList(),
-          'current_innings': _currentInnings,
-          'first_innings_runs': _firstInningsRuns,
-          'first_innings_wickets': _firstInningsWickets,
-          'first_innings_overs': _firstInningsOvers,
-          'bowler_type': _bowlerType,
-          'bowler_category': _bowlerCategory,
-          'waiting_for_bowler_selection': _waitingForBowlerSelection, // Save waiting state
-        };
+          // Determine scores based on innings
+          // Assuming team1 is the one that started batting first (Innings 1)
+          Map<String, dynamic> team1ScoreData;
+          Map<String, dynamic> team2ScoreData;
+          
+          if (_currentInnings == 1) {
+            team1ScoreData = {
+              'runs': _totalRuns,
+              'wickets': _wickets,
+              'overs': _currentOver + (_currentBall / 6),
+            };
+            team2ScoreData = {
+              'runs': 0, 
+              'wickets': 0,
+              'overs': 0,
+            };
+          } else {
+            // Second innings: Team 1 is done, Team 2 is batting
+            team1ScoreData = {
+              'runs': _firstInningsRuns,
+              'wickets': _firstInningsWickets,
+              'overs': _firstInningsOvers,
+            };
+            team2ScoreData = {
+              'runs': _totalRuns,
+              'wickets': _wickets,
+              'overs': _currentOver + (_currentBall / 6),
+            };
+          }
+
+          // Serialize player stats map
+          final playerStatsMapSerialized = _playerStatsMap.map((key, value) {
+            return MapEntry(key, {
+              'runs': value.runs,
+              'balls': value.balls,
+              'fours': value.fours,
+              'sixes': value.sixes,
+              'startTime': value.startTime?.toIso8601String(),
+              'isNotOut': !_dismissedPlayers.contains(key), // Determine from dismissed list
+              'dismissal': _dismissalTypes[key],
+            });
+          });
+
+          // Serialize bowler stats map
+          final bowlerStatsMapSerialized = _bowlerStatsMap.map((key, value) {
+            return MapEntry(key, {
+              'legalBalls': value.legalBalls,
+              'runs': value.runs,
+              'wickets': value.wickets,
+              'maidens': value.maidens,
+              'wides': value.wides,
+              'noBalls': value.noBalls,
+              'byes': value.byes,
+              'legByes': value.legByes,
+            });
+          });
+
+
+          // Serialize first innings player stats map
+          final firstInningsPlayerStatsSerialized = _firstInningsPlayerStats.map((key, value) {
+            return MapEntry(key, {
+              'runs': value.runs,
+              'balls': value.balls,
+              'fours': value.fours,
+              'sixes': value.sixes,
+              'startTime': value.startTime?.toIso8601String(),
+              'isNotOut': value.isNotOut,
+              'dismissal': value.dismissal,
+            });
+          });
+
+          // Serialize first innings bowler stats map
+          final firstInningsBowlerStatsSerialized = _firstInningsBowlerStats.map((key, value) {
+            return MapEntry(key, {
+              'legalBalls': value.legalBalls,
+              'runs': value.runs,
+              'wickets': value.wickets,
+              'maidens': value.maidens,
+              'wides': value.wides,
+              'noBalls': value.noBalls,
+              'byes': value.byes,
+              'legByes': value.legByes,
+            });
+          });
+
+          final scorecard = {
+            'team1_score': team1ScoreData,
+            'team2_score': team2ScoreData,
+            'current_over': _currentOver,
+            'current_ball': _currentBall,
+            'striker': _striker,
+            'non_striker': _nonStriker,
+            'bowler': _bowler,
+            'striker_runs': _strikerRuns,
+            'striker_balls': _strikerBalls,
+            'non_striker_runs': _nonStrikerRuns,
+            'non_striker_balls': _nonStrikerBalls,
+            'bowler_overs': _bowlerOvers,
+            'bowler_runs': _bowlerRuns,
+            'bowler_wickets': _bowlerWickets,
+            'crr': _crr,
+            'projected': _projected,
+            'current_over_balls': _currentOverBalls,
+            'over_history': _overHistory,
+            'dismissed_players': _dismissedPlayers,
+            'used_bowlers': _usedBowlers,
+            'dismissal_types': _dismissalTypes,
+            'run_out_runs': _runOutRuns,
+            'retired_hurt_players': _retiredHurtPlayers.toList(),
+            'is_declared_run': _isDeclaredRun,
+            'is_short_run': _isShortRun,
+            'bowler_metadata': _bowlerMetadata,
+            'bowler_overs_map': _bowlerOversMap.map((k, v) => MapEntry(k, v)),
+            'bowler_legal_balls_map': _bowlerLegalBallsMap.map((k, v) => MapEntry(k, v)),
+            'total_valid_balls': _totalValidBalls,
+            'batting_type_map': _battingTypeMap,
+            'batsmen_who_have_batted': _batsmenWhoHaveBatted.toList(),
+            'current_innings': _currentInnings,
+            'first_innings_runs': _firstInningsRuns,
+            'first_innings_wickets': _firstInningsWickets,
+            'first_innings_overs': _firstInningsOvers,
+            'bowler_type': _bowlerType,
+            'bowler_category': _bowlerCategory,
+            'waiting_for_bowler_selection': _waitingForBowlerSelection,
+            'player_stats_map': playerStatsMapSerialized,
+            'bowler_stats_map': bowlerStatsMapSerialized,
+            'first_innings_player_stats': firstInningsPlayerStatsSerialized,
+            'first_innings_bowler_stats': firstInningsBowlerStatsSerialized,
+          };
         
         await matchRepo.updateScorecard(widget.matchId!, scorecard);
       } catch (e) {
@@ -888,17 +973,15 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     
     // Track boundaries (only if runs are off the bat)
     if (delivery.extraType == null || delivery.extraType == 'NB') {
-      // Check if this delivery added a 4 or 6
-      // We need to compare with previous delivery to see if it's a new boundary
-      final previousDelivery = _deliveries.length > 1 
-          ? _deliveries[_deliveries.length - 2] 
-          : null;
-      final previousRuns = previousDelivery?.strikerRuns ?? 0;
-      final runsThisBall = delivery.strikerRuns - previousRuns;
+      // Use runs directly from the delivery object (actual runs scored on this ball)
+      // This is safer than comparing cumulative runs which can be buggy with player swaps
       
-      if (runsThisBall == 4) {
+      // For runs off bat (no extra) or No Ball (bat runs count), check runs
+      // boundary runs are stored in 'runs'
+      
+      if (delivery.runs == 4) {
         playerStats.fours++;
-      } else if (runsThisBall == 6) {
+      } else if (delivery.runs == 6) {
         playerStats.sixes++;
       }
     }
@@ -1182,14 +1265,22 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     // Save deliveries
     _firstInningsDeliveries = List<_Delivery>.from(_deliveries);
     
-    // Save player stats
+    // Save player stats with dismissal info
     _firstInningsPlayerStats = Map<String, _PlayerInningsStats>.from(
-      _playerStatsMap.map((k, v) => MapEntry(k, _PlayerInningsStats()
-        ..runs = v.runs
-        ..balls = v.balls
-        ..fours = v.fours
-        ..sixes = v.sixes
-        ..startTime = v.startTime)),
+      _playerStatsMap.map((k, v) {
+        final isDismissed = _dismissedPlayers.contains(k);
+        final dismissal = _dismissalTypes[k];
+        
+        return MapEntry(k, _PlayerInningsStats()
+          ..runs = v.runs
+          ..balls = v.balls
+          ..fours = v.fours
+          ..sixes = v.sixes
+          ..startTime = v.startTime
+          ..dismissal = dismissal
+          ..isNotOut = !isDismissed
+        );
+      }),
     );
     
     // Save bowler stats
@@ -2205,14 +2296,45 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   Future<void> _saveFinalMatchData(String result, String winningTeam) async {
     if (widget.matchId == null) return;
     
+    // Determine winner ID
+    String? winnerId;
+    if (winningTeam == _battingTeam) {
+      // If batting team won, we need to know if they were Team 1 or Team 2 initially
+      // Assuming _battingTeam name matches one of the initial team names
+      // But simpler: if _currentInnings == 1, batting team is Team 1. If 2, it's Team 2.
+      // Wait, strictly:
+      // If Team 1 batted first:
+      // Innings 1: Batting = Team 1
+      // Innings 2: Batting = Team 2
+      
+      // If the winner is the CURRENT batting team:
+      if (_currentInnings == 1) {
+         winnerId = _team1Id;
+      } else {
+         winnerId = _team2Id;
+      }
+    } else if (winningTeam == _bowlingTeam) {
+       // Winner is bowling team
+       if (_currentInnings == 1) {
+         winnerId = _team2Id;
+       } else {
+         winnerId = _team1Id;
+       }
+    } else {
+      // Draw or Tie
+      winnerId = null;
+    }
+
     try {
       final matchRepo = ref.read(matchRepositoryProvider);
       await matchRepo.updateMatch(
         widget.matchId!,
         {
           'status': 'completed',
-          'result': result,
-          'winning_team': winningTeam,
+          // 'result': result, // Removed: Column does not exist
+          // 'winning_team': winningTeam, // Removed: Column does not exist
+          'winner_id': winnerId, 
+          'completed_at': DateTime.now().toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         },
       );
@@ -2259,6 +2381,12 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             _overHistory = (scorecard['over_history'] as List<dynamic>?)
                 ?.map((e) => List<String>.from(e))
                 .toList() ?? [];
+            
+            // Store team IDs
+            _team1Id = match.team1Id;
+            _team2Id = match.team2Id;
+                
+            // Load dismissed players
             _dismissedPlayers = List<String>.from(scorecard['dismissed_players'] ?? []);
             _usedBowlers = List<String>.from(scorecard['used_bowlers'] ?? []);
             _isDeclaredRun = scorecard['is_declared_run'] ?? false;
@@ -2608,6 +2736,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     if (isRunOut && runsCompleted > 0) {
       _totalRuns += runsCompleted;
       _strikerRuns += runsCompleted;
+      
+      // Check if target chased in second innings (Match Won)
+      if (_currentInnings == 2 && _totalRuns > _firstInningsRuns) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _endInnings();
+        });
+      }
     }
     
     // Save state for undo
@@ -4922,6 +5057,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // ICC Rule: Add 1 automatic wide + runs completed to team total
       _totalRuns += totalRuns;
+      
+      // Check if target chased in second innings (Match Won)
+      if (_currentInnings == 2 && _totalRuns > _firstInningsRuns) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _endInnings();
+        });
+      }
       // ICC Rule: Wide runs count against bowler
       _bowlerRuns += totalRuns;
       // ICC Rule: Do NOT credit batsman for wide runs (not off the bat)
@@ -5057,6 +5199,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // ICC Rule: Add 1 automatic no-ball + runs to team total
       _totalRuns += totalRuns;
+
+      // Check if target chased in second innings (Match Won)
+      if (_currentInnings == 2 && _totalRuns > _firstInningsRuns) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _endInnings();
+        });
+      }
       // ICC Rule: No-ball runs count against bowler
       _bowlerRuns += totalRuns;
       // ICC Rule: Credit batsman only if runs are off the bat
@@ -5186,6 +5335,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // ICC Rule 1: Byes ADD to team total
       _totalRuns += runs;
+
+      // Check if target chased in second innings (Match Won)
+      if (_currentInnings == 2 && _totalRuns > _firstInningsRuns) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _endInnings();
+        });
+      }
       
       // ICC Rule 2: Byes do NOT add to bowler's runs (bowler only concedes from bat, wides, no-balls)
       // _bowlerRuns is NOT incremented for byes
@@ -5345,6 +5501,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // ICC Rule 1: Leg Byes ADD to team total
       _totalRuns += runs;
+
+      // Check if target chased in second innings (Match Won)
+      if (_currentInnings == 2 && _totalRuns > _firstInningsRuns) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _endInnings();
+        });
+      }
       
       // ICC Rule 2: Leg Byes do NOT add to bowler's runs (bowler only concedes from bat, wides, no-balls)
       // _bowlerRuns is NOT incremented for leg-byes
@@ -5857,6 +6020,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       // ICC Rule: Short run reduces declared/attempted runs by exactly one
       // Use actual runs (reduced if short run)
       _totalRuns += actualRuns;
+
+      // Check if target chased in second innings (Match Won)
+      if (_currentInnings == 2 && _totalRuns > _firstInningsRuns) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _endInnings();
+        });
+      }
       // ICC Rule: Credit batsman only if off the bat (declared runs are off the bat)
       _strikerRuns += actualRuns;
       _trackBoundaries(_striker, actualRuns);

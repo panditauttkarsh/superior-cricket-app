@@ -17,9 +17,12 @@ import '../../features/coach/presentation/pages/team_management_page.dart';
 import '../../features/coach/presentation/pages/player_monitoring_page.dart';
 import '../../features/tournament/presentation/pages/tournament_list_page.dart';
 import '../../features/tournament/presentation/pages/tournament_details_page.dart';
+import '../../features/tournament/presentation/pages/tournament_home_page.dart';
 import '../../features/tournament/presentation/pages/fixtures_page.dart';
 import '../../features/tournament/presentation/pages/points_table_page.dart';
 import '../../features/tournament/presentation/pages/tournaments_arena_page.dart';
+import '../../features/tournament/presentation/pages/add_teams_page.dart';
+import '../../features/tournament/presentation/pages/add_tournament_page.dart';
 import '../../features/academy/presentation/pages/academy_dashboard_page.dart';
 import '../../features/academy/presentation/pages/academy_detail_page.dart';
 import '../../features/academy/presentation/pages/training_programs_page.dart';
@@ -174,7 +177,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/create-match',
-        builder: (context, state) => const CreateMatchPage(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return CreateMatchPage(
+            tournamentId: extra?['tournamentId'],
+          );
+        },
       ),
       GoRoute(
         path: '/my-team-squad',
@@ -284,7 +292,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/tournament/:id',
         builder: (context, state) {
           final tournamentId = state.pathParameters['id']!;
-          return TournamentDetailsPage(tournamentId: tournamentId);
+          return TournamentHomePage(tournamentId: tournamentId);
         },
       ),
       GoRoute(
@@ -299,6 +307,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final tournamentId = state.pathParameters['id']!;
           return PointsTablePage(tournamentId: tournamentId);
+        },
+      ),
+      GoRoute(
+        path: '/create-tournament',
+        builder: (context, state) => const AddTournamentPage(),
+      ),
+      GoRoute(
+        path: '/tournament/:id/add-teams',
+        builder: (context, state) {
+          final tournamentId = state.pathParameters['id']!;
+          return AddTeamsPage(tournamentId: tournamentId);
         },
       ),
       

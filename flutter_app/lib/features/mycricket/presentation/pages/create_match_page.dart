@@ -7,7 +7,9 @@ import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class CreateMatchPage extends ConsumerStatefulWidget {
-  const CreateMatchPage({super.key});
+  final String? tournamentId;
+
+  const CreateMatchPage({super.key, this.tournamentId});
 
   @override
   ConsumerState<CreateMatchPage> createState() => _CreateMatchPageState();
@@ -36,6 +38,12 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
   List<Map<String, dynamic>> _myTeamPlayersData = [];
   List<Map<String, dynamic>> _opponentTeamPlayersData = [];
 
+  // Tournament specific fields
+  List<String> _tournamentTeamNames = [];
+  bool _isLoadingTournamentTeams = false;
+  String? _selectedMyTeam;
+  String? _selectedOpponentTeam;
+
   @override
   void initState() {
     super.initState();
@@ -62,8 +70,42 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
     );
     
     _animationController.forward();
+
+    // Load tournament teams if tournamentId is present
+    if (widget.tournamentId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadTournamentTeams();
+      });
+    }
   }
-  
+
+  Future<void> _loadTournamentTeams() async {
+    setState(() {
+      _isLoadingTournamentTeams = true;
+    });
+
+    try {
+      final teamRepo = ref.read(tournamentTeamRepositoryProvider);
+      final tournamentTeams = await teamRepo.getTournamentTeams(widget.tournamentId!);
+      
+      if (mounted) {
+        setState(() {
+          _tournamentTeamNames = tournamentTeams.map((t) => t.teamName).toList();
+          _isLoadingTournamentTeams = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingTournamentTeams = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load tournament teams: $e')),
+        );
+      }
+    }
+  }
+
   final List<String> _oversOptions = ['5', '10', '15', '20', '25', '50'];
   final List<String> _groundTypes = ['Turf', 'Cemented', 'Grassed', 'Synthetic', 'Clay'];
   final List<String> _ballTypes = ['Leather', 'Tennis', 'Rubber', 'Cork'];
@@ -292,6 +334,7 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
             'status': 'upcoming',
             'scheduled_at': DateTime.now().toIso8601String(),
             'created_by': user?.id,
+            if (widget.tournamentId != null) 'tournament_id': widget.tournamentId,
           });
           
           // Save players to match_players table (this will trigger notifications)
@@ -645,28 +688,68 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
                   color: AppColors.primary.withOpacity(0.1),
                 ),
               ),
-              child: TextField(
-                controller: _myTeamController,
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'My Team Name',
-                  hintStyle: TextStyle(
-                    color: AppColors.primary.withOpacity(0.4),
-                  ),
-                  prefixIcon: const Icon(
-                    Icons.groups,
-                    color: AppColors.primary,
-                    size: 20,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
+              child: widget.tournamentId != null
+                  ? _isLoadingTournamentTeams
+                      ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+                      : DropdownButtonFormField<String>(
+                          value: _selectedMyTeam,
+                          decoration: InputDecoration(
+                            hintText: 'Select Home Team',
+                            hintStyle: TextStyle(
+                              color: AppColors.primary.withOpacity(0.4),
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.groups,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          ),
+                          items: _tournamentTeamNames.map((name) {
+                            return DropdownMenuItem(
+                              value: name,
+                              child: Text(
+                                name,
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedMyTeam = value;
+                              if (value != null) {
+                                _myTeamController.text = value;
+                              }
+                            });
+                          },
+                        )
+                  : TextField(
+                      controller: _myTeamController,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'My Team Name',
+                        hintStyle: TextStyle(
+                          color: AppColors.primary.withOpacity(0.4),
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.groups,
+                          color: AppColors.primary,
+                          size: 20,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
             ),
           ],
         ),
@@ -728,28 +811,68 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
                   color: AppColors.primary.withOpacity(0.1),
                 ),
               ),
-              child: TextField(
-                controller: _opponentTeamController,
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Opponent Team Name',
-                  hintStyle: TextStyle(
-                    color: AppColors.primary.withOpacity(0.4),
-                  ),
-                  prefixIcon: const Icon(
-                    Icons.flag,
-                    color: AppColors.primary,
-                    size: 20,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
+              child: widget.tournamentId != null
+                  ? _isLoadingTournamentTeams
+                      ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+                      : DropdownButtonFormField<String>(
+                          value: _selectedOpponentTeam,
+                          decoration: InputDecoration(
+                            hintText: 'Select Away Team',
+                            hintStyle: TextStyle(
+                              color: AppColors.primary.withOpacity(0.4),
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.flag,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          ),
+                          items: _tournamentTeamNames.map((name) {
+                            return DropdownMenuItem(
+                              value: name,
+                              child: Text(
+                                name,
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedOpponentTeam = value;
+                              if (value != null) {
+                                _opponentTeamController.text = value;
+                              }
+                            });
+                          },
+                        )
+                  : TextField(
+                      controller: _opponentTeamController,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Opponent Team Name',
+                        hintStyle: TextStyle(
+                          color: AppColors.primary.withOpacity(0.4),
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.flag,
+                          color: AppColors.primary,
+                          size: 20,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
             ),
           ],
         ),
@@ -758,7 +881,9 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
 
         // Info text
         Text(
-          'Match details can be edited later in the match settings before the first ball is bowled.',
+          widget.tournamentId != null 
+              ? 'Select teams registered in this tournament.'
+              : 'Match details can be edited later in the match settings before the first ball is bowled.',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 12,

@@ -13,6 +13,10 @@ class TournamentModel {
   final String? createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? bannerUrl;
+  final String? logoUrl;
+  final String inviteLink;
+  final String? category;
 
   TournamentModel({
     required this.id,
@@ -29,6 +33,10 @@ class TournamentModel {
     this.createdBy,
     required this.createdAt,
     required this.updatedAt,
+    this.bannerUrl,
+    this.logoUrl,
+    this.inviteLink = '',
+    this.category,
   });
 
   factory TournamentModel.fromJson(Map<String, dynamic> json) {
@@ -51,6 +59,10 @@ class TournamentModel {
       createdBy: json['created_by'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      bannerUrl: json['banner_url'] as String?,
+      logoUrl: json['logo_url'] as String?,
+      inviteLink: json['invite_link'] as String? ?? '',
+      category: json['category'] as String?,
     );
   }
 
@@ -70,6 +82,7 @@ class TournamentModel {
       'created_by': createdBy,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'category': category,
     };
   }
 }

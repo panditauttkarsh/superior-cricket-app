@@ -99,5 +99,18 @@ class TournamentRepository {
       throw Exception('Failed to delete tournament: $e');
     }
   }
+  // Toggle invite link
+  Future<void> toggleInviteLink(String tournamentId, bool enabled) async {
+    try {
+      await _supabase.from('tournaments').update({
+        'invite_link_enabled': enabled,
+        'invite_link': enabled
+            ? 'https://pitchpoint.app/tournament/$tournamentId'
+            : '',
+      }).eq('id', tournamentId);
+    } catch (e) {
+      throw Exception('Failed to toggle invite link: $e');
+    }
+  }
 }
 

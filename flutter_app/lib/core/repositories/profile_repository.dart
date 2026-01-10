@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 
 /// Profile model for user profiles
@@ -197,6 +199,66 @@ class ProfileRepository {
       print('Error updating subscription plan: $e');
       // rethrow; // Optional: suppress or rethrow. I'll print.
     }
+  }
+
+  Future<void> updateProfileImage(String userId, String imageUrl) async {
+    try {
+      print('Profile: Updating image URL for user $userId to $imageUrl');
+      await _supabase
+          .from('profiles')
+          .update({'avatar_url': imageUrl})
+          .eq('id', userId);
+      print('Profile: Image URL updated successfully');
+    } catch (e) {
+      print('Error updating profile image: $e');
+      rethrow;
+    }
+  }
+
+  Future<String> uploadProfileImage(String userId, File imageFile) async {
+    final fileExt = imageFile.path.split('.').last;
+    final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+    final filePath = 'avatars/$fileName';
+
+    print('Profile: Uploading image to $filePath');
+    
+    try {
+      await _supabase.storage.from('avatars').upload(
+        filePath,
+        imageFile,
+        fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
+      );
+    } on StorageException catch (e) {
+      // If bucket not found, try to create it
+      if (e.statusCode == '404' || e.message.contains('Bucket not found')) {
+        print('Profile: Bucket "avatars" not found. Attempting to create it...');
+        try {
+          await _supabase.storage.createBucket('avatars', const BucketOptions(public: true));
+          print('Profile: Bucket "avatars" created successfully. Retrying upload...');
+          
+          await _supabase.storage.from('avatars').upload(
+            filePath,
+            imageFile,
+            fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
+          );
+        } catch (createError) {
+          print('Profile: Failed to create bucket: $createError');
+          throw 'The "avatars" storage bucket does not exist. Please create a public bucket named "avatars" in your Supabase Dashboard to enable image uploads.';
+        }
+      } else if (e.statusCode == '403' || e.message.contains('row-level security')) {
+        throw 'Permission denied. Please ensure you have "insert" permissions for the "avatars" bucket in Supabase Storage policies.';
+      } else {
+        rethrow;
+      }
+    } catch (e) {
+      print('Error uploading profile image: $e');
+      rethrow;
+    }
+
+    final imageUrl = _supabase.storage.from('avatars').getPublicUrl(filePath);
+    print('Profile: Image uploaded, public URL: $imageUrl');
+    
+    return imageUrl;
   }
 }
 

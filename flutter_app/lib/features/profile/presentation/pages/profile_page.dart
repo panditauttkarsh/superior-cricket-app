@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 
@@ -196,8 +199,89 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     );
   }
 
+  Future<void> _handleProfileImageUpdate() async {
+    final picker = ImagePicker();
+    
+    // Show dialog to choose source
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Update Profile Picture'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    
+    if (source == null) return;
+    
+    try {
+      final pickedFile = await picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      
+      if (pickedFile == null) return;
+      
+      // Show loading
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Uploading profile picture...')),
+        );
+      }
+      
+      final authState = ref.read(authStateProvider);
+      final userId = authState.user?.id;
+      
+      if (userId == null) return;
+      
+      final imageFile = File(pickedFile.path);
+      final repo = ref.read(profileRepositoryProvider);
+      
+      // Upload execution
+      final imageUrl = await repo.uploadProfileImage(userId, imageFile);
+      await repo.updateProfileImage(userId, imageUrl);
+      
+      // Refresh Auth State to reflect changes
+      await ref.read(authStateProvider.notifier).refreshAuth();
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile picture updated successfully!'),
+            backgroundColor: Color(0xFF00D26A),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.urgent,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authStateProvider).user;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -245,7 +329,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     ),
                     child: ClipOval(
                       child: Image.network(
-                        'https://api.dicebear.com/7.x/avataaars/svg?seed=${_profileData['name'] ?? 'User'}',
+                        user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/svg?seed=${_profileData['name'] ?? 'User'}',
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
@@ -264,18 +348,21 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                   Positioned(
                     bottom: 0,
                     right: 0,
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary, // Blue color
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: const Icon(
-                        Icons.camera_alt,
-                        color: Colors.white,
-                        size: 18,
+                    child: GestureDetector(
+                      onTap: _handleProfileImageUpdate,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary, // Blue color
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                       ),
                     ),
                   ),

@@ -16,12 +16,14 @@ class MatchModel {
   final String? tossDecision; // 'bat', 'bowl'
   final String? winnerId;
   final Map<String, dynamic>? scorecard;
+  final String? tournamentId;
   final String? createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
 
   MatchModel({
     required this.id,
+    this.tournamentId,
     required this.team1Id,
     required this.team2Id,
     this.team1Name,
@@ -46,6 +48,7 @@ class MatchModel {
   factory MatchModel.fromJson(Map<String, dynamic> json) {
     return MatchModel(
       id: json['id'] as String,
+      tournamentId: json['tournament_id'] as String?,
       team1Id: json['team1_id'] as String,
       team2Id: json['team2_id'] as String,
       team1Name: json['team1_name'] as String?,
@@ -77,6 +80,7 @@ class MatchModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tournament_id': tournamentId,
       'team1_id': team1Id,
       'team2_id': team2Id,
       'team1_name': team1Name,

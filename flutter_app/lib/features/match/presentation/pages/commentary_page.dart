@@ -85,34 +85,17 @@ class CommentaryPage extends ConsumerWidget {
             print('Commentary: ${entry.over} - ${entry.commentaryText}');
           }
           
-          // Sort by over and timestamp to ensure strict chronological order
-          // ICC Rule: Over summaries appear AFTER the 6th ball (0.6, 1.6, etc.)
-          // Over summaries are positioned at over + 0.7, so they naturally appear after 0.6
-          // Chronological order: 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, OVER 0 (at 0.7), 1.1, 1.2, ...
+          // Sort by timestamp first (strict chronological order), then by over as fallback
+          // This ensures Innings 1 (earlier) comes before Innings 2 (later)
           final sortedList = List<CommentaryModel>.from(commentaryList)
             ..sort((a, b) {
-              // Sort by over value (ascending for chronological order)
-              final overCompare = a.over.compareTo(b.over);
-              if (overCompare != 0) return overCompare;
-              // Then by timestamp (ascending for chronological order)
-              return a.timestamp.compareTo(b.timestamp);
+              final timeCompare = a.timestamp.compareTo(b.timestamp);
+              if (timeCompare != 0) return timeCompare;
+              return a.over.compareTo(b.over);
             });
           
-          // Convert to grouped format - summaries are already positioned correctly at over + 0.7
-          // Over summaries at over + 0.7 will naturally appear after over.6 in chronological order
-          var groupedCommentary = sortedList.map((commentary) {
-            if (commentary.ballType == 'overSummary') {
-              return {
-                'type': 'overSummary',
-                'text': commentary.commentaryText,
-              };
-            } else {
-              return {
-                'type': 'commentary',
-                'commentary': commentary,
-              };
-            }
-          }).toList();
+          // Convert to grouped format
+          var groupedCommentary = _groupCommentaryWithSummaries(sortedList);
           
           // Reverse for display (newest first in UI)
           // Since ListView has reverse: true, we reverse the list so newest appears at bottom
@@ -133,6 +116,8 @@ class CommentaryPage extends ConsumerWidget {
                   summaryText: item['text'] as String,
                   isLatest: isLatest,
                 );
+              } else if (item['type'] == 'inningsBreak') {
+                return const InningsBreakCard();
               } else {
                 final commentary = item['commentary'] as CommentaryModel;
                 // Skip newBatsman entries in grouping, show them directly
@@ -186,9 +171,7 @@ class CommentaryPage extends ConsumerWidget {
     );
   }
   
-  /// Group commentary entries and insert over summaries
-  /// Over summaries should appear ABOVE their over's balls
-  /// Since list is reversed (newest first), summaries appear before their over's balls
+  /// Group commentary entries and insert over summaries and innings breaks
   List<Map<String, dynamic>> _groupCommentaryWithSummaries(List<CommentaryModel> commentaryList) {
     final List<Map<String, dynamic>> grouped = [];
     final Map<int, Map<String, dynamic>> overSummaries = {};
@@ -211,40 +194,110 @@ class CommentaryPage extends ConsumerWidget {
     }
     
     // Second pass: add ALL entries, inserting summaries before their over's balls
-    // Since list is already reversed (newest first), we process in order
-    int? currentOver = -1;
+    // List is chronological (oldest to newest)
+    int? currentOverInt = -1;
+    double? lastOverDouble = -1.0;
+    
     for (final commentary in commentaryList) {
       // Skip over summaries in main loop, we'll insert them manually
       if (commentary.ballType == 'overSummary') {
         continue;
       }
       
-      final overNum = commentary.over.toInt();
+      final overNumInt = commentary.over.toInt();
+      final currentOverDouble = commentary.over;
       
-      // If we've moved to a new over, insert summary for the previous over first
-      if (currentOver != -1 && overNum != currentOver && overSummaries.containsKey(currentOver)) {
-        grouped.add(overSummaries[currentOver]!);
-        overSummaries.remove(currentOver);
+      // Check for Innings Break detection (Current ball is "earlier" than last ball)
+      // e.g. 19.6 -> 0.1 OR 0.5 -> 0.1
+      if (lastOverDouble != -1.0 && currentOverDouble < lastOverDouble!) {
+         // Force insert summary for previous over if pending (cleanup)
+         if (currentOverInt != -1 && overSummaries.containsKey(currentOverInt)) {
+            grouped.add(overSummaries[currentOverInt]!);
+            overSummaries.remove(currentOverInt);
+         }
+         
+         grouped.add({
+           'type': 'inningsBreak', 
+           'text': 'Innings Break',
+           'timestamp': commentary.timestamp,
+         });
+         
+         // Reset tracking for new innings
+         currentOverInt = -1; 
       }
       
-      // Add ALL commentary entries (including newBatsman, wickets, normal balls)
+      // If we've moved to a new over (integer change)
+      if (currentOverInt != -1 && overNumInt != currentOverInt) {
+        // Insert summary for the COMPLETED over
+        if (overSummaries.containsKey(currentOverInt)) {
+          grouped.add(overSummaries[currentOverInt]!);
+          overSummaries.remove(currentOverInt);
+        }
+      }
+      
+      // Add regular commentary entry
       grouped.add({
         'type': 'commentary',
         'commentary': commentary,
-        'over': overNum,
+        'over': overNumInt,
       });
       
-      currentOver = overNum;
+      currentOverInt = overNumInt;
+      lastOverDouble = currentOverDouble;
     }
     
     // Add summary for the last over if exists
-    if (currentOver != -1 && overSummaries.containsKey(currentOver)) {
-      grouped.add(overSummaries[currentOver]!);
+    if (currentOverInt != -1 && overSummaries.containsKey(currentOverInt)) {
+      grouped.add(overSummaries[currentOverInt]!);
     }
     
     return grouped;
   }
 }
+
+class InningsBreakCard extends StatelessWidget {
+  const InningsBreakCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 24),
+      child: Row(
+        children: [
+          const Expanded(child: Divider(color: AppColors.primary, thickness: 1)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.sports_cricket, color: Colors.white, size: 16),
+                  SizedBox(width: 8),
+                  Text(
+                    'INNINGS BREAK',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Expanded(child: Divider(color: AppColors.primary, thickness: 1)),
+        ],
+      ),
+    );
+  }
+}
+
 
 /// New Batsman Card Widget
 class NewBatsmanCard extends StatelessWidget {

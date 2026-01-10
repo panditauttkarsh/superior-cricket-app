@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/match_model.dart';
 import '../../../../core/models/tournament_model.dart';
+import '../../../../core/models/tournament_team_model.dart';
 import '../../../../core/providers/repository_providers.dart';
 
 /// Provider for tournament teams - shared across tabs
@@ -96,6 +97,12 @@ final pointsTableProvider =
   final allCompletedMatches = await matchRepo.getMatches(status: 'completed');
 
   final relevantMatches = allCompletedMatches.where((match) {
+    // 1. If match has explicit tournament_id, use that as primary filter
+    if (match.tournamentId != null) {
+      return match.tournamentId == tournamentId && match.completedAt != null;
+    }
+
+    // 2. Fallback: Filter by team names and date range
     if (match.completedAt == null) return false;
 
     final t1Name = match.team1Name ?? '';
@@ -108,7 +115,7 @@ final pointsTableProvider =
     final completedAt = match.completedAt!;
     // Use inclusive date range for tournament
     final startsOnOrAfter = !completedAt.isBefore(tournament.startDate);
-    final endsOnOrBefore = !completedAt.isAfter(tournament.endDate);
+    final endsOnOrBefore = tournament.endDate == null || !completedAt.isAfter(tournament.endDate!);
 
     return startsOnOrAfter && endsOnOrBefore;
   }).toList();

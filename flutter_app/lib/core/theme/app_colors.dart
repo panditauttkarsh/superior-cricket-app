@@ -27,6 +27,12 @@ class AppColors {
   static const Color borderLight = Color(0xFFE5E5E5);
   static const Color borderDark = Color(0xFFD1D5DB);
 
+  // Dark Mode Colors
+  static const Color backgroundDark = Color(0xFF222020);
+  static const Color surfaceDark = Color(0xFF474747);
+  static const Color textMainDark = Color(0xFFE5E5E5);
+  static const Color textSecDark = Color(0xFFA3A3A3);
+
   // Overlay colors
   static Color overlay = Colors.black.withOpacity(0.5);
   static Color overlayLight = Colors.black.withOpacity(0.2);
@@ -128,8 +134,99 @@ class AppTheme {
     );
   }
   
-  // Keep darkTheme for backward compatibility if needed
-  static ThemeData get darkTheme => lightTheme;
+  static ThemeData get darkTheme {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      primaryColor: AppColors.primary,
+      scaffoldBackgroundColor: AppColors.backgroundDark,
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.primary,
+        secondary: AppColors.accent,
+        surface: AppColors.surfaceDark,
+        error: AppColors.error,
+        onPrimary: Colors.white,
+        onSecondary: Colors.white,
+        onSurface: AppColors.textMainDark,
+        onError: Colors.white,
+        background: AppColors.backgroundDark,
+        onBackground: AppColors.textMainDark,
+      ),
+      cardTheme: CardThemeData(
+        color: AppColors.surfaceDark,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.surfaceDark,
+        elevation: 0,
+        iconTheme: IconThemeData(color: AppColors.textMainDark),
+        titleTextStyle: TextStyle(
+          color: AppColors.textMainDark,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textTheme: const TextTheme(
+        displayLarge: TextStyle(color: AppColors.textMainDark),
+        displayMedium: TextStyle(color: AppColors.textMainDark),
+        displaySmall: TextStyle(color: AppColors.textMainDark),
+        headlineLarge: TextStyle(color: AppColors.textMainDark),
+        headlineMedium: TextStyle(color: AppColors.textMainDark),
+        headlineSmall: TextStyle(color: AppColors.textMainDark),
+        titleLarge: TextStyle(color: AppColors.textMainDark),
+        titleMedium: TextStyle(color: AppColors.textMainDark),
+        titleSmall: TextStyle(color: AppColors.textMainDark),
+        bodyLarge: TextStyle(color: AppColors.textMainDark),
+        bodyMedium: TextStyle(color: AppColors.textSecDark),
+        bodySmall: TextStyle(color: AppColors.textSecDark),
+        labelLarge: TextStyle(color: AppColors.textMainDark),
+        labelMedium: TextStyle(color: AppColors.textSecDark),
+        labelSmall: TextStyle(color: AppColors.textSecDark),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surfaceDark,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.surfaceDark),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.surfaceDark),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        ),
+        hintStyle: const TextStyle(color: AppColors.textSecDark),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.surfaceDark,
+        thickness: 1,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.primary,
+        ),
+      ),
+      iconTheme: const IconThemeData(
+        color: AppColors.textMainDark,
+      ),
+    );
+  }
 }
 
 /// Border Radius Constants

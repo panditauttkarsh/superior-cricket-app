@@ -80,7 +80,10 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
   Widget _buildHeader(TournamentModel tournament) {
     final startDate = tournament.startDate;
     final endDate = tournament.endDate;
-    final dateRange = '${startDate.day} ${_getMonthName(startDate.month)}, ${startDate.year} to ${endDate.day} ${_getMonthName(endDate.month)}, ${endDate.year}';
+    final endDateStr = endDate != null 
+        ? ' to ${endDate.day} ${_getMonthName(endDate.month)}, ${endDate.year}' 
+        : '';
+    final dateRange = '${startDate.day} ${_getMonthName(startDate.month)}, ${startDate.year}$endDateStr';
 
     return Container(
       decoration: BoxDecoration(
@@ -139,221 +142,210 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
             bottom: false,
             child: Column(
               children: [
-            // App Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => context.go('/'),
-                  ),
-                  Expanded(
-                    child: Text(
-                      tournament.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                // App Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => context.go('/'),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
+                      Expanded(
+                        child: Text(
+                          tournament.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, color: Colors.white),
+                        onSelected: (value) {
+                          if (value == 'seed_test_data') {
+                            _seedIntoKPL(context, ref);
+                          } else if (value == 'share') {
+                            // Share tournament
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'seed_test_data',
+                            child: Row(
+                              children: [
+                                Icon(Icons.science, size: 20),
+                                SizedBox(width: 8),
+                                Text('Seed Test Data (KPL)'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'share',
+                            child: Row(
+                              children: [
+                                Icon(Icons.share, size: 20),
+                                SizedBox(width: 8),
+                                Text('Share'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, color: Colors.white),
-                    onSelected: (value) {
-                      if (value == 'seed_test_data') {
-                        _seedIntoKPL(context, ref);
-                      } else if (value == 'share') {
-                        // Share tournament
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'seed_test_data',
-                        child: Row(
+                ),
+                // Tournament Info
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      // Logo
+                      if (tournament.logoUrl != null)
+                        Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: ClipOval(
+                            child: Image.network(
+                              tournament.logoUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(Icons.sports_cricket, color: AppColors.primary);
+                              },
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          width: 60,
+                          height: 60,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                          ),
+                          child: const Icon(Icons.sports_cricket, color: AppColors.primary),
+                        ),
+                      const SizedBox(width: 16),
+                      // Info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.science, size: 20),
-                            SizedBox(width: 8),
-                            Text('Seed Test Data (KPL)'),
+                            Text(
+                              tournament.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              dateRange,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 12,
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
-                        value: 'share',
-                        child: Row(
-                          children: [
-                            Icon(Icons.share, size: 20),
-                            SizedBox(width: 8),
-                            Text('Share'),
-                          ],
+                      // Views count (placeholder)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          '1 Views',
+                          style: TextStyle(color: Colors.white, fontSize: 12),
                         ),
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            // Tournament Info
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Logo
-                  if (tournament.logoUrl != null)
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: ClipOval(
-                        child: Image.network(
-                          tournament.logoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Icon(Icons.sports_cricket, color: AppColors.primary);
-                          },
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                      ),
-                      child: const Icon(Icons.sports_cricket, color: AppColors.primary),
-                    ),
-                  const SizedBox(width: 16),
-                  // Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tournament.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          dateRange,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Views count (placeholder)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      '1 Views',
-                      style: TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Action Buttons - Only Go Live (centered)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Center(
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      // Go Live functionality
-                    },
-                    icon: const Icon(Icons.play_arrow, color: AppColors.primary, size: 20),
-                    label: const Text('Go Live', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 16)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white, // Bright white background
-                      foregroundColor: AppColors.primary,
-                      elevation: 3, // Slight elevation for brightness
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        // Navigate to Go Live screen with tournament context
-                        context.push(
-                          '/go-live',
-                          extra: {
-                            'matchId': tournament.id, // Using tournament ID as context
-                            'matchTitle': tournament.name,
-                            'isDraft': false,
-                          },
-                        );
-                      },
-                      icon: const Icon(Icons.play_arrow, color: Colors.white),
-                      label: const Text('Go Live', style: TextStyle(color: Colors.white)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.white),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        // Show Help Dialog
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Tournament Help'),
-                            content: const Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('• Use "Go Live" to stream matches for this tournament.'),
-                                SizedBox(height: 8),
-                                Text('• Check "Matches" tab for schedule.'),
-                                SizedBox(height: 8),
-                                Text('• "Teams" tab shows all participating squads.'),
-                                SizedBox(height: 8),
-                                Text('• Detailed stats are available in "Stats" tab.'),
-                              ],
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Close'),
+                ),
+                // Action Buttons - Only Go Live (centered)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Center(
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                // Navigate to Go Live screen with tournament context
+                                context.push(
+                                  '/go-live',
+                                  extra: {
+                                    'matchId': tournament.id, // Using tournament ID as context
+                                    'matchTitle': tournament.name,
+                                    'isDraft': false,
+                                  },
+                                );
+                              },
+                              icon: const Icon(Icons.play_arrow, color: Colors.white),
+                              label: const Text('Go Live', style: TextStyle(color: Colors.white)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.white),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
                               ),
-                            ],
+                            ),
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.help_outline),
-                      label: const Text('Help'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                // Show Help Dialog
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Tournament Help'),
+                                    content: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('• Use "Go Live" to stream matches for this tournament.'),
+                                        SizedBox(height: 8),
+                                        Text('• Check "Matches" tab for schedule.'),
+                                        SizedBox(height: 8),
+                                        Text('• "Teams" tab shows all participating squads.'),
+                                        SizedBox(height: 8),
+                                        Text('• Detailed stats are available in "Stats" tab.'),
+                                      ],
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('Close'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.help_outline),
+                              label: const Text('Help'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: AppColors.primary,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
               ],
             ),
           ),
@@ -389,7 +381,10 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
   Widget _buildTabContent(TournamentModel tournament) {
     switch (_selectedTab) {
       case 0:
-        return MatchesTab(tournamentId: tournament.id);
+        return MatchesTab(
+          tournamentId: tournament.id,
+          tournament: tournament,
+        );
       case 1:
         return TeamsTab(tournamentId: tournament.id);
       case 2:
@@ -453,4 +448,3 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
     return months[month - 1];
   }
 }
-

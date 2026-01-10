@@ -1,5 +1,6 @@
 import '../config/supabase_config.dart';
 import '../models/tournament_model.dart';
+import '../models/tournament_team_model.dart';
 
 class TournamentTeamRepository {
   final _supabase = SupabaseConfig.client;

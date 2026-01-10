@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/models/tournament_model.dart';
+import '../../../../core/models/tournament_team_model.dart';
 import '../providers/tournament_providers.dart';
 import '../providers/points_table_providers.dart';
 
@@ -46,6 +47,9 @@ class TeamsTab extends ConsumerWidget {
     List<TournamentTeamModel> teams,
     TournamentModel tournament,
   ) {
+    final now = DateTime.now();
+    final isCompleted = tournament.endDate != null && now.isAfter(tournament.endDate!);
+    
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Column(
@@ -56,20 +60,21 @@ class TeamsTab extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
-                'Add Teams in Tournament',
-                style: TextStyle(
+              Text(
+                isCompleted ? 'Participating Teams' : 'Add Teams in Tournament',
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textMain,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.edit, color: AppColors.primary),
-                onPressed: () {
-                  _showAddTeamsBottomSheet(context, ref, tournament);
-                },
-              ),
+              if (!isCompleted)
+                IconButton(
+                  icon: const Icon(Icons.edit, color: AppColors.primary),
+                  onPressed: () {
+                    _showAddTeamsBottomSheet(context, ref, tournament);
+                  },
+                ),
             ],
           ),
           const SizedBox(height: 24),
@@ -94,14 +99,16 @@ class TeamsTab extends ConsumerWidget {
                         color: AppColors.textSec,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Tap the edit icon to add teams',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textMeta,
+                    if (!isCompleted) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Tap the edit icon to add teams',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textMeta,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -599,4 +606,3 @@ class TeamsTab extends ConsumerWidget {
     );
   }
 }
-

@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -814,7 +815,11 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     final currentUserId = match['currentUserId'] as String?;
     
     // Check if current user is the scorer (match creator)
-    final isScorer = createdBy != null && currentUserId != null && createdBy == currentUserId;
+    // AND match is not effectively finished (no winner declared yet)
+    final isScorer = createdBy != null && 
+                    currentUserId != null && 
+                    createdBy == currentUserId &&
+                    match['winnerId'] == null;
     
     return Container(
       decoration: BoxDecoration(
@@ -1362,12 +1367,8 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
               ElevatedButton(
                 onPressed: () {
                   // Show create tournament dialog
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Tournament creation feature coming soon!'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  // Navigate to create tournament page
+                  context.push('/create-tournament');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
@@ -1766,7 +1767,12 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     } else if (filter == 'Live') {
       filteredTournaments = _allTournaments.where((t) => t.status == 'ongoing').toList();
     } else if (filter == 'Upcoming') {
-      filteredTournaments = _allTournaments.where((t) => t.status == 'registration_open' || t.status == 'upcoming').toList();
+      // Only show tournaments that haven't started yet AND are open for registration
+      filteredTournaments = _allTournaments.where((t) {
+        final hasNotStarted = t.startDate.isAfter(DateTime.now());
+        final isOpenOrUpcoming = t.status == 'registration_open' || t.status == 'upcoming';
+        return hasNotStarted && isOpenOrUpcoming;
+      }).toList();
     } else if (filter == 'T20') {
       // For now, all tournaments (you can add format field to TournamentModel if needed)
       filteredTournaments = _allTournaments;
@@ -1779,23 +1785,26 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
           : '${tournament.registeredTeams ?? 0} Teams';
       
       final startDate = tournament.startDate;
-      final formattedDate = '${startDate.day} ${_getMonthName(startDate.month)}';
+      final isCurrentYear = startDate.year == DateTime.now().year;
+      final formattedDate = '${startDate.day} ${_getMonthName(startDate.month)}' + 
+          (isCurrentYear ? '' : ' ${startDate.year}');
       
       final daysLeft = startDate.difference(DateTime.now()).inDays;
       final daysLeftText = daysLeft > 0 ? '$daysLeft Days Left' : daysLeft == 0 ? 'Starts Today' : 'Started';
       
       return {
         'id': tournament.id,
-        'imageUrl': tournament.imageUrl ?? 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=120&h=100&fit=crop',
+        'imageUrl': tournament.imageUrl ?? tournament.bannerUrl ?? 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=120&h=100&fit=crop',
         'title': tournament.name,
         'entryFee': tournament.prizePool != null ? '₹${tournament.prizePool!.toStringAsFixed(0)}' : 'Free',
         'entryFeeColor': tournament.prizePool != null ? AppColors.warning : AppColors.primary,
         'teams': teamsText,
         'date': formattedDate,
         'daysLeft': daysLeftText,
-        'participants': tournament.registeredTeams ?? 0,
-        'isLocked': tournament.status == 'completed',
+        'registeredTeams': tournament.registeredTeams,
+        'isLocked': tournament.endDate != null && DateTime.now().isAfter(tournament.endDate!),
         'status': tournament.status == 'ongoing' ? 'Live' : tournament.status == 'registration_open' ? 'Upcoming' : 'Completed',
+        'category': tournament.category,
         'format': 'T20', // You can add format to TournamentModel if needed
       };
     }).toList();
@@ -1836,17 +1845,28 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
         ...tournaments.map((tournament) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 14),
-            child: _buildTournamentCard(
-              imageUrl: tournament['imageUrl'] as String,
-              title: tournament['title'] as String,
-              entryFee: tournament['entryFee'] as String,
-              entryFeeColor: tournament['entryFeeColor'] as Color,
-              teams: tournament['teams'] as String,
-              date: tournament['date'] as String,
-              daysLeft: tournament['daysLeft'] as String?,
-              participants: tournament['participants'] as int?,
-              specialTag: tournament['specialTag'] as String?,
-              isLocked: tournament['isLocked'] as bool,
+            child: GestureDetector(
+              onTap: () {
+                final tournamentId = tournament['id'] as String;
+                context.push('/tournament/$tournamentId');
+              },
+              child: _buildTournamentCard(
+                imageUrl: tournament['imageUrl'] as String,
+                title: tournament['title'] as String,
+                entryFee: tournament['entryFee'] as String,
+                entryFeeColor: tournament['entryFeeColor'] as Color,
+                teams: tournament['teams'] as String,
+                date: tournament['date'] as String,
+                daysLeft: tournament['daysLeft'] as String?,
+                participants: tournament['participants'] as int?,
+                specialTag: tournament['specialTag'] as String?,
+                isLocked: tournament['isLocked'] as bool,
+                category: tournament['category'] as String?,
+                onJoin: () {
+                  final tournamentId = tournament['id'] as String;
+                  context.push('/tournament/$tournamentId');
+                },
+              ),
             ),
           );
         }).toList(),
@@ -1865,188 +1885,199 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     int? participants,
     String? specialTag,
     required bool isLocked,
+    String? category, // Added category
+    VoidCallback? onJoin,
   }) {
-    return Opacity(
-      opacity: isLocked ? 0.7 : 1.0,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider!),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            // Tournament Image
-            Stack(
-              children: [
-                Container(
-                  width: 90,
-                  height: 90,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    image: DecorationImage(
-                      image: NetworkImage(imageUrl),
-                      fit: BoxFit.cover,
+    // Check if category is OPEN (case insensitive)
+    final isOpenCategory = category != null && category.toLowerCase() == 'open';
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Stack(
+        children: [
+          Row(
+            children: [
+              // Tournament Image
+              Stack(
+                children: [
+                  Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      image: imageUrl.trim().isNotEmpty ? DecorationImage(
+                        image: (imageUrl.startsWith('http') 
+                            ? NetworkImage(imageUrl) 
+                            : AssetImage(imageUrl.startsWith('assets/') 
+                                ? imageUrl 
+                                : 'assets/images/$imageUrl')) as ImageProvider,
+                        fit: BoxFit.cover,
+                      ) : null,
+                    ),
+                  ),
+                  if (daysLeft != null && !isLocked)
+                    Positioned(
+                      top: 6,
+                      left: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          daysLeft,
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.surface,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 14),
+              // Tournament Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textMain,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.bookmark_border,
+                            color: AppColors.textMeta,
+                            size: 18,
+                          ),
+                          onPressed: () {},
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // Entry Fee
+                    RichText(
+                      text: TextSpan(
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSec,
+                        ),
+                        children: [
+                          const TextSpan(text: 'Entry: '),
+                          TextSpan(
+                            text: entryFee,
+                            style: TextStyle(
+                              color: entryFeeColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Meta
+                    Row(
+                      children: [
+                        _buildMetaItem(Icons.people_outline, teams),
+                        if (date.isNotEmpty) ...[
+                          const SizedBox(width: 16),
+                          _buildMetaItem(Icons.calendar_today, date),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Footer
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildParticipants(participants ?? 0),
+                        if (isLocked)
+                          Text(
+                            'Locked',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textMeta,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          )
+                        else if (isOpenCategory)
+                          ElevatedButton(
+                            onPressed: onJoin,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue, // Blue background
+                              foregroundColor: Colors.white, // White text
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 0,
+                              minimumSize: const Size(0, 32),
+                            ),
+                            child: const Text(
+                              'JOIN NOW',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Foggy overlay for locked tournaments
+          if (isLocked)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 1, sigmaY: 1),
+                    child: Container(
+                      color: Colors.white.withOpacity(0.05),
                     ),
                   ),
                 ),
-                if (daysLeft != null)
-                  Positioned(
-                    top: 6,
-                    left: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        daysLeft,
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.surface,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 14),
-            // Tournament Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textMain,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.bookmark_border,
-                          color: AppColors.textMeta,
-                          size: 18,
-                        ),
-                        onPressed: () {},
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  // Entry Fee
-                  RichText(
-                    text: TextSpan(
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSec,
-                      ),
-                      children: [
-                        const TextSpan(text: 'Entry: '),
-                        TextSpan(
-                          text: entryFee,
-                          style: TextStyle(
-                            color: entryFeeColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Meta
-                  Row(
-                    children: [
-                      _buildMetaItem(Icons.people_outline, teams),
-                      if (date.isNotEmpty) ...[
-                        const SizedBox(width: 16),
-                        _buildMetaItem(Icons.calendar_today, date),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  // Footer
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      if (participants != null)
-                        _buildParticipants(participants)
-                      else if (specialTag != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            specialTag,
-                            style: const TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        )
-                      else
-                        const SizedBox.shrink(),
-                      if (isLocked)
-                        Text(
-                          'Locked',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textMeta,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        )
-                      else
-                        OutlinedButton(
-                          onPressed: () {},
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFF205A28), width: 1.5),
-                            foregroundColor: AppColors.primary,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Text(
-                            'JOIN NOW',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }

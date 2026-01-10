@@ -6,11 +6,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // import 'package:firebase_core/firebase_core.dart';
 
 import 'core/router/app_router.dart';
-import 'core/theme/app_theme.dart';
+import 'core/theme/app_colors.dart';
 import 'core/providers/auth_provider.dart' as auth_provider;
 import 'core/providers/auth_provider.dart';
 import 'core/widgets/loading_screen.dart';
 import 'core/config/supabase_config.dart';
+import 'core/providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -86,14 +87,12 @@ class _PitchPointAppState extends ConsumerState<PitchPointApp> {
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
-    final themeMode = ref.watch(themeModeProvider);
+    final theme = ref.watch(themeProvider);
     
     return MaterialApp.router(
       title: 'PITCH POINT',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: themeMode,
+      theme: theme,
       routerConfig: router,
     );
   }
