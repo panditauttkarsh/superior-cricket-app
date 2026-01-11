@@ -1534,29 +1534,56 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                       
                                       // Subscription Badge
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                        padding: user?.subscriptionPlan == 'pro'
+                                            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
+                                            : const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: user?.subscriptionPlan == 'pro' 
-                                              ? Colors.amber.withOpacity(0.2)
-                                              : Colors.grey.withOpacity(0.2),
-                                          border: Border.all(
-                                            color: user?.subscriptionPlan == 'pro' 
-                                                ? Colors.amber
-                                                : Colors.grey,
-                                            width: 1.5,
+                                          gradient: LinearGradient(
+                                            colors: user?.subscriptionPlan == 'pro'
+                                                ? [
+                                                    const Color(0xFF43A047), // Green 600
+                                                    const Color(0xFF2E7D32), // Green 800
+                                                  ]
+                                                : [
+                                                    const Color(0xFFFFD54F), // Amber 300
+                                                    const Color(0xFFF57F17), // Orange 900 (Deep Yellow/Amber)
+                                                  ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
                                           ),
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius: BorderRadius.circular(30),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: (user?.subscriptionPlan == 'pro'
+                                                      ? Colors.green
+                                                      : Colors.grey)
+                                                  .withOpacity(0.3),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
                                         ),
-                                        child: Text(
-                                          user?.subscriptionPlan == 'pro' ? 'Pro Member' : 'Basic Member',
-                                          style: TextStyle(
-                                            color: user?.subscriptionPlan == 'pro' 
-                                                ? Colors.amber.shade700
-                                                : Colors.grey.shade700,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.3,
-                                          ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (user?.subscriptionPlan == 'pro') ...[
+                                              const Icon(
+                                                Icons.verified,
+                                                color: Colors.white,
+                                                size: 16,
+                                              ),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            Text(
+                                              (user?.subscriptionPlan == 'pro' ? 'Pro Member' : 'Basic Member').toUpperCase(),
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: user?.subscriptionPlan == 'pro' ? 11 : 9,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 1.0,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
