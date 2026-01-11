@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import '../widgets/notifications_dialog.dart';
 import '../../../notifications/presentation/pages/notifications_page.dart';
 import '../../../../core/providers/theme_provider.dart';
+import '../widgets/player_profile_popup.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -1591,10 +1592,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                 ),
                                 
                                 // Arrow Icon
-                                Icon(
-                                  Icons.arrow_forward_ios,
-                                  color: Theme.of(context).iconTheme.color?.withOpacity(0.5),
-                                  size: 20,
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.pop(context); // Close hamburger
+                                    showPlayerProfilePopup(context); // Show popup
+                                  },
+                                  child: Icon(
+                                    Icons.arrow_forward_ios,
+                                    color: Theme.of(context).iconTheme.color?.withOpacity(0.5),
+                                    size: 20,
+                                  ),
                                 ),
                               ],
                             ),

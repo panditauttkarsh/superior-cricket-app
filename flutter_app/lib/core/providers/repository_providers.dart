@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'auth_provider.dart';
 import '../repositories/match_repository.dart';
 import '../repositories/team_repository.dart';
 import '../repositories/tournament_repository.dart';
@@ -10,6 +11,8 @@ import '../repositories/profile_repository.dart';
 import '../repositories/notification_repository.dart';
 import '../repositories/match_player_repository.dart';
 import '../repositories/tournament_team_repository.dart';
+import '../repositories/player_repository.dart';
+import '../models/player_model.dart';
 import '../services/storage_service.dart';
 
 final storageServiceProvider = Provider<StorageService>((ref) {
@@ -58,5 +61,18 @@ final matchPlayerRepositoryProvider = Provider<MatchPlayerRepository>((ref) {
 
 final tournamentTeamRepositoryProvider = Provider<TournamentTeamRepository>((ref) {
   return TournamentTeamRepository();
+});
+
+final playerRepositoryProvider = Provider<PlayerRepository>((ref) {
+  return PlayerRepository();
+});
+
+final playerDataProvider = FutureProvider<PlayerModel?>((ref) async {
+  final authState = ref.watch(authStateProvider);
+  final user = authState.user;
+  if (user == null) return null;
+  
+  final playerRepo = ref.watch(playerRepositoryProvider);
+  return await playerRepo.getPlayerByUserId(user.id);
 });
 
