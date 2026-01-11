@@ -1,7 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../mycricket/presentation/widgets/enhanced_create_match_dialog.dart';
+import '../providers/tournament_providers.dart';
+import '../widgets/tournament_filter_dialog.dart';
+import '../../../../core/models/tournament_model.dart';
+import 'package:intl/intl.dart';
 
 class TournamentsArenaPage extends ConsumerStatefulWidget {
   const TournamentsArenaPage({super.key});
@@ -11,13 +16,33 @@ class TournamentsArenaPage extends ConsumerStatefulWidget {
 }
 
 class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
-  String _activeTab = 'All';
   final TextEditingController _searchController = TextEditingController();
   String _matchesFilter = 'My';
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    // Add listener to search controller
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    // Cancel previous timer
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    
+    // Create new timer
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      // Update search query in provider
+      ref.read(tournamentFiltersProvider.notifier).updateSearchQuery(_searchController.text);
+    });
+  }
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -424,7 +449,7 @@ class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
               ),
               child: ClipOval(
                 child: Image.network(
-                  'https://api.dicebear.com/7.x/avataaars/svg?seed=John&backgroundColor=c0aede&hair=short',
+                  'https://api.dicebear.com/7.x/avataaars/png?seed=John&backgroundColor=c0aede&hair=short',
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
@@ -541,7 +566,12 @@ class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
               color: Color(0xFF00D26A),
               size: 20,
             ),
-            onPressed: () {},
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => const TournamentFilterDialog(),
+              );
+            },
           ),
         ),
       ],
@@ -549,6 +579,7 @@ class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
   }
 
   Widget _buildFilterTabs() {
+    final filters = ref.watch(tournamentFiltersProvider);
     final tabs = ['All', 'Live Now', 'Upcoming', 'T20 Bash'];
     
     return SizedBox(
@@ -556,9 +587,11 @@ class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: tabs.map((tab) {
-          final isActive = _activeTab == tab;
+          final isActive = filters.status == tab;
           return GestureDetector(
-            onTap: () => setState(() => _activeTab = tab),
+            onTap: () {
+              ref.read(tournamentFiltersProvider.notifier).updateStatus(tab);
+            },
             child: Container(
               margin: const EdgeInsets.only(right: 10),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
@@ -809,6 +842,8 @@ class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
   }
 
   Widget _buildOpenTournamentsSection() {
+    final tournamentsAsync = ref.watch(filteredTournamentsProvider);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -821,39 +856,140 @@ class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
           ),
         ),
         const SizedBox(height: 16),
-        _buildTournamentCard(
-          imageUrl: 'https://images.unsplash.com/photo-1624526267942-ab0ff8a3e972?w=120&h=100&fit=crop',
-          title: 'Premier Championship',
-          entryFee: '100 Gold',
-          entryFeeColor: const Color(0xFFFFD700),
-          teams: '32/64 Teams',
-          date: 'Oct 24',
-          daysLeft: '4 Days Left',
-          participants: 29,
-          isLocked: false,
-        ),
-        const SizedBox(height: 14),
-        _buildTournamentCard(
-          imageUrl: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=120&h=100&fit=crop',
-          title: 'Super Sixes League',
-          entryFee: 'Free',
-          entryFeeColor: const Color(0xFF00D26A),
-          teams: '120/500',
-          date: 'Oct 26',
-          specialTag: 'WEEKEND SPECIAL',
-          isLocked: false,
-        ),
-        const SizedBox(height: 14),
-        _buildTournamentCard(
-          imageUrl: 'https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?w=120&h=100&fit=crop',
-          title: 'Pro Master Cup',
-          entryFee: 'Level 10',
-          entryFeeColor: const Color(0xFF00D26A),
-          teams: 'Starts in 2h',
-          date: '',
-          isLocked: true,
+        tournamentsAsync.when(
+          data: (tournaments) {
+            if (tournaments.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(40),
+                  child: Column(
+                    children: [
+                      Icon(Icons.search_off, size: 64, color: Colors.grey[500]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No tournaments found',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[400],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Try adjusting your search or filters',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return Column(
+              children: tournaments.map((tournament) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _buildTournamentCardFromModel(tournament),
+                );
+              }).toList(),
+            );
+          },
+          loading: () => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(40),
+              child: CircularProgressIndicator(
+                color: const Color(0xFF00D26A),
+              ),
+            ),
+          ),
+          error: (error, stack) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(40),
+              child: Column(
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Colors.grey[500]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Failed to load tournaments',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[400],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    error.toString(),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTournamentCardFromModel(TournamentModel tournament) {
+    // Format date
+    String formattedDate = '';
+    String? daysLeft;
+    
+    if (tournament.startDate != null) {
+      final startDate = tournament.startDate;
+      final now = DateTime.now();
+      final difference = startDate.difference(now).inDays;
+      
+      formattedDate = DateFormat('MMM d').format(startDate);
+      
+      if (difference > 0 && difference <= 30) {
+        daysLeft = '$difference Days Left';
+      }
+    }
+
+    // Determine entry fee display (using prize pool as indicator)
+    String entryFee = 'Free';
+    Color entryFeeColor = const Color(0xFF00D26A);
+    
+    if (tournament.prizePool != null && tournament.prizePool! > 0) {
+      entryFee = '₹${tournament.prizePool!.toInt()}';
+      entryFeeColor = const Color(0xFFFFD700);
+    }
+
+    // Teams info
+    String teamsInfo = '${tournament.registeredTeams ?? 0}/${tournament.totalTeams ?? 0} Teams';
+    
+    // Determine if locked
+    bool isLocked = tournament.status == 'completed' || tournament.status == 'cancelled';
+
+    // Use tournament image or fallback
+    String imageUrl = tournament.imageUrl ?? 
+                      tournament.bannerUrl ?? 
+                      'https://images.unsplash.com/photo-1624526267942-ab0ff8a3e972?w=120&h=100&fit=crop';
+
+    return GestureDetector(
+      onTap: () {
+        context.push('/tournament/${tournament.id}');
+      },
+      child: _buildTournamentCard(
+        imageUrl: imageUrl,
+        title: tournament.name,
+        entryFee: entryFee,
+        entryFeeColor: entryFeeColor,
+        teams: teamsInfo,
+        date: formattedDate,
+        daysLeft: daysLeft,
+        isLocked: isLocked,
+        specialTag: tournament.category?.toUpperCase(),
+      ),
     );
   }
 
@@ -1079,7 +1215,7 @@ class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
               ),
               child: ClipOval(
                 child: Image.network(
-                  'https://api.dicebear.com/7.x/avataaars/svg?seed=1',
+                  'https://api.dicebear.com/7.x/avataaars/png?seed=1',
                   fit: BoxFit.cover,
                 ),
               ),
@@ -1095,7 +1231,7 @@ class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
                 ),
                 child: ClipOval(
                   child: Image.network(
-                    'https://api.dicebear.com/7.x/avataaars/svg?seed=2',
+                    'https://api.dicebear.com/7.x/avataaars/png?seed=2',
                     fit: BoxFit.cover,
                   ),
                 ),

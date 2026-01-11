@@ -248,7 +248,7 @@ class _CreatePostDialogState extends ConsumerState<CreatePostDialog> {
                           child: ClipOval(
                             child: Image.network(
                               user?.email != null
-                                  ? 'https://api.dicebear.com/7.x/avataaars/svg?seed=${user!.email}'
+                                  ? 'https://api.dicebear.com/7.x/avataaars/png?seed=${user!.email}'
                                   : 'https://lh3.googleusercontent.com/aida-public/AB6AXuCAqmGqkLb3TUbTO-ibhl4h4gKqdKir2HBpFsiIUBeSFbtX9USNDlKICzE1xpzD_AdEUDlxcU0dNQ05wGMM8h94AwOXg0Q6bptslB6cqf44g9N5dAYir6_aa2kKKKhhpW_zUzv3d-Qc_7XeNqTHp27h4cxMCplzQCjQ2eZFvsJS9uP3Cfh3XhW6LsN5KWvJH9KSE6OtEvPfxBLK_Q7R6VC30chy_7nxkpTaILXRDetZI6oI1TbbGMVm1pOn7WKShZTnkjVL85ZcRw8B',
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) {

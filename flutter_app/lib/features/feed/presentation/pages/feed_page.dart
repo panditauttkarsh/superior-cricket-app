@@ -257,8 +257,8 @@ class _FeedPageState extends ConsumerState<FeedPage> {
             radius: 18,
             backgroundImage: NetworkImage(
               ref.read(authStateProvider).user?.email != null
-                  ? 'https://api.dicebear.com/7.x/avataaars/svg?seed=${ref.read(authStateProvider).user!.email}'
-                  : 'https://api.dicebear.com/7.x/avataaars/svg?seed=User',
+                  ? 'https://api.dicebear.com/7.x/avataaars/png?seed=${ref.read(authStateProvider).user!.email}'
+                  : 'https://api.dicebear.com/7.x/avataaars/png?seed=User',
             ),
           ),
           const SizedBox(width: 12),

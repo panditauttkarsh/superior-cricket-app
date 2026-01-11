@@ -74,7 +74,7 @@ class PostRepository {
             userId: comment['user_id'] as String,
             userName: commentProfile?['name'] as String? ?? 'Unknown',
             userAvatar: commentProfile?['profile_image_url'] as String? ??
-                'https://api.dicebear.com/7.x/avataaars/svg?seed=${commentProfile?['email'] ?? 'User'}',
+                'https://api.dicebear.com/7.x/avataaars/png?seed=${commentProfile?['email'] ?? 'User'}',
             content: comment['content'] as String,
             timestamp: DateTime.parse(comment['created_at'] as String),
             likes: 0, // TODO: Add comment likes if needed
@@ -96,7 +96,7 @@ class PostRepository {
           userId: postData['user_id'] as String,
           userName: profileData?['name'] as String? ?? 'Unknown',
           userAvatar: profileData?['profile_image_url'] as String? ??
-              'https://api.dicebear.com/7.x/avataaars/svg?seed=${profileData?['email'] ?? 'User'}',
+              'https://api.dicebear.com/7.x/avataaars/png?seed=${profileData?['email'] ?? 'User'}',
           imageUrl: postData['image_url'] as String?,
           videoUrl: postData['video_url'] as String?,
           videoDuration: null,
@@ -157,7 +157,7 @@ class PostRepository {
         userId: postData['user_id'] as String,
         userName: profileData?['name'] as String? ?? 'Unknown',
         userAvatar: profileData?['profile_image_url'] as String? ??
-            'https://api.dicebear.com/7.x/avataaars/svg?seed=${profileData?['email'] ?? 'User'}',
+            'https://api.dicebear.com/7.x/avataaars/png?seed=${profileData?['email'] ?? 'User'}',
         imageUrl: postData['image_url'] as String?,
         videoUrl: postData['video_url'] as String?,
         videoDuration: null,
@@ -306,7 +306,7 @@ class PostRepository {
         userId: commentData['user_id'] as String,
         userName: profileData?['name'] as String? ?? 'Unknown',
         userAvatar: profileData?['profile_image_url'] as String? ??
-            'https://api.dicebear.com/7.x/avataaars/svg?seed=${profileData?['email'] ?? 'User'}',
+            'https://api.dicebear.com/7.x/avataaars/png?seed=${profileData?['email'] ?? 'User'}',
         content: commentData['content'] as String,
         timestamp: DateTime.parse(commentData['created_at'] as String),
         likes: 0,

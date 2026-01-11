@@ -112,5 +112,64 @@ class TournamentRepository {
       throw Exception('Failed to toggle invite link: $e');
     }
   }
+
+  // Search tournaments by name or description
+  Future<List<TournamentModel>> searchTournaments(String query, {
+    String? status,
+    String? format,
+  }) async {
+    try {
+      dynamic queryBuilder = _supabase.from('tournaments').select();
+
+      // Apply status filter if provided
+      if (status != null && status != 'All') {
+        queryBuilder = queryBuilder.eq('status', status.toLowerCase());
+      }
+
+      // Apply format filter if provided
+      if (format != null && format != 'All') {
+        queryBuilder = queryBuilder.eq('format', format);
+      }
+
+      queryBuilder = queryBuilder.order('start_date', ascending: true);
+
+      final response = await queryBuilder;
+      
+      // Filter results by search query (client-side filtering)
+      final tournaments = (response as List)
+          .map((json) => TournamentModel.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      if (query.isEmpty) {
+        return tournaments;
+      }
+
+      final lowercaseQuery = query.toLowerCase();
+      return tournaments.where((tournament) {
+        final name = tournament.name.toLowerCase();
+        final description = (tournament.description ?? '').toLowerCase();
+        return name.contains(lowercaseQuery) || description.contains(lowercaseQuery);
+      }).toList();
+    } catch (e) {
+      throw Exception('Failed to search tournaments: $e');
+    }
+  }
+
+  // Get user's latest created tournament
+  Future<TournamentModel?> getUserLatestTournament(String userId) async {
+    try {
+      final response = await _supabase
+          .from('tournaments')
+          .select()
+          .eq('created_by', userId)
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      if ((response as List).isEmpty) return null;
+      return TournamentModel.fromJson(response.first as Map<String, dynamic>);
+    } catch (e) {
+      return null;
+    }
+  }
 }
 

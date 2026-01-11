@@ -232,7 +232,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
                 child: ClipOval(
                   child: Image.network(
-                    user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/svg?seed=$userName&backgroundColor=ffd5dc',
+                    user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/png?seed=$userName&backgroundColor=ffd5dc',
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
@@ -1457,7 +1457,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                       ),
                                       child: ClipOval(
                                         child: Image.network(
-                                          user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email ?? 'User'}',
+                                          user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/png?seed=${user?.email ?? 'User'}',
                                           fit: BoxFit.cover,
                                           errorBuilder: (context, error, stackTrace) {
                                             return Container(

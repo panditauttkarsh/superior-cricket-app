@@ -45,6 +45,8 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
 
   final List<String> _ballTypes = ['leather', 'tennis', 'other'];
   final List<String> _pitchTypes = ['matting', 'rough', 'cemented', 'astro-turf'];
+  final List<String> _grounds = ['MCG Stadium', 'Lord\'s Cricket Ground', 'Wankhede Stadium', 'Chepauk Stadium'];
+  final List<String> _customGrounds = [];
 
   @override
   void dispose() {
@@ -220,300 +222,750 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Add A Tournament'),
+        title: const Text(
+          'Create Tournament',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            letterSpacing: -0.5,
+          ),
+        ),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textMain,
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded, size: 28),
+          onPressed: () => context.pop(),
+        ),
+        shape: Border(
+          bottom: BorderSide(
+            color: AppColors.divider.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Tournament Banner
-                    _buildImageUploadSection(
-                      title: 'Add Tournament Banner',
-                      image: _bannerImage,
-                      isBanner: true,
-                    ),
-                    const SizedBox(height: 24),
+              child: Column(
+                children: [
+                  // Identity Section (Banner & Logo)
+                  _buildIdentitySection(),
+                  
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 8),
+                          _buildSectionTitle('General Information'),
+                          const SizedBox(height: 20),
+                          
+                          // Tournament Name
+                          _buildCustomTextField(
+                            controller: _nameController,
+                            label: 'Tournament Name',
+                            hint: 'e.g. Champions Trophy 2024',
+                            icon: Icons.emoji_events_outlined,
+                            validator: (value) =>
+                                value?.isEmpty ?? true ? 'Tournament name is required' : null,
+                          ),
+                          const SizedBox(height: 20),
 
-                    // Tournament Logo
-                    _buildImageUploadSection(
-                      title: 'Add Tournament Logo',
-                      image: _logoImage,
-                      isBanner: false,
-                    ),
-                    const SizedBox(height: 24),
+                          // City
+                          _buildCustomTextField(
+                            controller: _cityController,
+                            label: 'City',
+                            hint: 'Enter your city',
+                            icon: Icons.location_on_outlined,
+                            validator: (value) =>
+                                value?.isEmpty ?? true ? 'City is required' : null,
+                          ),
+                          const SizedBox(height: 20),
 
-                    // Tournament Name
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Tournament Name*',
-                        hintText: 'Enter tournament name',
+                          // Ground
+                          _buildCustomDropdownField(
+                            label: 'Ground / Venue',
+                            hint: 'Select Venue',
+                            value: _groundController.text.isEmpty ? null : _groundController.text,
+                            items: [..._grounds, ..._customGrounds],
+                            icon: Icons.stadium_outlined,
+                            showAddOption: true,
+                            onChanged: (value) {
+                              if (value == 'ADD_NEW') {
+                                _showAddGroundDialog();
+                              } else {
+                                setState(() {
+                                  _groundController.text = value ?? '';
+                                });
+                              }
+                            },
+                            validator: (value) =>
+                                value?.isEmpty ?? true ? 'Ground is required' : null,
+                          ),
+                          
+                          const SizedBox(height: 32),
+                          _buildSectionTitle('Organization Details'),
+                          const SizedBox(height: 16),
+
+                          // Organizer Name
+                          _buildCustomTextField(
+                            controller: _organizerNameController,
+                            label: 'Organizer Name',
+                            hint: 'Full name',
+                            icon: Icons.person_outline_rounded,
+                            validator: (value) =>
+                                value?.isEmpty ?? true ? 'Organizer name is required' : null,
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Organizer Mobile
+                          _buildCustomTextField(
+                            controller: _organizerMobileController,
+                            label: 'Contact Number',
+                            hint: '10-digit mobile number',
+                            icon: Icons.phone_outlined,
+                            keyboardType: TextInputType.phone,
+                            maxLength: 10,
+                            validator: _validateMobile,
+                          ),
+                          
+                          const SizedBox(height: 32),
+                          _buildSectionTitle('Schedule & Specifications'),
+                          const SizedBox(height: 16),
+
+                          // Start Date
+                          _buildCustomDateField(
+                            label: 'Starts On',
+                            date: _startDate,
+                            icon: Icons.calendar_today_outlined,
+                            onTap: () => _selectDate(true),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // End Date
+                          _buildCustomDateField(
+                            label: 'Ends On',
+                            date: _endDate,
+                            icon: Icons.event_available_outlined,
+                            onTap: () => _selectDate(false),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Tournament Category
+                          _buildCustomDropdownField(
+                            label: 'Tournament Category',
+                            hint: 'Select Category',
+                            value: _category,
+                            items: _categories,
+                            icon: Icons.category_outlined,
+                            onChanged: (value) => setState(() => _category = value),
+                            validator: (value) =>
+                                value == null ? 'Category is required' : null,
+                          ),
+                          const SizedBox(height: 20),
+                          Row(
+                            children: [
+                              Flexible(
+                                flex: 1,
+                                child: _buildCustomDropdownField(
+                                  label: 'Ball Type',
+                                  hint: 'Select Ball',
+                                  value: _ballType,
+                                  items: _ballTypes,
+                                  icon: Icons.sports_baseball_outlined,
+                                  onChanged: (value) => setState(() => _ballType = value),
+                                  validator: (value) =>
+                                      value == null ? 'Ball type is required' : null,
+                                  showPrefix: false,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                flex: 1,
+                                child: _buildCustomDropdownField(
+                                  label: 'Pitch Type',
+                                  hint: 'Select Pitch',
+                                  value: _pitchType,
+                                  items: _pitchTypes,
+                                  icon: Icons.layers_outlined,
+                                  onChanged: (value) => setState(() => _pitchType = value),
+                                  validator: (value) =>
+                                      value == null ? 'Pitch type is required' : null,
+                                  showPrefix: false,
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 48),
+
+                          // Register Button
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withOpacity(0.3),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton(
+                              onPressed: _registerTournament,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Center(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.emoji_events_rounded, size: 20, color: Colors.white),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'CREATE TOURNAMENT',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+                        ],
                       ),
-                      validator: (value) =>
-                          value?.isEmpty ?? true ? 'Tournament name is required' : null,
                     ),
-                    const SizedBox(height: 16),
-
-                    // City
-                    TextFormField(
-                      controller: _cityController,
-                      decoration: const InputDecoration(
-                        labelText: 'City*',
-                        hintText: 'Enter city',
-                      ),
-                      validator: (value) =>
-                          value?.isEmpty ?? true ? 'City is required' : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Ground
-                    _buildDropdownField(
-                      label: 'Ground*',
-                      value: _groundController.text.isEmpty ? null : _groundController.text,
-                      items: const ['Ground 1', 'Ground 2', 'Ground 3'], // You can fetch from API
-                      onChanged: (value) {
-                        setState(() {
-                          _groundController.text = value ?? '';
-                        });
-                      },
-                      validator: (value) =>
-                          value?.isEmpty ?? true ? 'Ground is required' : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Organizer Name
-                    TextFormField(
-                      controller: _organizerNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Organizer Name*',
-                        hintText: 'Enter organizer name',
-                      ),
-                      validator: (value) =>
-                          value?.isEmpty ?? true ? 'Organizer name is required' : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Organizer Mobile
-                    TextFormField(
-                      controller: _organizerMobileController,
-                      decoration: const InputDecoration(
-                        labelText: 'Organizer Number*',
-                        hintText: 'Enter 10-digit mobile number',
-                      ),
-                      keyboardType: TextInputType.phone,
-                      maxLength: 10,
-                      validator: _validateMobile,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Start Date
-                    _buildDateField(
-                      label: 'Tournament Start Date*',
-                      date: _startDate,
-                      onTap: () => _selectDate(true),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // End Date
-                    _buildDateField(
-                      label: 'Tournament End Date*',
-                      date: _endDate,
-                      onTap: () => _selectDate(false),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Tournament Category
-                    _buildDropdownField(
-                      label: 'Tournament Category*',
-                      value: _category,
-                      items: _categories,
-                      onChanged: (value) => setState(() => _category = value),
-                      validator: (value) =>
-                          value == null ? 'Category is required' : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Ball Type
-                    _buildDropdownField(
-                      label: 'Ball Type*',
-                      value: _ballType,
-                      items: _ballTypes,
-                      onChanged: (value) => setState(() => _ballType = value),
-                      validator: (value) =>
-                          value == null ? 'Ball type is required' : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Pitch Type
-                    _buildDropdownField(
-                      label: 'Pitch Type*',
-                      value: _pitchType,
-                      items: _pitchTypes,
-                      onChanged: (value) => setState(() => _pitchType = value),
-                      validator: (value) =>
-                          value == null ? 'Pitch type is required' : null,
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Register Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _registerTournament,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: const Text(
-                          'Register',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
     );
   }
 
-  Widget _buildImageUploadSection({
-    required String title,
-    required File? image,
-    required bool isBanner,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GestureDetector(
-          onTap: () {
-            showModalBottomSheet(
-              context: context,
-              builder: (context) => SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.photo_library),
-                      title: const Text('Choose from Gallery'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _pickImage(ImageSource.gallery, isBanner);
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.camera_alt),
-                      title: const Text('Take Photo'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _pickImage(ImageSource.camera, isBanner);
-                      },
-                    ),
-                  ],
-                ),
+  Widget _buildIdentitySection() {
+    return SizedBox(
+      height: 240,
+      child: Stack(
+        children: [
+          // Banner Image
+          GestureDetector(
+            onTap: () => _showImageSourceOptions(true),
+            child: Container(
+              height: 180,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: AppColors.elevated,
+                image: _bannerImage != null
+                    ? DecorationImage(image: FileImage(_bannerImage!), fit: BoxFit.cover)
+                    : null,
               ),
-            );
-          },
-          child: Container(
-            width: double.infinity,
-            height: isBanner ? 200 : 120,
-            decoration: BoxDecoration(
-              color: AppColors.elevated,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.borderLight),
-            ),
-            child: image != null
-                ? Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(image, fit: BoxFit.cover),
-                      ),
-                      Positioned(
-                        bottom: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+              child: _bannerImage == null
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_photo_alternate_outlined, size: 40, color: AppColors.textMeta.withOpacity(0.5)),
+                        const SizedBox(height: 8),
+                        Text('Add Tournament Banner', style: TextStyle(color: AppColors.textMeta.withOpacity(0.8), fontSize: 13, fontWeight: FontWeight.w500)),
+                      ],
+                    )
+                  : Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
                         ),
                       ),
-                    ],
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        isBanner ? Icons.image : Icons.account_circle,
-                        size: 48,
-                        color: AppColors.textMeta,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        title,
-                        style: TextStyle(color: AppColors.textMeta),
-                      ),
-                    ],
-                  ),
+                    ),
+            ),
+          ),
+          // Logo Image (Overlapping)
+          Positioned(
+            bottom: 0,
+            left: 20,
+            child: GestureDetector(
+              onTap: () => _showImageSourceOptions(false),
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                  border: Border.all(color: Colors.white, width: 4),
+                ),
+                child: ClipOval(
+                  child: _logoImage != null
+                      ? Image.file(_logoImage!, fit: BoxFit.cover)
+                      : Container(
+                          color: AppColors.surface,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_a_photo_outlined, size: 24, color: AppColors.primary.withOpacity(0.5)),
+                              const SizedBox(height: 4),
+                              const Text('LOGO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textMeta)),
+                            ],
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ),
+          // Edit Banner Button
+          if (_bannerImage != null)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: _buildCircleToolButton(Icons.edit_outlined, () => _showImageSourceOptions(true)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCircleToolButton(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4),
+          ],
+        ),
+        child: Icon(icon, size: 20, color: AppColors.textMain),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 18,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textMain,
+            letterSpacing: -0.2,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildDropdownField({
+  Widget _buildCustomTextField({
+    required TextEditingController controller,
     required String label,
-    required String? value,
-    required List<String> items,
-    required Function(String?) onChanged,
+    required String hint,
+    required IconData icon,
+    TextInputType? keyboardType,
+    int? maxLength,
     String? Function(String?)? validator,
   }) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      decoration: InputDecoration(
-        labelText: label,
-      ),
-      items: items.map((item) {
-        return DropdownMenuItem(
-          value: item,
-          child: Text(item.toUpperCase()),
-        );
-      }).toList(),
-      onChanged: onChanged,
-      validator: validator,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMain.withOpacity(0.7),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          maxLength: maxLength,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: AppColors.textMeta.withOpacity(0.5), fontWeight: FontWeight.normal),
+            prefixIcon: Icon(icon, size: 20, color: AppColors.primary),
+            filled: true,
+            fillColor: AppColors.surface,
+            counterText: "",
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.5)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.5)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.error, width: 1),
+            ),
+          ),
+          validator: validator,
+        ),
+      ],
     );
   }
 
-  Widget _buildDateField({
+  Widget _buildCustomDropdownField({
+    required String label,
+    required String hint,
+    required String? value,
+    required List<String> items,
+    required IconData icon,
+    required Function(String?) onChanged,
+    String? Function(String?)? validator,
+    bool showAddOption = false,
+    bool showPrefix = true,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMain.withOpacity(0.7),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: value,
+          isExpanded: true,
+          hint: Text(
+            hint,
+            style: TextStyle(
+              fontSize: 14,
+            fontWeight: FontWeight.normal,
+            color: AppColors.textMeta.withOpacity(0.5),
+            ),
+          ),
+          icon: const Icon(Icons.arrow_drop_down, size: 16),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textMain),
+          decoration: InputDecoration(
+            prefix: showPrefix 
+              ? Padding(
+                  padding: const EdgeInsets.only(right: 2),
+                  child: Icon(icon, size: 14, color: AppColors.primary),
+                )
+              : null,
+            isDense: true,
+            filled: true,
+            fillColor: AppColors.surface,
+            contentPadding: const EdgeInsets.only(left: 6, right: 0, top: 12, bottom: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.5)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.5)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+            ),
+          ),
+          items: [
+            ...items.map((item) {
+              return DropdownMenuItem(
+                value: item,
+                child: Text(item.toUpperCase()),
+              );
+            }).toList(),
+            if (showAddOption)
+              const DropdownMenuItem(
+                value: 'ADD_NEW',
+                child: Row(
+                  children: [
+                    Icon(Icons.add_circle_outline_rounded, size: 20, color: AppColors.primary),
+                    SizedBox(width: 8),
+                    Text(
+                      'Add New Ground...',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          onChanged: onChanged,
+          validator: validator,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCustomDateField({
     required String label,
     required DateTime? date,
+    required IconData icon,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          suffixIcon: const Icon(Icons.calendar_today),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMain.withOpacity(0.7),
+            ),
+          ),
         ),
-        child: Text(
-          date != null
-              ? '${date.day}/${date.month}/${date.year}'
-              : 'Select date',
-          style: TextStyle(
-            color: date != null ? AppColors.textMain : AppColors.textMeta,
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.divider.withOpacity(0.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 20, color: AppColors.primary),
+                const SizedBox(width: 12),
+                Text(
+                  date != null
+                      ? '${date.day}/${date.month}/${date.year}'
+                      : 'Select Date',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: date != null ? AppColors.textMain : AppColors.textMeta.withOpacity(0.5),
+                  ),
+                ),
+                const Spacer(),
+                Icon(Icons.calendar_today_outlined, size: 16, color: AppColors.textMeta.withOpacity(0.5)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showAddGroundDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        elevation: 10,
+        backgroundColor: Colors.white,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Decorative Icon
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.stadium_rounded,
+                  size: 32,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              const Text(
+                'Add New Ground',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textMain,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Enter the name of the ground manually to add it to your tournament.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textMeta.withOpacity(0.8),
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Custom styled TextField for the dialog
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'e.g. Skyline Cricket Ground',
+                  hintStyle: TextStyle(color: AppColors.textMeta.withOpacity(0.5)),
+                  filled: true,
+                  fillColor: AppColors.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: AppColors.divider.withOpacity(0.3)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: AppColors.divider.withOpacity(0.3)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                ),
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              ),
+              const SizedBox(height: 32),
+              
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: AppColors.textMeta,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final name = controller.text.trim();
+                        if (name.isNotEmpty) {
+                          setState(() {
+                            _customGrounds.add(name.toUpperCase()); // Keep consistency with uppercase rule
+                            _groundController.text = name.toUpperCase();
+                          });
+                          Navigator.pop(context);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 4,
+                        shadowColor: AppColors.primary.withOpacity(0.4),
+                      ),
+                      child: const Text(
+                        'Add Ground',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showImageSourceOptions(bool isBanner) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 20),
+              const Text('Update Photo', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
+                title: const Text('Choose from Gallery'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery, isBanner);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                title: const Text('Take Photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera, isBanner);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
           ),
         ),
       ),

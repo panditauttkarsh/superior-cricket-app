@@ -329,7 +329,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     ),
                     child: ClipOval(
                       child: Image.network(
-                        user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/svg?seed=${_profileData['name'] ?? 'User'}',
+                        user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/png?seed=${_profileData['name'] ?? 'User'}',
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
