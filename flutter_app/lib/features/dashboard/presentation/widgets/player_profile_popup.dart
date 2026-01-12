@@ -19,7 +19,7 @@ class PlayerProfilePopup extends ConsumerWidget {
         color: Colors.transparent,
         child: Container(
           width: size.width * 0.9,
-          height: size.height * 0.85,
+          height: size.height * 0.7, // Reduced height to 70%
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
@@ -55,11 +55,12 @@ class PlayerProfilePopup extends ConsumerWidget {
 
               Expanded(
                 child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(bottom: 24),
+                  physics: const NeverScrollableScrollPhysics(), // Disable scrolling as requested
+                  padding: const EdgeInsets.only(bottom: 12),
                   child: playerAsyncValue.when(
                     data: (PlayerModel? playerData) {
                       final battingStats = playerData?.battingStats ?? {};
+                      final isPro = playerData?.subscriptionPlan?.toUpperCase() == 'PRO';
                       
                       return Column(
                         children: [
@@ -74,8 +75,8 @@ class PlayerProfilePopup extends ConsumerWidget {
                                   children: [
                                     // Dotted border effect
                                     Container(
-                                      width: 120, // Reduced size
-                                      height: 120, // Reduced size
+                                      width: 105, // Slightly adjusted for better fit
+                                      height: 105, 
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         border: Border.all(
@@ -84,7 +85,7 @@ class PlayerProfilePopup extends ConsumerWidget {
                                         ),
                                       ),
                                       child: Padding(
-                                        padding: const EdgeInsets.all(6.0),
+                                        padding: const EdgeInsets.all(5.0),
                                         child: Container(
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
@@ -98,63 +99,68 @@ class PlayerProfilePopup extends ConsumerWidget {
                                     ),
                                     // Actual Image
                                     Container(
-                                      width: 95, // Reduced size
-                                      height: 95, // Reduced size
+                                      width: 86, // Slightly adjusted
+                                      height: 86,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         image: DecorationImage(
                                           image: NetworkImage(
-                                            playerData?.profileImageUrl ?? authUser?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.email ?? 'User'}',
+                                            playerData?.profileImageUrl ?? authUser?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/png?seed=${authUser?.email ?? 'User'}',
                                           ),
                                           fit: BoxFit.cover,
                                         ),
-                                        border: Border.all(color: Colors.white, width: 3),
+                                        border: Border.all(color: Colors.white, width: 2),
                                       ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 16), // Reduced spacing
+                                const SizedBox(height: 10), // Tighter
                                 // Name
                                 Text(
                                   (playerData?.name ?? authUser?.name ?? authUser?.email?.split('@')[0] ?? 'Player Name').toUpperCase(),
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 24, // Reduced size
+                                    fontSize: 20, // Slightly smaller
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 1.2,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 8), // Tighter
                                 
-                                // Skill/Circle indicator
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    _buildSkillCircle(true),
-                                    Container(width: 40, height: 1.5, color: Colors.cyanAccent.withOpacity(0.5)),
-                                    _buildSkillCircle(true, isCenter: true),
-                                    Container(width: 40, height: 1.5, color: Colors.cyanAccent.withOpacity(0.5)),
-                                    _buildSkillCircle(true),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                
-                                // Role
-                                Text(
-                                  (playerData?.role ?? 'Player').toUpperCase(),
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.8),
-                                    fontSize: 13, // Reduced size
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 2.0,
+                                // Membership Status Tag
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    gradient: isPro ? const LinearGradient(
+                                      colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                                    ) : null,
+                                    color: isPro ? null : Colors.white.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: isPro ? Border.all(color: Colors.white.withOpacity(0.5), width: 1) : null,
+                                    boxShadow: isPro ? [
+                                      BoxShadow(
+                                        color: Colors.orange.withOpacity(0.3),
+                                        blurRadius: 8,
+                                        spreadRadius: 1,
+                                      )
+                                    ] : null,
+                                  ),
+                                  child: Text(
+                                    isPro ? 'PRO MEMBER' : 'BASIC MEMBER',
+                                    style: TextStyle(
+                                      color: isPro ? Colors.black87 : Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1.2,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
 
-                          const SizedBox(height: 30),
+                          const SizedBox(height: 16), // Tighter
 
                           // Stats Section
                           Container(
@@ -197,7 +203,7 @@ class PlayerProfilePopup extends ConsumerWidget {
 
   Widget _buildStatRow(String label, String value) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 9), // Further reduced height to hit the fit
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
@@ -213,7 +219,7 @@ class PlayerProfilePopup extends ConsumerWidget {
             label,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 16,
+              fontSize: 13, // Slightly smaller
               fontWeight: FontWeight.w700,
               letterSpacing: 1.0,
             ),
@@ -222,44 +228,12 @@ class PlayerProfilePopup extends ConsumerWidget {
             value,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: 15, // Slightly smaller
               fontWeight: FontWeight.w800,
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSkillCircle(bool isActive, {bool isCenter = false}) {
-    return Container(
-      width: isCenter ? 24 : 32,
-      height: isCenter ? 24 : 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isCenter ? Colors.cyan : Colors.white.withOpacity(0.2),
-        border: Border.all(
-          color: isCenter ? Colors.white : Colors.white.withOpacity(0.4),
-          width: 1.5,
-        ),
-        boxShadow: isCenter ? [
-          BoxShadow(
-            color: Colors.cyan.withOpacity(0.5),
-            blurRadius: 10,
-            spreadRadius: 2,
-          )
-        ] : null,
-      ),
-      child: isCenter ? Center(
-        child: Container(
-          width: 12,
-          height: 12,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
-          ),
-        ),
-      ) : null,
     );
   }
 }

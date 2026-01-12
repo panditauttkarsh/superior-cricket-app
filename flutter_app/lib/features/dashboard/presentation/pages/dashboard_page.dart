@@ -1429,185 +1429,153 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Profile Header - Horizontal Layout
+                          // Fine-tuned Profile Section
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.grey.shade800
-                                  : Colors.grey.shade100,
-                            ),
-                            child: Row(
-                              children: [
-                                // Profile Picture
-                                Stack(
-                                  children: [
-                                    Container(
-                                      width: 80,
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Colors.white,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(0.1),
-                                            blurRadius: 10,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ],
-                                      ),
-                                      child: ClipOval(
-                                        child: Image.network(
-                                          user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/png?seed=${user?.email ?? 'User'}',
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) {
-                                            return Container(
+                            color: Colors.grey[100],
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+                            child: InkWell(
+                              onTap: () {
+                                Navigator.pop(context);
+                                showPlayerProfilePopup(context);
+                              },
+                              child: Row(
+                                children: [
+                                  // Profile Image with Camera Icon Overlay
+                                  Stack(
+                                    children: [
+                                      Container(
+                                        width: 80,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white, width: 3),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.05),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ClipOval(
+                                          child: Image.network(
+                                            user?.avatar ?? 'https://api.dicebear.com/7.x/avataaars/png?seed=${user?.email ?? 'User'}',
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) => Container(
                                               color: AppColors.surface,
-                                              child: Icon(
-                                                Icons.person,
-                                                color: AppColors.textSec,
-                                                size: 40,
-                                              ),
-                                            );
-                                          },
+                                              child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    // Camera icon overlay
-                                    Positioned(
-                                      bottom: 0,
-                                      right: 0,
-                                      child: GestureDetector(
-                                        onTap: () => _handleProfileImageUpdate(context, ref),
+                                      Positioned(
+                                        bottom: 0,
+                                        right: 0,
                                         child: Container(
-                                          width: 28,
-                                          height: 28,
+                                          padding: const EdgeInsets.all(6),
                                           decoration: BoxDecoration(
-                                            color: AppColors.primary,
+                                            color: const Color(0xFF1E88E5), // Brighter blue like the image
                                             shape: BoxShape.circle,
                                             border: Border.all(color: Colors.white, width: 2),
                                           ),
                                           child: const Icon(
                                             Icons.camera_alt,
                                             color: Colors.white,
-                                            size: 14,
+                                            size: 16,
                                           ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                
-                                const SizedBox(width: 16),
-                                
-                                // User Info
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      // Name
-                                      Text(
-                                        (user?.name ?? user?.email?.split('@')[0] ?? 'User Name').toUpperCase(),
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: Theme.of(context).textTheme.displayLarge?.color ?? AppColors.textMain,
-                                          letterSpacing: 0.8,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      
-                                      const SizedBox(height: 4),
-                                      
-                                      // Email
-                                      Text(
-                                        user?.email ?? 'user@example.com',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7) ?? AppColors.textSec,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      
-                                      const SizedBox(height: 8),
-                                      
-                                      // Subscription Badge
-                                      Container(
-                                        padding: user?.subscriptionPlan == 'pro'
-                                            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
-                                            : const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: user?.subscriptionPlan == 'pro'
-                                                ? [
-                                                    const Color(0xFF43A047), // Green 600
-                                                    const Color(0xFF2E7D32), // Green 800
-                                                  ]
-                                                : [
-                                                    const Color(0xFFFFD54F), // Amber 300
-                                                    const Color(0xFFF57F17), // Orange 900 (Deep Yellow/Amber)
-                                                  ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ),
-                                          borderRadius: BorderRadius.circular(30),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: (user?.subscriptionPlan == 'pro'
-                                                      ? Colors.green
-                                                      : Colors.grey)
-                                                  .withOpacity(0.3),
-                                              blurRadius: 6,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (user?.subscriptionPlan == 'pro') ...[
-                                              const Icon(
-                                                Icons.verified,
-                                                color: Colors.white,
-                                                size: 16,
-                                              ),
-                                              const SizedBox(width: 6),
-                                            ],
-                                            Text(
-                                              (user?.subscriptionPlan == 'pro' ? 'Pro Member' : 'Basic Member').toUpperCase(),
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: user?.subscriptionPlan == 'pro' ? 11 : 9,
-                                                fontWeight: FontWeight.w800,
-                                                letterSpacing: 1.0,
-                                              ),
-                                            ),
-                                          ],
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                
-                                // Arrow Icon
-                                GestureDetector(
-                                  onTap: () {
-                                    Navigator.pop(context); // Close hamburger
-                                    showPlayerProfilePopup(context); // Show popup
-                                  },
-                                  child: Icon(
-                                    Icons.arrow_forward_ios,
-                                    color: Theme.of(context).iconTheme.color?.withOpacity(0.5),
-                                    size: 20,
+                                  const SizedBox(width: 16),
+                                  // User Details & Badge
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          (user?.name ?? 'UTTKARSH PANDITA').toUpperCase(),
+                                          style: const TextStyle(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFF263238),
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          user?.email ?? 'uttkarshpandita@gmail.com',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.blueGrey[400],
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        // Compact Orange Pill Badge
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [Color(0xFFFFB300), Color(0xFFFF8F00)],
+                                              begin: Alignment.centerLeft,
+                                              end: Alignment.centerRight,
+                                            ),
+                                            borderRadius: BorderRadius.circular(20),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.orange.withOpacity(0.3),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Text(
+                                            'BASIC MEMBER',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.8,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  // Circular Shadowed Arrow with Teal Border
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white,
+                                      border: Border.all(
+                                        color: const Color(0xFF009688).withOpacity(0.4), // Teal-ish border
+                                        width: 1.5,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.1),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.chevron_right,
+                                        color: Color(0xFF90A4AE),
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 8),
                           
                           // Menu Items
                           Padding(
@@ -1664,10 +1632,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           // NOTIFICATIONS Section
                           _buildSectionLabel('NOTIFICATIONS'),
                           const SizedBox(height: 12),
-                          _buildMenuTileWithToggle(
-                            icon: Icons.bar_chart_outlined,
-                            title: 'Activities notifications',
-                            subtitle: 'Payment Success, Failed and other activities',
+                           _buildMenuTileWithToggle(
+                            icon: Icons.notifications_active_outlined,
+                            title: 'Activities',
+                            subtitle: 'Payment, tournaments & matches',
                             value: activitiesNotifications,
                             onChanged: (value) {
                               setDialogState(() {
@@ -1681,14 +1649,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           Consumer(
                             builder: (context, ref, child) {
                               final isDarkMode = ref.watch(isDarkModeProvider);
-                              return _buildMenuTileWithToggle(
-                                icon: Icons.dark_mode_outlined,
-                                title: 'Dark Mode',
-                                value: isDarkMode,
-                                onChanged: (value) {
-                                  ref.read(isDarkModeProvider.notifier).state = value;
-                                },
-                              );
+                                return _buildMenuTileWithToggle(
+                                  icon: Icons.dark_mode_outlined,
+                                  title: 'Dark Mode',
+                                  value: isDarkMode,
+                                  onChanged: (value) {
+                                    ref.read(isDarkModeProvider.notifier).state = value;
+                                  },
+                                );
                             },
                           ),
                           
@@ -1707,33 +1675,33 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           const SizedBox(height: 24),
                           
                           _buildMenuTile(
-                            icon: Icons.logout,
+                            icon: Icons.logout_rounded,
                             title: 'Logout',
                             onTap: () {
                               Navigator.pop(context);
                               ref.read(authStateProvider.notifier).logout();
                               context.go('/login');
                             },
-                            color: AppColors.urgent,
+                            color: Colors.redAccent,
                           ),
                           
                           const SizedBox(height: 32),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+            ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+),
+);
+}
 
   Widget _buildSectionLabel(String label) {
     return Text(
