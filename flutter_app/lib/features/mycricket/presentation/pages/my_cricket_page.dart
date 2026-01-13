@@ -165,34 +165,33 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            _buildHeader(),
-            
-            // Tabs
-            _buildTabs(),
-            
-            // Content
-            Expanded(
-              child: SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 430),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: _buildTabContent(),
+    return SafeArea(
+      child: Column(
+        children: [
+          // Header
+          _buildHeader(),
+          
+          // Tabs
+          _buildTabs(),
+          
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      _buildTabContent(),
+                      const SizedBox(height: 130), // Increased space for floating footer
+                    ],
                   ),
                 ),
               ),
             ),
-            
-            // Bottom Navigation
-            _buildBottomNavBar(),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -210,18 +209,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textMain, size: 24),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/');
-              }
-            },
-          ),
+          const SizedBox(width: 48), // Padding to match the right side button width
           const Expanded(
             child: Center(
               child: Text(
@@ -2700,16 +2688,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.bookmark_border,
-                            color: AppColors.textMeta,
-                            size: 18,
-                          ),
-                          onPressed: () {},
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
+                        const SizedBox(width: 48),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -3627,96 +3606,4 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     );
   }
 
-  Widget _buildBottomNavBar() {
-    final currentLocation = GoRouterState.of(context).matchedLocation;
-    final isMyCricketActive = currentLocation == '/my-cricket' || 
-                              currentLocation.startsWith('/my-cricket');
-    
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(
-          top: BorderSide(color: AppColors.divider),
-        ),
-      ),
-      child: SafeArea(
-        child: Container(
-          height: 64,
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(
-                Icons.home, 
-                'Home', 
-                currentLocation == '/', 
-                () => context.go('/'),
-              ),
-              _buildNavItem(
-                Icons.sports_cricket, 
-                'My Matches', 
-                isMyCricketActive, 
-                () => context.go('/my-cricket'),
-              ),
-              _buildNavItem(
-                Icons.rss_feed, 
-                'Feed', 
-                currentLocation == '/feed', 
-                () => context.go('/feed'),
-              ),
-              _buildNavItem(
-                Icons.person, 
-                'Profile', 
-                currentLocation == '/profile', 
-                () => context.go('/profile'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, String label, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Stack(
-            children: [
-              Icon(
-                icon,
-                color: isActive ? AppColors.primary : AppColors.textSec,
-                size: 24,
-              ),
-              if (isActive)
-                Positioned(
-                  top: 4,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.background, width: 1),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-              color: isActive ? AppColors.primary : AppColors.textSec,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

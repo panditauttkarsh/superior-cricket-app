@@ -466,16 +466,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: AppColors.primary,
-                      size: 24,
-                    ),
-                    onPressed: () {
-                      context.go('/');
-                    },
-                  ),
+                  const SizedBox(width: 48),
                   const Text(
                     'Feed',
                     style: TextStyle(
@@ -554,7 +545,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                                 ),
                               )
                             : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 130),
                         itemCount: _posts.length,
                         itemBuilder: (context, index) {
                           return Padding(
