@@ -253,7 +253,7 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
                   _buildIdentitySection(),
                   
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                     child: Form(
                       key: _formKey,
                       child: Column(
@@ -306,9 +306,9 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
                                 value?.isEmpty ?? true ? 'Ground is required' : null,
                           ),
                           
-                          const SizedBox(height: 32),
+                          const SizedBox(height: 40),
                           _buildSectionTitle('Organization Details'),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 24),
 
                           // Organizer Name
                           _buildCustomTextField(
@@ -332,9 +332,9 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
                             validator: _validateMobile,
                           ),
                           
-                          const SizedBox(height: 32),
+                          const SizedBox(height: 40),
                           _buildSectionTitle('Schedule & Specifications'),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 24),
 
                           // Start Date
                           _buildCustomDateField(
@@ -382,7 +382,7 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
                                   showPrefix: false,
                                 ),
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 12),
                               Flexible(
                                 flex: 1,
                                 child: _buildCustomDropdownField(
@@ -425,23 +425,22 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
-                              child: const Center(
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.emoji_events_rounded, size: 20, color: Colors.white),
-                                    SizedBox(width: 10),
+                                    Icon(Icons.emoji_events_rounded, size: 22, color: Colors.white),
+                                    SizedBox(width: 12),
                                     Text(
                                       'CREATE TOURNAMENT',
                                       style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.2,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.5,
+                                        fontFamily: 'Inter',
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
                             ),
                           ),
                           const SizedBox(height: 40),
@@ -597,43 +596,55 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: AppColors.textMain.withOpacity(0.7),
+              color: AppColors.textMain.withOpacity(0.8),
+              fontFamily: 'Inter',
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         TextFormField(
           controller: controller,
           keyboardType: keyboardType,
           maxLength: maxLength,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            fontFamily: 'Inter',
+          ),
           decoration: InputDecoration(
+            isDense: true,
             hintText: hint,
-            hintStyle: TextStyle(color: AppColors.textMeta.withOpacity(0.5), fontWeight: FontWeight.normal),
+            hintStyle: TextStyle(
+              color: AppColors.textMeta.withOpacity(0.4),
+              fontWeight: FontWeight.normal,
+              fontSize: 14,
+            ),
             prefixIcon: Icon(icon, size: 20, color: AppColors.primary),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 44,
+            ),
             filled: true,
             fillColor: AppColors.surface,
             counterText: "",
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.5)),
+              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.3)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.5)),
+              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -660,19 +671,19 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: AppColors.textMain.withOpacity(0.7),
+              color: AppColors.textMain.withOpacity(0.8),
+              fontFamily: 'Inter',
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         DropdownButtonFormField<String>(
           value: value,
           isExpanded: true,
@@ -680,34 +691,39 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
             hint,
             style: TextStyle(
               fontSize: 14,
-            fontWeight: FontWeight.normal,
-            color: AppColors.textMeta.withOpacity(0.5),
+              fontWeight: FontWeight.normal,
+              color: AppColors.textMeta.withOpacity(0.4),
             ),
           ),
-          icon: const Icon(Icons.arrow_drop_down, size: 16),
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textMain),
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMeta.withOpacity(0.5)),
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textMain,
+            fontFamily: 'Inter',
+          ),
           decoration: InputDecoration(
-            prefix: showPrefix 
-              ? Padding(
-                  padding: const EdgeInsets.only(right: 2),
-                  child: Icon(icon, size: 14, color: AppColors.primary),
-                )
-              : null,
             isDense: true,
+            prefixIcon: showPrefix
+                ? Icon(icon, size: 20, color: AppColors.primary)
+                : null,
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 44,
+            ),
             filled: true,
             fillColor: AppColors.surface,
-            contentPadding: const EdgeInsets.only(left: 6, right: 0, top: 12, bottom: 12),
+            contentPadding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.5)),
+              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.3)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.5)),
+              borderSide: BorderSide(color: AppColors.divider.withOpacity(0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
             ),
           ),
           items: [
@@ -751,19 +767,19 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: AppColors.textMain.withOpacity(0.7),
+              color: AppColors.textMain.withOpacity(0.8),
+              fontFamily: 'Inter',
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
@@ -772,24 +788,28 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.divider.withOpacity(0.5)),
+              border: Border.all(color: AppColors.divider.withOpacity(0.3)),
             ),
             child: Row(
               children: [
                 Icon(icon, size: 20, color: AppColors.primary),
                 const SizedBox(width: 12),
-                Text(
-                  date != null
-                      ? '${date.day}/${date.month}/${date.year}'
-                      : 'Select Date',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: date != null ? AppColors.textMain : AppColors.textMeta.withOpacity(0.5),
+                Expanded(
+                  child: Text(
+                    date != null
+                        ? '${date.day}/${date.month}/${date.year}'
+                        : 'Select Date',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: date != null ? AppColors.textMain : AppColors.textMeta.withOpacity(0.4),
+                      fontFamily: 'Inter',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const Spacer(),
-                Icon(Icons.calendar_today_outlined, size: 16, color: AppColors.textMeta.withOpacity(0.5)),
+                Icon(Icons.calendar_month_rounded, size: 18, color: AppColors.textMeta.withOpacity(0.4)),
               ],
             ),
           ),
@@ -804,126 +824,162 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
       context: context,
       barrierDismissible: true,
       builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        elevation: 10,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        elevation: 12,
         backgroundColor: Colors.white,
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Decorative Icon
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.stadium_rounded,
-                  size: 32,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              const Text(
-                'Add New Ground',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textMain,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Enter the name of the ground manually to add it to your tournament.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textMeta.withOpacity(0.8),
-                  fontSize: 14,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              // Custom styled TextField for the dialog
-              TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: 'e.g. Skyline Cricket Ground',
-                  hintStyle: TextStyle(color: AppColors.textMeta.withOpacity(0.5)),
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: AppColors.divider.withOpacity(0.3)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: AppColors.divider.withOpacity(0.3)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                ),
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-              ),
-              const SizedBox(height: 32),
-              
-              Row(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  // Icon Header
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.stadium_rounded,
+                      size: 32,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  const Text(
+                    'Add New Ground',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textMain,
+                      fontFamily: 'Inter',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add a custom ground manually if it\'s not in the list.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.textMeta.withOpacity(0.6),
+                      fontSize: 14,
+                      fontFamily: 'Inter',
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  
+                  // Input Field
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.words,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Inter',
+                    ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'e.g. Skyline Cricket Ground',
+                      hintStyle: TextStyle(
+                        color: AppColors.textMeta.withOpacity(0.4),
+                        fontWeight: FontWeight.normal,
                       ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          color: AppColors.textMeta,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.divider.withOpacity(0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.divider.withOpacity(0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: AppColors.textMeta.withOpacity(0.8),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                              fontFamily: 'Inter',
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final name = controller.text.trim();
-                        if (name.isNotEmpty) {
-                          setState(() {
-                            _customGrounds.add(name.toUpperCase()); // Keep consistency with uppercase rule
-                            _groundController.text = name.toUpperCase();
-                          });
-                          Navigator.pop(context);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        elevation: 4,
-                        shadowColor: AppColors.primary.withOpacity(0.4),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.2),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            onPressed: () {
+                              final name = controller.text.trim();
+                              if (name.isNotEmpty) {
+                                setState(() {
+                                  _customGrounds.add(name.toUpperCase());
+                                  _groundController.text = name.toUpperCase();
+                                });
+                                Navigator.pop(context);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 18),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              'Add Ground',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                                fontFamily: 'Inter',
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      child: const Text(
-                        'Add Ground',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                    ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),

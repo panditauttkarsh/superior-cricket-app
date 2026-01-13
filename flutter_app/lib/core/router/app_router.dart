@@ -9,6 +9,7 @@ import '../../features/auth/presentation/pages/email_verification_callback_page.
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../core/widgets/loading_screen.dart';
 import '../../core/widgets/splash_screen.dart';
+import '../../core/widgets/main_shell.dart';
 import '../../features/player/presentation/pages/player_dashboard_page.dart';
 import '../../features/player/presentation/pages/scorecards_page.dart';
 import '../../features/player/presentation/pages/leaderboards_page.dart';
@@ -138,28 +139,40 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       
-      // Dashboard Routes
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const DashboardPage(),
+      // Main Shell Routes
+      ShellRoute(
+        builder: (context, state, child) => MainShell(child: child),
+        routes: [
+          // Dashboard Routes
+          GoRoute(
+            path: '/',
+            builder: (context, state) => const DashboardPage(),
+          ),
+          
+          // My Cricket Route
+          GoRoute(
+            path: '/my-cricket',
+            builder: (context, state) {
+              final tab = state.uri.queryParameters['tab'];
+              return MyCricketPage(initialTab: tab);
+            },
+          ),
+          
+          // Feed Route
+          GoRoute(
+            path: '/feed',
+            builder: (context, state) => const FeedPage(),
+          ),
+
+          // Profile Route
+          GoRoute(
+            path: '/profile',
+            builder: (context, state) => const ProfilePage(),
+          ),
+        ],
       ),
       
-      // My Cricket Route
-      GoRoute(
-        path: '/my-cricket',
-        builder: (context, state) {
-          final tab = state.uri.queryParameters['tab'];
-          return MyCricketPage(initialTab: tab);
-        },
-      ),
-      
-      // Feed Route
-      GoRoute(
-        path: '/feed',
-        builder: (context, state) => const FeedPage(),
-      ),
-      
-      // Match Routes
+      // Other Routes (Outside of Shell)
       GoRoute(
         path: '/match-center',
         builder: (context, state) => const MatchCenterPage(),
@@ -347,11 +360,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AdminDashboardPage(),
       ),
       
-      // Profile & Settings
-      GoRoute(
-        path: '/profile',
-        builder: (context, state) => const ProfilePage(),
-      ),
+      // Settings
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsPage(),

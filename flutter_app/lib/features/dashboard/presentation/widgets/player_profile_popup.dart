@@ -25,9 +25,9 @@ class PlayerProfilePopup extends ConsumerWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFF8B5CF6), // Bright Purple
-                Color(0xFF6D28D9), // Deep Purple
-                Color(0xFF4C1D95), // Darkest Purple
+                Color(0xFF1E3A8A), // Navy Blue
+                Color(0xFF1E40AF), // Royal Navy
+                Color(0xFF2563EB), // Light Navy Blue
               ],
             ),
             borderRadius: BorderRadius.circular(24),

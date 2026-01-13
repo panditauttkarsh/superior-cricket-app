@@ -287,20 +287,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back,
-            color: Colors.black,
-            size: 24,
-          ),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/');
-            }
-          },
-        ),
+        automaticallyImplyLeading: false,
         title: const Text(
           'Edit Profile',
           style: TextStyle(
@@ -484,7 +471,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 ),
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 130), // Increased space for floating footer
           ],
         ),
       ),
