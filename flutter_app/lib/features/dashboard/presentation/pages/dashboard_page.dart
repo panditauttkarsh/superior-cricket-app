@@ -1496,11 +1496,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                         Text(
                                           (user?.name ?? 'UTTKARSH PANDITA').toUpperCase(),
                                           style: const TextStyle(
-                                            fontSize: 17,
+                                            fontSize: 15,
                                             fontWeight: FontWeight.w800,
                                             color: Color(0xFF263238),
                                             letterSpacing: 0.5,
                                           ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
@@ -1545,20 +1547,20 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                   ),
                                   // Circular Shadowed Arrow with Teal Border
                                   Container(
-                                    width: 44,
-                                    height: 44,
+                                    width: 32,
+                                    height: 32,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: Colors.white,
                                       border: Border.all(
                                         color: const Color(0xFF009688).withOpacity(0.4), // Teal-ish border
-                                        width: 1.5,
+                                        width: 1.2,
                                       ),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Colors.black.withOpacity(0.1),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 4),
+                                          color: Colors.black.withOpacity(0.08),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 3),
                                         ),
                                       ],
                                     ),
@@ -1566,7 +1568,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                       child: Icon(
                                         Icons.chevron_right,
                                         color: Color(0xFF90A4AE),
-                                        size: 24,
+                                        size: 18,
                                       ),
                                     ),
                                   ),
