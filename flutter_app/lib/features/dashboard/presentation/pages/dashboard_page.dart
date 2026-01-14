@@ -162,28 +162,33 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         limit: 10,
       );
 
-      // Filter out KPL
+      // Filter out KPL (but keep KCPL)
       final filteredTournaments = allTournaments.where((t) {
-        return !t.name.toUpperCase().contains('KPL');
+        final name = t.name.toUpperCase();
+        if (name.contains('KCPL')) return true; // Explicitly allow KCPL
+        return !name.contains('KPL');
       }).toList();
 
-      // Find SPL and SPL S-4
+      TournamentModel? kcplTournament;
       TournamentModel? splTournament;
       TournamentModel? splS4Tournament;
       final otherTournaments = <TournamentModel>[];
 
       for (var t in filteredTournaments) {
         final name = t.name.toUpperCase();
-        if (name.contains('SPL S-4')) {
+        if (name.contains('KCPL')) {
+          kcplTournament = t;
+        } else if (name.contains('SPL S-4')) {
           splS4Tournament = t;
         } else if (name == 'SPL' || (name.contains('SPL') && !name.contains('S-4'))) {
-          splTournament = t; // Assume "SPL" or similar is the main SPL
+          splTournament = t;
         } else {
           otherTournaments.add(t);
         }
       }
 
       final finalTournaments = <TournamentModel>[];
+      if (kcplTournament != null) finalTournaments.add(kcplTournament);
       if (splTournament != null) finalTournaments.add(splTournament);
       if (splS4Tournament != null) finalTournaments.add(splS4Tournament);
       finalTournaments.addAll(otherTournaments);
@@ -198,9 +203,19 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             // Fallback data if no real tournaments matched
              _featuredTournaments = [
               TournamentModel(
+                id: 'kcpl_0',
+                name: 'KCPL',
+                startDate: DateTime.now().add(const Duration(days: 1)),
+                status: 'registration_open',
+                imageUrl: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=800&q=80',
+                prizePool: 75000,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+              ),
+              TournamentModel(
                 id: '0',
                 name: 'SPL', 
-                startDate: DateTime.now().add(const Duration(days: 1)),
+                startDate: DateTime.now().add(const Duration(days: 2)),
                 status: 'registration_open',
                 imageUrl: 'https://images.unsplash.com/photo-1624526267942-ab0ff8a3e972?w=800&q=80',
                 prizePool: 100000,
@@ -210,20 +225,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               TournamentModel(
                 id: '1',
                 name: 'SPL S-4', 
-                startDate: DateTime.now().add(const Duration(days: 2)),
+                startDate: DateTime.now().add(const Duration(days: 3)),
                 status: 'registration_open',
                 imageUrl: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&q=80',
                 prizePool: 50000,
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now(),
-              ),
-              TournamentModel(
-                id: '2',
-                name: 'Champions Trophy Qualifiers',
-                startDate: DateTime.now().add(const Duration(days: 7)),
-                status: 'upcoming',
-                imageUrl: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=800&q=80',
-                prizePool: 25000,
                 createdAt: DateTime.now(),
                 updatedAt: DateTime.now(),
               ),
@@ -1134,95 +1139,140 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text( // Removed padding around text, container handles it
-            'Become a Pro Member',
+          const Text(
+            'Pro Membership',
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
               color: AppColors.textMain,
-              letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 16), // Match spacing in Quick Actions
+          const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF1E3C72),
-                  const Color(0xFF1E3C72),
-                  Colors.white.withOpacity(0.2),
-                ],
-                stops: const [0.0, 0.7, 1.0],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
+              color: const Color(0xFF0A1221),
+              borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF1E3C72).withOpacity(0.4),
-                  blurRadius: 16,
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 15,
                   offset: const Offset(0, 8),
                 ),
               ],
             ),
-            child: Row(
+            child: Stack(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.workspace_premium,
-                    color: Colors.white,
-                    size: 32,
+                // Tech Lines Background
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: TechLinesPainter(),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Pro Membership',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        children: [
+                          // Left Content: Icon + Text
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                                  ),
+                                  child: const Icon(
+                                    Icons.workspace_premium,
+                                    color: Color(0xFFFFD700),
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'UNLOCK YOUR POTENTIAL',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Right Content: Button + Feature text
+                          Expanded(
+                            flex: 2,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Buy Now Button
+                                InkWell(
+                                  onTap: () => context.go('/pro'),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'BUY NOW',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                        SizedBox(width: 4),
+                                        Icon(Icons.call_made, color: Color(0xFFFFD700), size: 12),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                // Bottom Feature text
+                                Text(
+                                  'Ad-Free. Priority Support.',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.5),
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  textAlign: TextAlign.end,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Get exclusive access to premium tournaments',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.95),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                      const SizedBox(height: 12),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'GO PRO TODAY. UNLIMITED ACCESS.',
+                          style: TextStyle(
+                            color: Color(0xFFFFD700),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF1E3C72),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                  child: const Text(
-                    'Buy Now',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
                   ),
                 ),
               ],
@@ -1321,7 +1371,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         fit: BoxFit.cover,
                       ),
                     ),
-                    // Gradient overlay
+                    // Lighter white fading effect starting later
                     Positioned.fill(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
@@ -1330,8 +1380,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              Colors.black.withOpacity(0.4),
+                              Colors.white.withOpacity(0.4),
+                              Colors.white,
                             ],
+                            stops: const [0.82, 0.94, 1.0],
                           ),
                         ),
                       ),
@@ -2164,6 +2216,49 @@ class AcademyGroundPainter extends CustomPainter {
       ..lineTo(size.width * 0.9, size.height * 0.4)
       ..close();
     canvas.drawPath(path2, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Custom Painter for Tech/Circuitry background lines
+class TechLinesPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.08)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+
+    final goldPaint = Paint()
+      ..color = const Color(0xFFFFD700).withOpacity(0.15)
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+    
+    // Top patterns
+    for (var i = 0; i < 4; i++) {
+      path.reset();
+      double y = size.height * (0.1 + i * 0.15);
+      path.moveTo(0, y);
+      path.lineTo(size.width * 0.2, y);
+      path.lineTo(size.width * 0.25, y - 20);
+      path.lineTo(size.width * 0.5, y - 20);
+      canvas.drawPath(path, i % 2 == 0 ? paint : goldPaint);
+    }
+
+    // Bottom patterns
+    for (var i = 0; i < 4; i++) {
+      path.reset();
+      double y = size.height * (0.9 - i * 0.15);
+      path.moveTo(size.width, y);
+      path.lineTo(size.width * 0.8, y);
+      path.lineTo(size.width * 0.75, y + 20);
+      path.lineTo(size.width * 0.4, y + 20);
+      canvas.drawPath(path, i % 2 != 0 ? paint : goldPaint);
+    }
   }
 
   @override

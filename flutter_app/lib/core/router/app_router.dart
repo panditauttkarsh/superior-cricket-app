@@ -32,7 +32,7 @@ import '../../features/match/presentation/pages/match_details_page.dart';
 import '../../features/match/presentation/pages/match_list_page.dart';
 import '../../features/match/presentation/pages/match_detail_screen.dart';
 import '../../features/match/presentation/pages/match_detail_page_comprehensive.dart';
-import '../../features/feed/presentation/pages/feed_page.dart';
+import '../../features/pro/presentation/pages/pro_page.dart';
 import '../../features/admin/presentation/pages/admin_dashboard_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
@@ -158,10 +158,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             },
           ),
           
-          // Feed Route
+          // Pro Route
           GoRoute(
-            path: '/feed',
-            builder: (context, state) => const FeedPage(),
+            path: '/pro',
+            builder: (context, state) => const ProPage(),
           ),
 
           // Profile Route

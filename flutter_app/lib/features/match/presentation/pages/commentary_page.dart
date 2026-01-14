@@ -34,141 +34,131 @@ class CommentaryPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final commentaryAsync = ref.watch(commentaryStreamProvider(matchId));
 
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: showAppBar
-          ? AppBar(
-              title: const Text('Ball-by-Ball Commentary'),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            )
-          : null,
-      body: commentaryAsync.when(
-        data: (commentaryList) {
-          if (commentaryList.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.comment_outlined,
-                    size: 64,
-                    color: Colors.grey[400],
+    final content = commentaryAsync.when(
+      data: (commentaryList) {
+        if (commentaryList.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.comment_outlined,
+                  size: 64,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No commentary yet',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No commentary yet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Commentary will appear here as the match progresses',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[500],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Commentary will appear here as the match progresses',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            );
-          }
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
 
-          // Debug: Print commentary list
-          print('Commentary: Displaying ${commentaryList.length} entries');
-          for (var entry in commentaryList) {
-            print('Commentary: ${entry.over} - ${entry.commentaryText}');
-          }
-          
-          // Sort by timestamp first (strict chronological order), then by over as fallback
-          // This ensures Innings 1 (earlier) comes before Innings 2 (later)
-          final sortedList = List<CommentaryModel>.from(commentaryList)
-            ..sort((a, b) {
-              final timeCompare = a.timestamp.compareTo(b.timestamp);
-              if (timeCompare != 0) return timeCompare;
-              return a.over.compareTo(b.over);
-            });
-          
-          // Convert to grouped format
-          var groupedCommentary = _groupCommentaryWithSummaries(sortedList);
-          
-          // Reverse for display (newest first in UI)
-          // Since ListView has reverse: true, we reverse the list so newest appears at bottom
-          groupedCommentary = groupedCommentary.reversed.toList();
-          
-          print('Commentary: Grouped into ${groupedCommentary.length} items');
-          
-          return ListView.builder(
-            reverse: true, // Show latest at bottom, but scroll to bottom
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            itemCount: groupedCommentary.length,
-            itemBuilder: (context, index) {
-              final item = groupedCommentary[index];
-              final isLatest = index == 0; // Latest is first in reversed list
-              
-              if (item['type'] == 'overSummary') {
-                return OverSummaryCard(
-                  summaryText: item['text'] as String,
-                  isLatest: isLatest,
-                );
-              } else if (item['type'] == 'inningsBreak') {
-                return const InningsBreakCard();
-              } else {
-                final commentary = item['commentary'] as CommentaryModel;
-                // Skip newBatsman entries in grouping, show them directly
-                if (commentary.ballType == 'newBatsman') {
-                  return NewBatsmanCard(
-                    batsmanName: commentary.strikerName,
-                    isLatest: isLatest,
-                  );
-                }
-                return CommentaryCard(
-                  commentary: commentary,
+        // ... existing sorting and grouping logic ...
+        final sortedList = List<CommentaryModel>.from(commentaryList)
+          ..sort((a, b) {
+            final timeCompare = a.timestamp.compareTo(b.timestamp);
+            if (timeCompare != 0) return timeCompare;
+            return a.over.compareTo(b.over);
+          });
+        
+        var groupedCommentary = _groupCommentaryWithSummaries(sortedList);
+        groupedCommentary = groupedCommentary.reversed.toList();
+        
+        return ListView.builder(
+          reverse: true, // Show latest at bottom, but scroll to bottom
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          itemCount: groupedCommentary.length,
+          itemBuilder: (context, index) {
+            final item = groupedCommentary[index];
+            final isLatest = index == 0;
+            
+            if (item['type'] == 'overSummary') {
+              return OverSummaryCard(
+                summaryText: item['text'] as String,
+                isLatest: isLatest,
+              );
+            } else if (item['type'] == 'inningsBreak') {
+              return const InningsBreakCard();
+            } else {
+              final commentary = item['commentary'] as CommentaryModel;
+              if (commentary.ballType == 'newBatsman') {
+                return NewBatsmanCard(
+                  batsmanName: commentary.strikerName,
                   isLatest: isLatest,
                 );
               }
-            },
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(),
-        ),
-        error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Colors.red,
+              return CommentaryCard(
+                commentary: commentary,
+                isLatest: isLatest,
+              );
+            }
+          },
+        );
+      },
+      loading: () => const Center(
+        child: CircularProgressIndicator(),
+      ),
+      error: (error, stack) => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.red,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Error loading commentary',
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey[800],
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Error loading commentary',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.grey[800],
-                ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error.toString(),
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
               ),
-              const SizedBox(height: 8),
-              Text(
-                error.toString(),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
+
+    if (showAppBar) {
+      return Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          title: const Text('Ball-by-Ball Commentary'),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        body: content,
+      );
+    } else {
+      return content;
+    }
   }
   
   /// Group commentary entries and insert over summaries and innings breaks

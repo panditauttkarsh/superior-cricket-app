@@ -334,7 +334,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
         
         // Animated Filter Tabs
         _buildAnimatedFilterTabBar(
@@ -507,7 +507,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
         };
         
         return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: 12),
           child: GestureDetector(
             onTap: () {
               // Navigate to match details page with real-time data
@@ -1062,9 +1062,16 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF90A4AE).withOpacity(0.2), // Cool grey shadow with blue undertone
+            blurRadius: 24, // High blur for soft glow effect
+            offset: const Offset(0, 8), // Vertical depth
+            spreadRadius: 5, // Spread it out
+          ),
+          BoxShadow(
+            color: const Color(0xFF607D8B).withOpacity(0.25), // Darker core shadow
+            blurRadius: 8,
+            offset: const Offset(0, 4), // Closer depth
+            spreadRadius: 0,
           ),
         ],
       ),
@@ -1257,15 +1264,21 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
                     match['winnerId'] == null;
     
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF90A4AE).withOpacity(0.2), 
+            blurRadius: 24, 
+            offset: const Offset(0, 8), 
+            spreadRadius: 5, 
+          ),
+          BoxShadow(
+            color: const Color(0xFF607D8B).withOpacity(0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 4), 
+            spreadRadius: 0,
           ),
         ],
       ),
@@ -1532,15 +1545,21 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     final matchId = match['id'] as String?;
     
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF90A4AE).withOpacity(0.2), 
+            blurRadius: 24, 
+            offset: const Offset(0, 8), 
+            spreadRadius: 5, 
+          ),
+          BoxShadow(
+            color: const Color(0xFF607D8B).withOpacity(0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 4), 
+            spreadRadius: 0,
           ),
         ],
       ),

@@ -8,57 +8,60 @@ class BottomNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentLocation = GoRouterState.of(context).matchedLocation;
     
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A1A2E),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
-      child: BottomAppBar(
-        color: Colors.transparent,
-        elevation: 0,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(
-              context,
-              Icons.home,
-              'Home',
-              0,
-              '/',
-              currentLocation,
-            ),
-            _buildNavItem(
-              context,
-              Icons.sports_cricket,
-              'Matches',
-              1,
-              '/matches',
-              currentLocation,
-            ),
-            const SizedBox(width: 40), // Space for FAB
-            _buildNavItem(
-              context,
-              Icons.newspaper,
-              'Feed',
-              2,
-              '/feed',
-              currentLocation,
-            ),
-            _buildNavItem(
-              context,
-              Icons.person,
-              'Profile',
-              3,
-              '/profile',
-              currentLocation,
+    return SafeArea(
+      bottom: true,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A1A2E),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
             ),
           ],
+        ),
+        child: BottomAppBar(
+          color: Colors.transparent,
+          elevation: 0,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(
+                context,
+                Icons.home,
+                'Home',
+                0,
+                '/',
+                currentLocation,
+              ),
+              _buildNavItem(
+                context,
+                Icons.sports_cricket,
+                'Matches',
+                1,
+                '/matches',
+                currentLocation,
+              ),
+              const SizedBox(width: 40), // Space for FAB
+              _buildNavItem(
+                context,
+                Icons.newspaper,
+                'Feed',
+                2,
+                '/feed',
+                currentLocation,
+              ),
+              _buildNavItem(
+                context,
+                Icons.person,
+                'Profile',
+                3,
+                '/profile',
+                currentLocation,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -74,7 +77,7 @@ class BottomNavBar extends StatelessWidget {
   ) {
     final isActive = currentLocation == path || 
                      (path == '/' && currentLocation == '/') ||
-                     (path != '/' && currentLocation.startsWith(path));
+                     (path != '/' && currentLocation.startsWith('$path/'));
     
     return GestureDetector(
       onTap: () => context.go(path),
