@@ -16,31 +16,11 @@ class MainShell extends ConsumerWidget {
       extendBody: true,
       body: Stack(
         children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            switchInCurve: Curves.easeInOut,
-            switchOutCurve: Curves.easeInOut,
-            transitionBuilder: (Widget child, Animation<double> animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.05, 0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                ),
-              );
-            },
-            child: KeyedSubtree(
-              key: ValueKey(location),
-              child: child,
-            ),
-          ),
+          child,
           Positioned(
             left: 20,
             right: 20,
-            bottom: 16,
+            bottom: 16 + MediaQuery.of(context).padding.bottom,
             child: _buildBottomNavBar(context, location),
           ),
         ],
@@ -85,7 +65,7 @@ class MainShell extends ConsumerWidget {
                 // Center Plus Button
                 _buildCenterPlusButton(context),
 
-                _buildNavItem(context, Icons.rss_feed, Icons.rss_feed, 'Feed', 'feed', '/feed', location),
+                _buildNavItem(context, Icons.workspace_premium, Icons.workspace_premium_outlined, 'PRO', 'pro', '/pro', location),
                 _buildNavItem(context, Icons.person, Icons.person_outline, 'Profile', 'profile', '/profile', location),
               ],
             ),
@@ -128,7 +108,9 @@ class MainShell extends ConsumerWidget {
   }
 
   Widget _buildNavItem(BuildContext context, IconData filledIcon, IconData outlinedIcon, String label, String navKey, String path, String currentLocation) {
-    final isActive = path == '/' ? currentLocation == '/' : currentLocation.startsWith(path);
+    final isActive = path == '/' 
+        ? currentLocation == '/' 
+        : (currentLocation == path || currentLocation.startsWith('$path/'));
     
     return GestureDetector(
       onTap: () {

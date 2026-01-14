@@ -457,26 +457,57 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
         children: [
           // Progress indicator
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             child: Row(
               children: List.generate(3, (index) {
-                // Map steps: 0->0, 1->0, 2->1, 3->2
                 final stepIndex = _currentStep == 0 || _currentStep == 1
                     ? 0
                     : _currentStep == 2
                         ? 1
                         : 2;
                 final isActive = index <= stepIndex;
+                final isCurrent = index == stepIndex;
+                
                 return Expanded(
-                  child: Container(
-                    height: 6,
-                    margin: EdgeInsets.only(right: index < 2 ? 8 : 0),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeInOutCubic,
+                    height: isCurrent ? 8 : 6,
+                    margin: EdgeInsets.only(right: index < 2 ? 12 : 0),
                     decoration: BoxDecoration(
-                      color: isActive
-                          ? AppColors.primary
-                          : AppColors.divider.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(3),
+                      gradient: isActive
+                          ? LinearGradient(
+                              colors: [
+                                AppColors.primary,
+                                AppColors.primary.withOpacity(0.7),
+                              ],
+                            )
+                          : LinearGradient(
+                              colors: [
+                                AppColors.divider.withOpacity(0.3),
+                                AppColors.divider.withOpacity(0.1),
+                              ],
+                            ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: isCurrent
+                          ? [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : [],
                     ),
                   ),
                 );
@@ -486,14 +517,26 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
 
           // Content with animations
           Expanded(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-                  child: _buildStepContent(),
-                ),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 500),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.05, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              child: SingleChildScrollView(
+                key: ValueKey<int>(_currentStep),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                child: _buildStepContent(),
               ),
             ),
           ),
@@ -653,245 +696,169 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Register Teams',
+        ShaderMask(
+          shaderCallback: (bounds) => const LinearGradient(
+            colors: [AppColors.primary, Color(0xFF1E3A8A)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ).createShader(bounds),
+          child: const Text(
+            'Register Teams',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Choose your teams and opponents',
           style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: AppColors.primary,
-            letterSpacing: -0.5,
+            fontSize: 14,
+            color: AppColors.textMeta,
+            fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(height: 24),
         
-        // Home Team
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 8),
-              child: Text(
-                'HOME TEAM',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[500],
-                  letterSpacing: 1.2,
-                ),
+        // Home Team Section
+        _buildStaggeredEntry(
+          index: 0,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTeamLabel('HOME TEAM'),
+              const SizedBox(height: 12),
+              _PremiumTeamCard(
+                controller: _myTeamController,
+                hintText: 'Your Team Name',
+                icon: Icons.groups_rounded,
+                isTournament: widget.tournamentId != null,
+                isLoading: _isLoadingTournamentTeams,
+                items: widget.tournamentId != null ? _tournamentTeamNames : [],
+                selectedItem: _selectedMyTeam,
+                onChanged: (value) {
+                  setState(() {
+                    if (widget.tournamentId != null) {
+                      _selectedMyTeam = value;
+                      _myTeamController.text = value ?? '';
+                    } else {
+                      // Handled by controller
+                    }
+                  });
+                },
               ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.primary.withOpacity(0.1),
-                ),
-              ),
-              child: widget.tournamentId != null
-                  ? _isLoadingTournamentTeams
-                      ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
-                      : DropdownButtonFormField<String>(
-                          value: _selectedMyTeam,
-                          decoration: InputDecoration(
-                            hintText: 'Select Home Team',
-                            hintStyle: TextStyle(
-                              color: AppColors.primary.withOpacity(0.4),
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.groups,
-                              color: AppColors.primary,
-                              size: 20,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                          ),
-                          items: _tournamentTeamNames.map((name) {
-                            return DropdownMenuItem(
-                              value: name,
-                              child: Text(
-                                name,
-                                style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedMyTeam = value;
-                              if (value != null) {
-                                _myTeamController.text = value;
-                              }
-                            });
-                          },
-                        )
-                  : TextField(
-                      controller: _myTeamController,
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'My Team Name',
-                        hintStyle: TextStyle(
-                          color: AppColors.primary.withOpacity(0.4),
-                        ),
-                        prefixIcon: const Icon(
-                          Icons.groups,
-                          color: AppColors.primary,
-                          size: 20,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-            ),
-          ],
+            ],
+          ),
         ),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
 
-        // VS Divider
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              height: 1,
-              width: 48,
-              color: Colors.grey[300],
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'VS',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[400],
-                  letterSpacing: 2,
-                ),
-              ),
-            ),
-            Container(
-              height: 1,
-              width: 48,
-              color: Colors.grey[300],
-            ),
-          ],
-        ),
+        // Animated VS Badge
+        const _AnimatedVSBadge(),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
 
-        // Away Team
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 8),
-              child: Text(
-                'AWAY TEAM',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[500],
-                  letterSpacing: 1.2,
-                ),
+        // Away Team Section
+        _buildStaggeredEntry(
+          index: 1,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTeamLabel('AWAY TEAM'),
+              const SizedBox(height: 12),
+              _PremiumTeamCard(
+                controller: _opponentTeamController,
+                hintText: 'Opponent Team Name',
+                icon: Icons.flag_rounded,
+                isTournament: widget.tournamentId != null,
+                isLoading: _isLoadingTournamentTeams,
+                items: widget.tournamentId != null ? _tournamentTeamNames : [],
+                selectedItem: _selectedOpponentTeam,
+                onChanged: (value) {
+                  setState(() {
+                    if (widget.tournamentId != null) {
+                      _selectedOpponentTeam = value;
+                      _opponentTeamController.text = value ?? '';
+                    } else {
+                      // Handled by controller
+                    }
+                  });
+                },
               ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.primary.withOpacity(0.1),
-                ),
-              ),
-              child: widget.tournamentId != null
-                  ? _isLoadingTournamentTeams
-                      ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
-                      : DropdownButtonFormField<String>(
-                          value: _selectedOpponentTeam,
-                          decoration: InputDecoration(
-                            hintText: 'Select Away Team',
-                            hintStyle: TextStyle(
-                              color: AppColors.primary.withOpacity(0.4),
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.flag,
-                              color: AppColors.primary,
-                              size: 20,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                          ),
-                          items: _tournamentTeamNames.map((name) {
-                            return DropdownMenuItem(
-                              value: name,
-                              child: Text(
-                                name,
-                                style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedOpponentTeam = value;
-                              if (value != null) {
-                                _opponentTeamController.text = value;
-                              }
-                            });
-                          },
-                        )
-                  : TextField(
-                      controller: _opponentTeamController,
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Opponent Team Name',
-                        hintStyle: TextStyle(
-                          color: AppColors.primary.withOpacity(0.4),
-                        ),
-                        prefixIcon: const Icon(
-                          Icons.flag,
-                          color: AppColors.primary,
-                          size: 20,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-            ),
-          ],
+            ],
+          ),
         ),
 
         const SizedBox(height: 24),
 
         // Info text
-        Text(
-          widget.tournamentId != null 
-              ? 'Select teams registered in this tournament.'
-              : 'Match details can be edited later in the match settings before the first ball is bowled.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[400],
-            height: 1.5,
+        _buildStaggeredEntry(
+          index: 2,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    widget.tournamentId != null 
+                        ? 'Select teams registered in this tournament.'
+                        : 'Match details can be edited later.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSec,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTeamLabel(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: AppColors.primary,
+          letterSpacing: 1.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStaggeredEntry({required int index, required Widget child}) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 400 + (index * 150)),
+      curve: Curves.easeOutBack,
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(opacity: value.clamp(0.0, 1.0), child: child),
+        );
+      },
+      child: child,
     );
   }
 
@@ -1777,6 +1744,213 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
           },
         ),
       ],
+    );
+  }
+}
+
+class _PremiumTeamCard extends StatefulWidget {
+  final TextEditingController controller;
+  final String hintText;
+  final IconData icon;
+  final bool isTournament;
+  final bool isLoading;
+  final List<String> items;
+  final String? selectedItem;
+  final Function(String?) onChanged;
+
+  const _PremiumTeamCard({
+    required this.controller,
+    required this.hintText,
+    required this.icon,
+    this.isTournament = false,
+    this.isLoading = false,
+    this.items = const [],
+    this.selectedItem,
+    required this.onChanged,
+  });
+
+  @override
+  State<_PremiumTeamCard> createState() => _PremiumTeamCardState();
+}
+
+class _PremiumTeamCardState extends State<_PremiumTeamCard> {
+  bool _isFocused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _isFocused ? AppColors.primary : AppColors.divider.withOpacity(0.5),
+          width: _isFocused ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _isFocused 
+                ? AppColors.primary.withOpacity(0.15) 
+                : Colors.black.withOpacity(0.03),
+            blurRadius: _isFocused ? 20 : 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: widget.isTournament
+          ? widget.isLoading
+              ? const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                )
+              : DropdownButtonFormField<String>(
+                  value: widget.selectedItem,
+                  decoration: InputDecoration(
+                    hintText: widget.hintText,
+                    hintStyle: TextStyle(color: AppColors.textMeta.withOpacity(0.5)),
+                    prefixIcon: Icon(widget.icon, color: AppColors.primary, size: 20),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  dropdownColor: Colors.white,
+                  icon: const Icon(Icons.expand_more_rounded, color: AppColors.primary),
+                  items: widget.items.map((name) {
+                    return DropdownMenuItem(
+                      value: name,
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                          color: AppColors.textMain,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    widget.onChanged(value);
+                  },
+                )
+          : Focus(
+              onFocusChange: (hasFocus) => setState(() => _isFocused = hasFocus),
+              child: TextField(
+                controller: widget.controller,
+                style: const TextStyle(
+                  color: AppColors.textMain,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+                decoration: InputDecoration(
+                  hintText: widget.hintText,
+                  hintStyle: TextStyle(
+                    color: AppColors.textMeta.withOpacity(0.4),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  prefixIcon: Icon(
+                    widget.icon,
+                    color: _isFocused ? AppColors.primary : AppColors.textMeta.withOpacity(0.6),
+                    size: 20,
+                  ),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+                onChanged: (value) => widget.onChanged(value),
+              ),
+            ),
+    );
+  }
+}
+
+class _AnimatedVSBadge extends StatefulWidget {
+  const _AnimatedVSBadge();
+
+  @override
+  State<_AnimatedVSBadge> createState() => _AnimatedVSBadgeState();
+}
+
+class _AnimatedVSBadgeState extends State<_AnimatedVSBadge> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Animated Glow
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              return Container(
+                width: 36 + (8 * _controller.value),
+                height: 36 + (8 * _controller.value),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppColors.primary.withOpacity(0.2),
+                      AppColors.primary.withOpacity(0.0),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          // VS Circle
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.primary.withOpacity(0.1), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.1),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: const Text(
+              'VS',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                color: AppColors.primary,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ),
+          // Lines
+          Positioned(
+            left: -60,
+            child: Container(height: 1.5, width: 60, color: AppColors.divider.withOpacity(0.5)),
+          ),
+          Positioned(
+            right: -60,
+            child: Container(height: 1.5, width: 60, color: AppColors.divider.withOpacity(0.5)),
+          ),
+        ],
+      ),
     );
   }
 }

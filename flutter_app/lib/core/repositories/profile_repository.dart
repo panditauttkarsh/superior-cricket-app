@@ -70,9 +70,9 @@ class ProfileRepository {
   }
 
   /// Fetch profile by username (case-insensitive)
-  /// Also tries email and name as fallbacks
+  /// Also tries email and name as fallbacks unless exactOnly is true
   /// Returns null if user not found
-  Future<ProfileModel?> getProfileByUsername(String username) async {
+  Future<ProfileModel?> getProfileByUsername(String username, {bool exactOnly = false}) async {
     try {
       // Remove @ if present
       final cleanUsername = username.startsWith('@') 
@@ -89,8 +89,8 @@ class ProfileRepository {
           .limit(1)
           .maybeSingle();
 
-      // Try 2: If not found, try partial username match (handles typos)
-      if (response == null) {
+      // Try 2: If not found, try partial username match (handles typos) - skip if exactOnly is true
+      if (response == null && !exactOnly) {
         print('Profile: Exact match not found, trying partial match...');
         final partialMatches = await _supabase
             .from('profiles')
@@ -104,9 +104,9 @@ class ProfileRepository {
           print('Profile: Found partial match: ${response['username']}');
         }
       }
-
-      // Try 3: If still not found, try searching by email (if input looks like email)
-      if (response == null && cleanUsername.contains('@')) {
+ 
+      // Try 3: Search by email - skip if exactOnly is true
+      if (response == null && !exactOnly && cleanUsername.contains('@')) {
         print('Profile: Trying email search...');
         response = await _supabase
             .from('profiles')
@@ -115,18 +115,18 @@ class ProfileRepository {
             .limit(1)
             .maybeSingle();
       }
-
-      // Try 4: If still not found, try searching by name (cleaned, lowercase)
-      if (response == null) {
+ 
+      // Try 4: Search by name - skip if exactOnly is true
+      if (response == null && !exactOnly) {
         print('Profile: Trying name search...');
         // Clean the input similar to how usernames are generated
         final cleanedName = cleanUsername.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
         
-        // Search in both name and full_name fields
+        // Search in full_name field (name column might not exist)
         final nameMatches = await _supabase
             .from('profiles')
             .select()
-            .or('name.ilike.%$cleanedName%,full_name.ilike.%$cleanedName%')
+            .ilike('full_name', '%$cleanedName%')
             .limit(5);
         
         if (nameMatches.isNotEmpty) {
