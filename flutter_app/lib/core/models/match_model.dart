@@ -18,6 +18,7 @@ class MatchModel {
   final Map<String, dynamic>? scorecard;
   final String? tournamentId;
   final String? createdBy;
+  final String? currentScorerId; // User ID of the current scorer
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -41,6 +42,7 @@ class MatchModel {
     this.winnerId,
     this.scorecard,
     this.createdBy,
+    this.currentScorerId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -72,6 +74,7 @@ class MatchModel {
       winnerId: json['winner_id'] as String?,
       scorecard: json['scorecard'] as Map<String, dynamic>?,
       createdBy: json['created_by'] as String?,
+      currentScorerId: json['current_scorer_id'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -98,6 +101,7 @@ class MatchModel {
       'winner_id': winnerId,
       'scorecard': scorecard,
       'created_by': createdBy,
+      'current_scorer_id': currentScorerId,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };

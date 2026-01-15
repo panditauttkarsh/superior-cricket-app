@@ -434,22 +434,22 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                       // Banner Section
                       _buildBannerSection(),
                       
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
                       
                       // Sell Your Items Section
                       _buildSellItemsSection(),
                       
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
                       
                       // Categories Section
                       _buildCategoriesSection(),
                       
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       
                       // Products Grid
                       _buildProductsGrid(),
                       
-                      const SizedBox(height: 100), // Space for bottom nav
+                      const SizedBox(height: 80), // Space for bottom nav
                     ],
                   ),
                 ),
@@ -467,14 +467,23 @@ class _ShopPageState extends ConsumerState<ShopPage> {
   Widget _buildHeader() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6).withOpacity(0.95),
-        border: Border(
-          bottom: BorderSide(
-            color: const Color(0xFFE5E7EB),
-          ),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            Colors.grey.shade50,
+          ],
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.fromLTRB(20, 48, 20, 16),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       child: Column(
         children: [
           // Top Row
@@ -485,47 +494,61 @@ class _ShopPageState extends ConsumerState<ShopPage> {
               Row(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary,
+                          AppColors.primary.withOpacity(0.8),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
                           color: AppColors.primary.withOpacity(0.3),
-                          blurRadius: 15,
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
                     child: const Icon(
-                      Icons.storefront,
+                      Icons.storefront_rounded,
                       color: Colors.white,
-                      size: 18,
+                      size: 22,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  RichText(
-                    text: const TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'Pitch Point ',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                            letterSpacing: 0.5,
-                          ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RichText(
+                        text: const TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Pitch Point',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ],
                         ),
-                        TextSpan(
-                          text: 'Store',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey,
-                          ),
+                      ),
+                      Text(
+                        'Premium Cricket Store',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade600,
+                          letterSpacing: 0.3,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -534,48 +557,91 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                 children: [
                   Stack(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications_outlined, color: Colors.grey),
-                        onPressed: _showNotifications,
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: IconButton(
+                          icon: Icon(Icons.notifications_outlined, color: Colors.grey.shade700, size: 22),
+                          onPressed: _showNotifications,
+                        ),
                       ),
                       Positioned(
-                        top: 8,
-                        right: 8,
+                        top: 10,
+                        right: 10,
                         child: Container(
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFC72B32), // secondary
+                            color: const Color(0xFFEF4444),
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
+                            border: Border.all(color: Colors.white, width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFEF4444).withOpacity(0.5),
+                                blurRadius: 4,
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(width: 8),
                   Stack(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.shopping_cart_outlined, color: Colors.grey),
-                        onPressed: _showCart,
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.primary,
+                              AppColors.primary.withOpacity(0.9),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 22),
+                          onPressed: _showCart,
+                        ),
                       ),
                       if (_cartItems.isNotEmpty)
                         Positioned(
-                          top: 4,
-                          right: 4,
+                          top: 6,
+                          right: 6,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.all(4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFC72B32),
+                              color: const Color(0xFFEF4444),
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFEF4444).withOpacity(0.5),
+                                  blurRadius: 4,
+                                ),
+                              ],
                             ),
-                            child: Text(
-                              '${_cartItems.fold<int>(0, (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 1))}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${_cartItems.fold<int>(0, (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 1))}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
@@ -586,27 +652,49 @@ class _ShopPageState extends ConsumerState<ShopPage> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           // Search Bar
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.transparent),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade200, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: TextField(
               controller: _searchController,
               onChanged: (_) => _loadProducts(),
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
               decoration: InputDecoration(
-                hintText: 'Search bats, jerseys, gear...',
-                hintStyle: TextStyle(color: Colors.grey[400]),
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.tune, color: Colors.grey),
-                  onPressed: () {},
+                hintText: 'Search for cricket gear...',
+                hintStyle: TextStyle(
+                  color: Colors.grey.shade400,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                ),
+                prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade600, size: 22),
+                suffixIcon: Container(
+                  margin: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.tune_rounded, color: AppColors.primary, size: 20),
+                    onPressed: () {},
+                  ),
                 ),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
           ),
@@ -617,49 +705,70 @@ class _ShopPageState extends ConsumerState<ShopPage> {
 
   Widget _buildBannerSection() {
     return Container(
-      width: double.infinity,
-      height: 200,
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      height: 197,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
             AppColors.primary,
             AppColors.primary.withOpacity(0.85),
+            AppColors.primary.withOpacity(0.75),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Stack(
-        clipBehavior: Clip.hardEdge,
+        clipBehavior: Clip.none,
         children: [
           // Decorative circles
           Positioned(
-            top: -30,
-            right: -30,
+            top: -40,
+            right: -40,
             child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.1),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -40,
-            right: 60,
-            child: Container(
-              width: 100,
-              height: 100,
+              width: 140,
+              height: 140,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withOpacity(0.08),
               ),
             ),
           ),
+          Positioned(
+            bottom: -30,
+            right: 40,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.06),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 30,
+            left: -20,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+          ),
           // Content
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.all(20),
             child: Row(
               children: [
                 // Left side - Text content
@@ -671,70 +780,105 @@ class _ShopPageState extends ConsumerState<ShopPage> {
                     children: [
                       // HOT DEALS badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withOpacity(0.25),
                           borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          '🔥 HOT DEALS',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 1,
                           ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Text(
+                              '🔥',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'HOT DEALS',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      // CRICKET SEASON
+                      const Text(
+                        'CRICKET\nSEASON',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          height: 1.1,
+                          letterSpacing: -0.5,
                         ),
                       ),
                       const SizedBox(height: 6),
-                      // CRICKET SEASON
-                      const Text(
-                        'CRICKET SEASON',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
                       // Subtitle
                       Text(
                         'Get pro gear at 30% off',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withOpacity(0.95),
                           fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       // Shop Now button
                       ElevatedButton(
                         onPressed: () {},
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           elevation: 0,
+                          shadowColor: Colors.black.withOpacity(0.1),
                         ),
-                        child: const Text(
-                          'Shop Now',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Text(
+                              'Shop Now',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            SizedBox(width: 4),
+                            Icon(Icons.arrow_forward_rounded, size: 15),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
                 // Right side - Cricket icon
-                Icon(
-                  Icons.sports_cricket,
-                  size: 80,
-                  color: Colors.white.withOpacity(0.2),
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.1),
+                  ),
+                  child: Icon(
+                    Icons.sports_cricket_rounded,
+                    size: 45,
+                    color: Colors.white.withOpacity(0.4),
+                  ),
                 ),
               ],
             ),

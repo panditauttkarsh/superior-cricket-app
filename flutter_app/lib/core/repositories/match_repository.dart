@@ -205,6 +205,21 @@ class MatchRepository {
     }
   }
 
+  // Assign scorer to a match
+  Future<void> assignScorer(String matchId, String scorerId) async {
+    try {
+      await _supabase
+          .from('matches')
+          .update({
+            'current_scorer_id': scorerId,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', matchId);
+    } catch (e) {
+      throw Exception('Failed to assign scorer: $e');
+    }
+  }
+
   // Delete match
   Future<void> deleteMatch(String matchId) async {
     try {

@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../../core/models/match_model.dart';
 import '../../../../core/repositories/match_repository.dart';
 import '../../../../core/repositories/match_player_repository.dart';
@@ -10,6 +11,7 @@ import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'commentary_page.dart';
 import '../../../live/presentation/pages/go_live_screen.dart';
+import '../widgets/assign_scorer_dialog.dart';
 
 /// Provider for match data
 final matchDetailProvider = StreamProvider.autoDispose.family<MatchModel?, String>((ref, matchId) {
@@ -38,6 +40,7 @@ class MatchDetailPageComprehensive extends ConsumerStatefulWidget {
 class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageComprehensive>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
@@ -61,11 +64,18 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text('Match Details'),
+        elevation: 0,
+        title: const Text(
+          'Match Details',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -75,19 +85,133 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
           },
         ),
         actions: [
+          // Refresh Button with Animation
+          AnimatedRotation(
+            turns: _isRefreshing ? 1 : 0,
+            duration: const Duration(milliseconds: 500),
+            child: IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.white),
+              tooltip: 'Refresh',
+              onPressed: _isRefreshing
+                  ? null
+                  : () async {
+                      setState(() {
+                        _isRefreshing = true;
+                      });
+
+                      // Invalidate providers to refresh data
+                      ref.invalidate(matchDetailProvider(widget.matchId));
+                      ref.invalidate(matchPlayersProvider(widget.matchId));
+
+                      // Wait a bit for the animation and data refresh
+                      await Future.delayed(const Duration(milliseconds: 500));
+
+                      if (mounted) {
+                        setState(() {
+                          _isRefreshing = false;
+                        });
+
+                        // Show success message
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Row(
+                              children: [
+                                Icon(Icons.check_circle, color: Colors.white),
+                                SizedBox(width: 12),
+                                Text('Match data refreshed'),
+                              ],
+                            ),
+                            backgroundColor: Colors.green,
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 2),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+            ),
+          ),
+          // Share Button
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              ref.invalidate(matchDetailProvider(widget.matchId));
-              ref.invalidate(matchPlayersProvider(widget.matchId));
+            icon: const Icon(Icons.share, color: Colors.white),
+            tooltip: 'Share',
+            onPressed: () async {
+              final matchAsync = ref.read(matchDetailProvider(widget.matchId));
+              matchAsync.whenData((match) {
+                if (match != null) {
+                  final team1 = match.team1Name ?? 'Team 1';
+                  final team2 = match.team2Name ?? 'Team 2';
+                  final status = match.status.toUpperCase();
+                  
+                  String shareText = '🏏 $team1 vs $team2\n';
+                  shareText += '📊 Status: $status\n';
+                  
+                  // Add score if available
+                  final scorecard = match.scorecard;
+                  if (scorecard != null && scorecard.isNotEmpty) {
+                    final team1Score = scorecard['team1_score'] as Map<String, dynamic>? ?? {};
+                    final team2Score = scorecard['team2_score'] as Map<String, dynamic>? ?? {};
+                    
+                    if (team1Score.isNotEmpty) {
+                      final runs = team1Score['runs'] ?? 0;
+                      final wickets = team1Score['wickets'] ?? 0;
+                      final overs = team1Score['overs'] ?? 0.0;
+                      shareText += '$team1: $runs/$wickets (${_formatOvers(overs)} Ov)\n';
+                    }
+                    
+                    if (team2Score.isNotEmpty) {
+                      final runs = team2Score['runs'] ?? 0;
+                      final wickets = team2Score['wickets'] ?? 0;
+                      final overs = team2Score['overs'] ?? 0.0;
+                      shareText += '$team2: $runs/$wickets (${_formatOvers(overs)} Ov)\n';
+                    }
+                  }
+                  
+                  shareText += '\n⚡ Format: ${match.overs} Overs\n';
+                  shareText += '📍 Ground: ${match.groundType}\n';
+                  
+                  if (match.winnerId != null) {
+                    final winner = _getTeamName(match, match.winnerId!);
+                    shareText += '🏆 Winner: $winner\n';
+                  }
+                  
+                  shareText += '\nShared from Superior Cricket App';
+                  
+                  // Share the text
+                  Share.share(
+                    shareText,
+                    subject: '$team1 vs $team2 - Match Details',
+                  );
+                }
+              });
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: () {
-              // Share match functionality
+          // Assign Scorer Button (only for match creator)
+          matchAsync.when(
+            data: (match) {
+              if (match != null && currentUserId != null && match.createdBy == currentUserId) {
+                return IconButton(
+                  icon: const Icon(Icons.person_add, color: Colors.white),
+                  tooltip: 'Assign Scorer',
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AssignScorerDialog(
+                        matchId: widget.matchId,
+                        currentScorerId: match.currentScorerId,
+                      ),
+                    );
+                  },
+                );
+              }
+              return const SizedBox.shrink();
             },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: matchAsync.when(

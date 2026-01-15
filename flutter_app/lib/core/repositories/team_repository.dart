@@ -46,6 +46,23 @@ class TeamRepository {
     }
   }
 
+  // Get team by name
+  Future<TeamModel?> getTeamByName(String teamName) async {
+    try {
+      final response = await _supabase
+          .from('teams')
+          .select()
+          .ilike('name', teamName)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return TeamModel.fromJson(response as Map<String, dynamic>);
+    } catch (e) {
+      print('Error getting team by name: $e');
+      return null;
+    }
+  }
+
   // Create a new team
   Future<TeamModel> createTeam(Map<String, dynamic> teamData) async {
     try {

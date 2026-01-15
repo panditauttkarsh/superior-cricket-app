@@ -38,6 +38,7 @@ class TournamentTestDataSeeder {
       final tournamentRepo = ref.read(tournamentRepositoryProvider);
       final teamRepo = ref.read(tournamentTeamRepositoryProvider);
       final matchRepo = ref.read(matchRepositoryProvider);
+      final coreTeamRepo = ref.read(teamRepositoryProvider); // Core teams repository
 
       // 1. Find existing tournament
       final allTournaments = await tournamentRepo.getTournaments();
@@ -48,12 +49,33 @@ class TournamentTestDataSeeder {
       final tournamentId = tournament.id;
       print('✅ Found tournament: ${tournament.name} (ID: $tournamentId)');
 
-      // 2. Get existing teams to avoid duplicates
-      final existingTeams = await teamRepo.getTournamentTeams(tournamentId);
-      final existingTeamNames = existingTeams.map((t) => t.teamName.toLowerCase()).toSet();
-      print('✅ Found ${existingTeams.length} existing teams');
+      // 2. Create a placeholder team in teams table for current user (if not exists)
+      // This is needed because matches table has foreign key constraint to teams table
+      print('📝 Checking/creating placeholder team for current user...');
+      try {
+        // Check if user already has a team
+        final existingUserTeam = await coreTeamRepo.getTeamById(userId);
+        if (existingUserTeam == null) {
+          // Create a placeholder team with user's ID
+          final userTeamData = {
+            'id': userId, // Use user ID as team ID
+            'name': 'Test Team (Auto-generated)',
+            'location': 'Kasauli',
+            'city': 'Kasauli',
+            'state': 'Himachal Pradesh',
+            'created_by': userId,
+          };
+          await _supabase.from('teams').insert(userTeamData);
+          print('✅ Created placeholder team for user');
+        } else {
+          print('✅ User already has a team in teams table');
+        }
+      } catch (e) {
+        print('⚠️  Could not create placeholder team: $e');
+        print('   Attempting to continue anyway...');
+      }
 
-      // 3. Create Teams and store their IDs
+      // 3. Define team names
       final teamNames = [
         'Black Panthers',
         'Valley Warriors',
@@ -64,45 +86,33 @@ class TournamentTestDataSeeder {
         'Retired XI',
       ];
 
+      // 4. Use current user ID as team ID (simplified approach for test data)
+      // This works because we created a placeholder team with user's ID above
       final Map<String, String> teamNameToId = {};
       
-      // First, map existing teams
-      for (final existingTeam in existingTeams) {
-        teamNameToId[existingTeam.teamName] = existingTeam.id;
-      }
-
-      // Then, add new teams that don't exist
+      print('📝 Preparing test teams (using simplified ID approach)...');
+      
       for (final teamName in teamNames) {
-        if (!existingTeamNames.contains(teamName.toLowerCase())) {
-          try {
-            final team = await teamRepo.addTeamToTournament(
-              tournamentId: tournamentId,
-              teamName: teamName,
-            );
-            teamNameToId[teamName] = team.id;
-            print('✅ Added team: $teamName (ID: ${team.id})');
-          } catch (e) {
-            // Team might already exist, try to find it
-            final teams = await teamRepo.getTournamentTeams(tournamentId);
-            final foundTeam = teams.firstWhere(
-              (t) => t.teamName.toLowerCase() == teamName.toLowerCase(),
-              orElse: () => throw Exception('Could not add or find team: $teamName'),
-            );
-            teamNameToId[teamName] = foundTeam.id;
-            print('✅ Found existing team: $teamName (ID: ${foundTeam.id})');
-          }
-        } else {
-          // Find the existing team ID
-          final existingTeam = existingTeams.firstWhere(
-            (t) => t.teamName.toLowerCase() == teamName.toLowerCase(),
+        // Use current user ID for all teams (simplified for test data)
+        teamNameToId[teamName] = userId;
+        
+        // Add to tournament_teams for points table display
+        try {
+          await teamRepo.addTeamToTournament(
+            tournamentId: tournamentId,
+            teamName: teamName,
           );
-          teamNameToId[teamName] = existingTeam.id;
-          print('ℹ️  Team already exists: $teamName (ID: ${existingTeam.id})');
+          print('✅ Added $teamName to tournament');
+        } catch (e) {
+          // Team might already be in tournament, that's okay
+          print('ℹ️  $teamName might already be in tournament');
         }
       }
-      print('✅ Total teams: ${teamNameToId.length}');
 
-      // 4. Create Completed Matches with Scorecards
+      print('✅ Total teams prepared: ${teamNameToId.length}');
+      print('📊 Creating test matches...');
+
+      // 5. Create Completed Matches with Scorecards
       final now = DateTime.now();
       
       // Match 1: Black Panthers vs Valley Warriors
@@ -120,6 +130,7 @@ class TournamentTestDataSeeder {
         wickets2: 8,
         overs2: 20.0,
         completedAt: now.subtract(const Duration(days: 25)),
+        tournamentId: tournamentId,
       );
 
       // Match 2: Brave Hearts vs Tikdi Tigers
@@ -137,6 +148,7 @@ class TournamentTestDataSeeder {
         wickets2: 7,
         overs2: 20.0,
         completedAt: now.subtract(const Duration(days: 24)),
+        tournamentId: tournamentId,
       );
 
       // Match 3: Black Panthers vs Brave Hearts
@@ -154,6 +166,7 @@ class TournamentTestDataSeeder {
         wickets2: 6,
         overs2: 20.0,
         completedAt: now.subtract(const Duration(days: 23)),
+        tournamentId: tournamentId,
       );
 
       // Match 4: Valley Warriors vs Tikdi Tigers
@@ -171,6 +184,7 @@ class TournamentTestDataSeeder {
         wickets2: 9,
         overs2: 20.0,
         completedAt: now.subtract(const Duration(days: 22)),
+        tournamentId: tournamentId,
       );
 
       // Match 5: Asset Assassins vs Staff Mavericks
@@ -188,6 +202,7 @@ class TournamentTestDataSeeder {
         wickets2: 2,
         overs2: 12.5,
         completedAt: now.subtract(const Duration(days: 21)),
+        tournamentId: tournamentId,
       );
 
       // Match 6: Valley Warriors vs Brave Hearts
@@ -205,6 +220,7 @@ class TournamentTestDataSeeder {
         wickets2: 8,
         overs2: 20.0,
         completedAt: now.subtract(const Duration(days: 20)),
+        tournamentId: tournamentId,
       );
 
       // Match 7: Black Panthers vs Tikdi Tigers
@@ -222,6 +238,7 @@ class TournamentTestDataSeeder {
         wickets2: 10,
         overs2: 18.4,
         completedAt: now.subtract(const Duration(days: 19)),
+        tournamentId: tournamentId,
       );
 
       // Match 8: Retired XI vs Asset Assassins
@@ -239,6 +256,7 @@ class TournamentTestDataSeeder {
         wickets2: 1,
         overs2: 10.2,
         completedAt: now.subtract(const Duration(days: 18)),
+        tournamentId: tournamentId,
       );
 
       // Match 9: Valley Warriors vs Asset Assassins
@@ -256,6 +274,7 @@ class TournamentTestDataSeeder {
         wickets2: 8,
         overs2: 20.0,
         completedAt: now.subtract(const Duration(days: 17)),
+        tournamentId: tournamentId,
       );
 
       // Match 10: Brave Hearts vs Staff Mavericks
@@ -273,6 +292,7 @@ class TournamentTestDataSeeder {
         wickets2: 9,
         overs2: 20.0,
         completedAt: now.subtract(const Duration(days: 16)),
+        tournamentId: tournamentId,
       );
 
       print('✅ Created 10 completed matches');
@@ -384,10 +404,16 @@ class TournamentTestDataSeeder {
     required int wickets2,
     required double overs2,
     required DateTime completedAt,
+    String? tournamentId,
   }) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      throw Exception('User must be logged in to create matches');
+    }
+
     final matchData = {
-      'team1_id': team1Id,
-      'team2_id': team2Id,
+      'team1_id': team1Id, // Use actual team ID from teams table
+      'team2_id': team2Id, // Use actual team ID from teams table
       'team1_name': team1Name,
       'team2_name': team2Name,
       'overs': 20,
@@ -396,7 +422,8 @@ class TournamentTestDataSeeder {
       'status': 'completed',
       'completed_at': completedAt.toIso8601String(),
       'started_at': completedAt.subtract(const Duration(hours: 3)).toIso8601String(),
-      'winner_id': winnerId,
+      'winner_id': winnerId, // Use actual team ID from teams table
+      'tournament_id': tournamentId, // Link to tournament
       'scorecard': {
         'team1_score': {
           'runs': runs1,
@@ -410,7 +437,7 @@ class TournamentTestDataSeeder {
         },
         'current_innings': 2,
       },
-      'created_by': _supabase.auth.currentUser?.id,
+      'created_by': userId,
     };
 
     await matchRepo.createMatch(matchData);
