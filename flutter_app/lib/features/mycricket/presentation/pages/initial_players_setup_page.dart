@@ -90,13 +90,17 @@ class _InitialPlayersSetupPageState extends State<InitialPlayersSetupPage> with 
   List<String> get _bowlingTeamPlayers {
     // Determine bowling team based on toss
     if (widget.tossWinner == widget.myTeam && widget.tossChoice == 'Bowl') {
+      // myTeam won and chose to bowl → myTeam bowls
       return widget.myTeamPlayers.isNotEmpty ? widget.myTeamPlayers : ['Bowler 1', 'Bowler 2', 'Bowler 3', 'Bowler 4'];
     } else if (widget.tossWinner == widget.opponentTeam && widget.tossChoice == 'Bowl') {
+      // opponentTeam won and chose to bowl → opponentTeam bowls
       return widget.opponentTeamPlayers.isNotEmpty ? widget.opponentTeamPlayers : ['Bowler 1', 'Bowler 2', 'Bowler 3', 'Bowler 4'];
     } else if (widget.tossWinner == widget.myTeam && widget.tossChoice == 'Bat') {
+      // myTeam won and chose to bat → opponentTeam bowls
       return widget.opponentTeamPlayers.isNotEmpty ? widget.opponentTeamPlayers : ['Bowler 1', 'Bowler 2', 'Bowler 3', 'Bowler 4'];
     } else {
-      return widget.opponentTeamPlayers.isNotEmpty ? widget.opponentTeamPlayers : ['Bowler 1', 'Bowler 2', 'Bowler 3', 'Bowler 4'];
+      // opponentTeam won and chose to bat → myTeam bowls
+      return widget.myTeamPlayers.isNotEmpty ? widget.myTeamPlayers : ['Bowler 1', 'Bowler 2', 'Bowler 3', 'Bowler 4'];
     }
   }
 
@@ -112,6 +116,7 @@ class _InitialPlayersSetupPageState extends State<InitialPlayersSetupPage> with 
     }
 
     // Navigate to scorecard with all match data
+    // Batting/bowling styles will be collected on the scorecard page
     if (mounted) {
       // Calculate max overs per bowler based on match format
       final oversInt = int.tryParse(widget.overs) ?? 20;
@@ -138,6 +143,8 @@ class _InitialPlayersSetupPageState extends State<InitialPlayersSetupPage> with 
       });
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {

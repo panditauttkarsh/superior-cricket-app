@@ -1036,6 +1036,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
               overs: firstInningsOvers,
               isCurrentInnings: false,
               battingStats: _buildBattingStatsFromScorecard(scorecard, firstInningsTeam),
+              bowlingStats: _buildBowlingStatsFromScorecard(scorecard, firstInningsTeam),
             ),
           // Show current innings
           _InningsScorecardWidget(
@@ -1045,6 +1046,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
             overs: currentOvers,
             isCurrentInnings: true,
             battingStats: _buildBattingStatsFromScorecard(scorecard, secondInningsTeam, isCurrent: true),
+            bowlingStats: _buildBowlingStatsFromScorecard(scorecard, secondInningsTeam, isCurrent: true),
           ),
         ],
       ),
@@ -1758,12 +1760,29 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
       // Get all players in the stats map
       final players = statsMap.keys.toList();
       
+      // Get active players for override (to match Summary tab consistency)
+      final striker = isCurrent ? (scorecard['striker'] as String? ?? '') : '';
+      final nonStriker = isCurrent ? (scorecard['non_striker'] as String? ?? '') : '';
+      
       for (final player in players) {
         final playerStats = statsMap[player] as Map<String, dynamic>;
-        final runs = (playerStats['runs'] as num?)?.toInt() ?? 0;
-        final balls = (playerStats['balls'] as num?)?.toInt() ?? 0;
-        final fours = (playerStats['fours'] as num?)?.toInt() ?? 0;
-        final sixes = (playerStats['sixes'] as num?)?.toInt() ?? 0;
+        
+        // Default values from map
+        int runs = (playerStats['runs'] as num?)?.toInt() ?? 0;
+        int balls = (playerStats['balls'] as num?)?.toInt() ?? 0;
+        int fours = (playerStats['fours'] as num?)?.toInt() ?? 0;
+        int sixes = (playerStats['sixes'] as num?)?.toInt() ?? 0;
+        
+        // Override with root keys for active players if isCurrent
+        // This ensures Scorecard matches Summary tab exactly
+        if (isCurrent && player == striker && striker.isNotEmpty) {
+           runs = (scorecard['striker_runs'] as num?)?.toInt() ?? runs;
+           balls = (scorecard['striker_balls'] as num?)?.toInt() ?? balls;
+        } else if (isCurrent && player == nonStriker && nonStriker.isNotEmpty) {
+           runs = (scorecard['non_striker_runs'] as num?)?.toInt() ?? runs;
+           balls = (scorecard['non_striker_balls'] as num?)?.toInt() ?? balls;
+        }
+        
         final strikeRate = balls > 0 ? (runs / balls) * 100 : 0.0;
         // startTime -> minutes calculation omitted for brevity/simplicity in read-only view
         
@@ -1904,6 +1923,75 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
     
     return stats;
   }
+
+  // Build bowling stats from scorecard data
+  List<_PlayerBowlingStat> _buildBowlingStatsFromScorecard(
+    Map<String, dynamic> scorecard,
+    String teamName, {
+    bool isCurrent = false,
+  }) {
+    final stats = <_PlayerBowlingStat>[];
+    
+    // Determine which stats map to use
+    // For bowling, we need the bowlers from the OPPOSING team's innings
+    // If we are displaying Team A's batting scorecard (isCurrent=true), 
+    // we need Team B's bowlers (from 'bowler_stats_map' if isCurrent is true)
+    
+    // Wait, the scorecard argument structure in _buildScorecardTab passes:
+    // _InningsScorecardWidget(teamName: BattingTeam ...)
+    // So 'teamName' is the Batting Team.
+    // We want the bowlers who bowled AGAINST this team.
+    
+    // In the Summary tab logic:
+    // final bowlerStatsMap = scorecard['bowler_stats_map']
+    // This 'bowler_stats_map' contains bowlers for the CURRENT active innings.
+    
+    Map<String, dynamic>? statsMap;
+    
+    if (isCurrent) {
+      // Current innings bowlers (bowling against the current batting team)
+      statsMap = scorecard['bowler_stats_map'] as Map<String, dynamic>?;
+    } else {
+      // First innings bowlers (bowled against the first batting team)
+      statsMap = scorecard['first_innings_bowler_stats'] as Map<String, dynamic>?;
+    }
+    
+    if (statsMap != null && statsMap.isNotEmpty) {
+      final bowlers = statsMap.keys.toList();
+      
+      // Get active bowler for override
+      final currentBowler = isCurrent ? (scorecard['bowler'] as String? ?? '') : '';
+
+      for (final bowler in bowlers) {
+        final bowlerStats = statsMap[bowler] as Map<String, dynamic>;
+        
+        double overs = (bowlerStats['overs'] as num?)?.toDouble() ?? 0.0;
+        int maidens = (bowlerStats['maidens'] as num?)?.toInt() ?? 0;
+        int runs = (bowlerStats['runs'] as num?)?.toInt() ?? 0;
+        int wickets = (bowlerStats['wickets'] as num?)?.toInt() ?? 0;
+        
+        // Override with root keys for active bowler if isCurrent
+        if (isCurrent && bowler == currentBowler && currentBowler.isNotEmpty) {
+          overs = (scorecard['bowler_overs'] as num?)?.toDouble() ?? overs;
+          runs = (scorecard['bowler_runs'] as num?)?.toInt() ?? runs;
+          wickets = (scorecard['bowler_wickets'] as num?)?.toInt() ?? wickets;
+        }
+
+        final economy = overs > 0 ? runs / overs : 0.0; // Rough eco calc
+        
+        stats.add(_PlayerBowlingStat(
+          bowlerName: bowler,
+          overs: overs,
+          maidens: maidens,
+          runs: runs,
+          wickets: wickets,
+          economy: economy,
+        ));
+      }
+    }
+    
+    return stats;
+  }
 }
 
 // Delegate for the pinned TabBar in NestedScrollView
@@ -1956,6 +2044,25 @@ class _PlayerBattingStat {
   });
 }
 
+// Player bowling statistics
+class _PlayerBowlingStat {
+  final String bowlerName;
+  final double overs;
+  final int maidens;
+  final int runs;
+  final int wickets;
+  final double economy;
+
+  _PlayerBowlingStat({
+    required this.bowlerName,
+    required this.overs,
+    required this.maidens,
+    required this.runs,
+    required this.wickets,
+    required this.economy,
+  });
+}
+
 // Expandable Innings Scorecard Widget
 class _InningsScorecardWidget extends StatefulWidget {
   final String teamName;
@@ -1972,7 +2079,10 @@ class _InningsScorecardWidget extends StatefulWidget {
     required this.overs,
     required this.isCurrentInnings,
     required this.battingStats,
+    required this.bowlingStats,
   });
+
+  final List<_PlayerBowlingStat> bowlingStats;
 
   @override
   State<_InningsScorecardWidget> createState() => _InningsScorecardWidgetState();
@@ -2206,6 +2316,14 @@ class _InningsScorecardWidgetState extends State<_InningsScorecardWidget>
                     battingStats: widget.battingStats,
                   ),
                 ),
+                if (widget.bowlingStats.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: _BowlingScorecardTable(
+                      bowlingStats: widget.bowlingStats,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -2214,6 +2332,181 @@ class _InningsScorecardWidgetState extends State<_InningsScorecardWidget>
     );
   }
 }
+
+// Bowling Scorecard Table Widget
+class _BowlingScorecardTable extends StatelessWidget {
+  final List<_PlayerBowlingStat> bowlingStats;
+
+  const _BowlingScorecardTable({required this.bowlingStats});
+
+  // Fixed column widths
+  static const double _statColumnWidth = 45.0; 
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.borderLight.withOpacity(0.5),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.elevated.withOpacity(0.6),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              border: Border(
+                bottom: BorderSide(
+                  color: AppColors.borderLight.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Bowlers',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSec.withOpacity(0.8),
+                      fontFamily: 'Inter',
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: _statColumnWidth,
+                  child: _buildHeaderCell('O'),
+                ),
+                SizedBox(
+                  width: _statColumnWidth,
+                  child: _buildHeaderCell('M'),
+                ),
+                SizedBox(
+                  width: _statColumnWidth,
+                  child: _buildHeaderCell('R'),
+                ),
+                SizedBox(
+                  width: _statColumnWidth,
+                  child: _buildHeaderCell('W'),
+                ),
+                SizedBox(
+                  width: 50,
+                  child: _buildHeaderCell('Eco'),
+                ),
+              ],
+            ),
+          ),
+          // Table Rows
+          ...bowlingStats.asMap().entries.map((entry) {
+            final index = entry.key;
+            final stat = entry.value;
+            final isLast = index == bowlingStats.length - 1;
+            return _buildBowlingRow(stat, isLast);
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderCell(String text) {
+    return Text(
+      text,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textSec.withOpacity(0.8),
+        fontFamily: 'Inter',
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  Widget _buildBowlingRow(_PlayerBowlingStat stat, bool isLast) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : Border(
+                bottom: BorderSide(
+                  color: AppColors.borderLight.withOpacity(0.3),
+                  width: 0.5,
+                ),
+              ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              stat.bowlerName,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textMain,
+                fontFamily: 'Inter',
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          SizedBox(
+            width: _statColumnWidth,
+            child: _buildDataCell(_formatOvers(stat.overs)),
+          ),
+          SizedBox(
+            width: _statColumnWidth,
+            child: _buildDataCell(stat.maidens.toString()),
+          ),
+          SizedBox(
+            width: _statColumnWidth,
+            child: _buildDataCell(stat.runs.toString(), isBold: true),
+          ),
+          SizedBox(
+            width: _statColumnWidth,
+            child: _buildDataCell(stat.wickets.toString(), isBold: true),
+          ),
+          SizedBox(
+            width: 50,
+            child: _buildDataCell(stat.economy.toStringAsFixed(1)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataCell(String text, {bool isBold = false}) {
+    return Text(
+      text,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: isBold ? FontWeight.w600 : FontWeight.w500,
+        color: AppColors.textMain,
+      ),
+    );
+  }
+
+  String _formatOvers(double overs) {
+    final wholeOvers = overs.floor();
+    final balls = ((overs - wholeOvers) * 6).round();
+    if (balls == 6) {
+      return '${wholeOvers + 1}.0';
+    }
+    return '$wholeOvers.$balls';
+  }
+}
+
 
 // Batting Scorecard Table Widget
 class _BattingScorecardTable extends StatelessWidget {

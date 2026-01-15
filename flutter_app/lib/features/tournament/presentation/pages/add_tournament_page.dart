@@ -7,9 +7,11 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/services/storage_service.dart';
+import '../../../../core/models/tournament_model.dart';
 
 class AddTournamentPage extends ConsumerStatefulWidget {
-  const AddTournamentPage({super.key});
+  final TournamentModel? initialTournament;
+  const AddTournamentPage({super.key, this.initialTournament});
 
   @override
   ConsumerState<AddTournamentPage> createState() => _AddTournamentPageState();
@@ -25,6 +27,8 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
 
   File? _bannerImage;
   File? _logoImage;
+  String? _existingBannerUrl;
+  String? _existingLogoUrl;
   DateTime? _startDate;
   DateTime? _endDate;
   String? _category;
@@ -47,6 +51,45 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
   final List<String> _pitchTypes = ['matting', 'rough', 'cemented', 'astro-turf'];
   final List<String> _grounds = ['MCG Stadium', 'Lord\'s Cricket Ground', 'Wankhede Stadium', 'Chepauk Stadium'];
   final List<String> _customGrounds = [];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialTournament != null) {
+      final t = widget.initialTournament!;
+      _nameController.text = t.name;
+      _cityController.text = t.city;
+      _groundController.text = t.ground ?? '';
+      _organizerNameController.text = t.organizerName;
+      _organizerMobileController.text = t.organizerMobile;
+      _startDate = t.startDate;
+      _endDate = t.endDate;
+      
+      // Fix for Ground Dropdown Crash
+      // Ensure the existing ground is in the list of items
+      if (t.ground != null && 
+          t.ground!.isNotEmpty && 
+          !_grounds.contains(t.ground) && 
+          !_customGrounds.contains(t.ground)) {
+        _customGrounds.add(t.ground!);
+      }
+      
+      // Handle dropdowns - ensure value exists in list or add/handle 'other' logic if needed
+      // For now assuming values match
+      if (_categories.contains(t.category)) {
+        _category = t.category;
+      }
+      if (_ballTypes.contains(t.ballType)) {
+        _ballType = t.ballType;
+      }
+      if (_pitchTypes.contains(t.pitchType)) {
+        _pitchType = t.pitchType;
+      }
+      
+      _existingBannerUrl = t.bannerUrl;
+      _existingLogoUrl = t.logoUrl;
+    }
+  }
 
   @override
   void dispose() {
@@ -138,7 +181,7 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
     final user = authState.user;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in to create a tournament')),
+        const SnackBar(content: Text('Please log in to manage tournaments')),
       );
       return;
     }
@@ -151,11 +194,9 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
       final tournamentRepo = ref.read(tournamentRepositoryProvider);
       final storageService = ref.read(storageServiceProvider);
 
-      // Upload images first
-      String? bannerUrl;
-      String? logoUrl;
+      final isEdit = widget.initialTournament != null;
+      TournamentModel tournament;
 
-      // Create tournament first to get ID for image naming
       final tournamentData = {
         'name': _nameController.text.trim(),
         'city': _cityController.text.trim(),
@@ -167,12 +208,21 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
         'category': _category,
         'ball_type': _ballType,
         'pitch_type': _pitchType,
-        'created_by': user.id,
+        if (!isEdit) 'created_by': user.id,
       };
 
-      final tournament = await tournamentRepo.createTournament(tournamentData);
+      if (isEdit) {
+        // Update existing tournament
+        tournament = await tournamentRepo.updateTournament(widget.initialTournament!.id, tournamentData);
+      } else {
+        // Create new tournament
+        tournament = await tournamentRepo.createTournament(tournamentData);
+      }
 
-      // Upload images after tournament creation
+      // Handle Image Uploads
+      String? bannerUrl;
+      String? logoUrl;
+
       if (_bannerImage != null) {
         bannerUrl = await storageService.uploadTournamentBanner(
           _bannerImage!,
@@ -187,7 +237,7 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
         );
       }
 
-      // Update tournament with image URLs
+      // Update tournament with new image URLs if any
       if (bannerUrl != null || logoUrl != null) {
         await tournamentRepo.updateTournament(tournament.id, {
           if (bannerUrl != null) 'banner_url': bannerUrl,
@@ -196,14 +246,22 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
       }
 
       if (mounted) {
-        // Navigate to tournament home
-        context.go('/tournament/${tournament.id}');
+        if (isEdit) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Tournament updated successfully!')),
+          );
+          // Pop back to detail page with refreshed data (or just pop, parent should refresh)
+          context.pop();
+        } else {
+          // Navigate to tournament home for new tournament
+          context.go('/tournament/${tournament.id}');
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to create tournament: $e'),
+            content: Text('Failed to ${widget.initialTournament != null ? 'update' : 'create'} tournament: $e'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -222,8 +280,8 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Create Tournament',
+        title: Text(
+          widget.initialTournament != null ? 'Edit Tournament' : 'Create Tournament',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             letterSpacing: -0.5,
@@ -431,7 +489,7 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
                                     Icon(Icons.emoji_events_rounded, size: 22, color: Colors.white),
                                     SizedBox(width: 12),
                                     Text(
-                                      'CREATE TOURNAMENT',
+                                      widget.initialTournament != null ? 'UPDATE TOURNAMENT' : 'CREATE TOURNAMENT',
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w800,
@@ -469,9 +527,14 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
                 color: AppColors.elevated,
                 image: _bannerImage != null
                     ? DecorationImage(image: FileImage(_bannerImage!), fit: BoxFit.cover)
-                    : null,
+                    : (_existingBannerUrl != null
+                        ? DecorationImage(
+                            image: NetworkImage(_existingBannerUrl!),
+                            fit: BoxFit.cover,
+                          )
+                        : null),
               ),
-              child: _bannerImage == null
+              child: (_bannerImage == null && _existingBannerUrl == null)
                   ? Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -513,8 +576,10 @@ class _AddTournamentPageState extends ConsumerState<AddTournamentPage> {
                   border: Border.all(color: Colors.white, width: 4),
                 ),
                 child: ClipOval(
-                  child: _logoImage != null
-                      ? Image.file(_logoImage!, fit: BoxFit.cover)
+                  child: (_logoImage != null || _existingLogoUrl != null)
+                      ? (_logoImage != null 
+                          ? Image.file(_logoImage!, fit: BoxFit.cover)
+                          : Image.network(_existingLogoUrl!, fit: BoxFit.cover))
                       : Container(
                           color: AppColors.surface,
                           child: Column(
