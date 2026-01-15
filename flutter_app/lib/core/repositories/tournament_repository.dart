@@ -123,7 +123,11 @@ class TournamentRepository {
 
       // Apply status filter if provided
       if (status != null && status != 'All') {
-        queryBuilder = queryBuilder.eq('status', status.toLowerCase());
+        if (status == 'past') {
+          queryBuilder = queryBuilder.in_('status', ['completed', 'locked']);
+        } else {
+          queryBuilder = queryBuilder.eq('status', status.toLowerCase());
+        }
       }
 
       // Apply format filter if provided

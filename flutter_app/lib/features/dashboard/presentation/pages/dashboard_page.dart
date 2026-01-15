@@ -296,7 +296,51 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   // Pro Membership Section
                   _buildProMembershipSection(),
                   
-                  const SizedBox(height: 130), // Increased space to ensure content clears floating footer
+                  // Footer
+                  const SizedBox(height: 60),
+                  const Divider(color: AppColors.divider, thickness: 1),
+                  
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 60),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Image.asset(
+                            'assets/images/home_logo.png',
+                            height: 70,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(height: 16),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              'Every match deserves a spotlight !',
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w900,
+                                fontStyle: FontStyle.italic,
+                                color: Colors.grey,
+                                letterSpacing: -0.5,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                           Text(
+                            'Built with love and passion in Jammu, India.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 100), // Reduced slightly as padding covers some space, but ensuring clearing floating footer
                 ],
               ),
             ),

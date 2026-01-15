@@ -59,7 +59,7 @@ class MainShell extends ConsumerWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildNavItem(context, Icons.home, Icons.home_outlined, 'Home', 'home', '/', location),
+                _buildNavItem(context, null, null, 'Home', 'home', '/', location, assetPath: 'assets/images/home_logo.png'),
                 _buildNavItem(context, Icons.sports_cricket, Icons.sports_cricket_outlined, 'My Cricket', 'my-matches', '/my-cricket', location),
                 
                 // Center Plus Button
@@ -107,7 +107,7 @@ class MainShell extends ConsumerWidget {
     );
   }
 
-  Widget _buildNavItem(BuildContext context, IconData filledIcon, IconData outlinedIcon, String label, String navKey, String path, String currentLocation) {
+  Widget _buildNavItem(BuildContext context, IconData? filledIcon, IconData? outlinedIcon, String label, String navKey, String path, String currentLocation, {String? assetPath}) {
     final isActive = path == '/' 
         ? currentLocation == '/' 
         : (currentLocation == path || currentLocation.startsWith('$path/'));
@@ -129,13 +129,21 @@ class MainShell extends ConsumerWidget {
               color: isActive ? AppColors.primary : Colors.transparent, 
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              isActive ? filledIcon : outlinedIcon,
-              color: isActive 
-                  ? Colors.white
-                  : AppColors.textMeta,
-              size: 22,
-            ),
+            child: assetPath != null
+                ? Padding(
+                    padding: const EdgeInsets.all(5.5), // Reduced padding to increase size ~1.3x
+                    child: Image.asset(
+                      assetPath,
+                      color: isActive ? Colors.white : AppColors.textMeta,
+                    ),
+                  )
+                : Icon(
+                    isActive ? filledIcon : outlinedIcon,
+                    color: isActive 
+                        ? Colors.white
+                        : AppColors.textMeta,
+                    size: 22,
+                  ),
           ),
           const SizedBox(height: 2), // Tighter spacing
           Text(

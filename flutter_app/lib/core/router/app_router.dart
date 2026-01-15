@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/models/tournament_model.dart';
 
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/onboarding_page.dart';
@@ -324,7 +325,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/create-tournament',
-        builder: (context, state) => const AddTournamentPage(),
+        builder: (context, state) {
+          final tournament = state.extra as TournamentModel?;
+          return AddTournamentPage(initialTournament: tournament);
+        },
       ),
       GoRoute(
         path: '/tournament/:id/add-teams',

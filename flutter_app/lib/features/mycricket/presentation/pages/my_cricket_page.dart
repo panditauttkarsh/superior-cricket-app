@@ -874,58 +874,116 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
-                          // Second row: T20 Bash
-                          GestureDetector(
-                            onTap: () {
-                              setDialogState(() {
-                                tempFilter = 'T20 Bash';
-                              });
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              decoration: BoxDecoration(
-                                gradient: tempFilter == 'T20 Bash'
-                                    ? LinearGradient(
-                                        colors: [
-                                          AppColors.primary,
-                                          AppColors.primary.withOpacity(0.8),
-                                        ],
-                                      )
-                                    : null,
-                                color: tempFilter == 'T20 Bash' ? null : AppColors.background,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: tempFilter == 'T20 Bash'
-                                      ? AppColors.primary
-                                      : AppColors.divider,
-                                  width: tempFilter == 'T20 Bash' ? 2 : 1,
-                                ),
-                                boxShadow: tempFilter == 'T20 Bash'
-                                    ? [
-                                        BoxShadow(
-                                          color: AppColors.primary.withOpacity(0.3),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 4),
+                          const SizedBox(height: 6),
+                          // Second row: Past, T20 Bash
+                          Row(
+                            children: [
+                              // Past chip
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setDialogState(() {
+                                      tempFilter = 'Past';
+                                    });
+                                  },
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      gradient: tempFilter == 'Past'
+                                          ? LinearGradient(
+                                              colors: [
+                                                AppColors.primary,
+                                                AppColors.primary.withOpacity(0.8),
+                                              ],
+                                            )
+                                          : null,
+                                      color: tempFilter == 'Past' ? null : AppColors.background,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: tempFilter == 'Past'
+                                            ? AppColors.primary
+                                            : AppColors.divider,
+                                        width: 1.5,
+                                      ),
+                                      boxShadow: tempFilter == 'Past'
+                                          ? [
+                                              BoxShadow(
+                                                color: AppColors.primary.withOpacity(0.3),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ]
+                                          : null,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'Past',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: tempFilter == 'Past' ? FontWeight.w600 : FontWeight.w500,
+                                          color: tempFilter == 'Past' ? Colors.white : AppColors.textSec,
                                         ),
-                                      ]
-                                    : null,
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'T20 Bash',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: tempFilter == 'T20 Bash' ? FontWeight.w600 : FontWeight.w500,
-                                      color: tempFilter == 'T20 Bash' ? Colors.white : AppColors.textSec,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 6),
+                              // T20 Bash chip
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setDialogState(() {
+                                      tempFilter = 'T20 Bash';
+                                    });
+                                  },
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      gradient: tempFilter == 'T20 Bash'
+                                          ? LinearGradient(
+                                              colors: [
+                                                AppColors.primary,
+                                                AppColors.primary.withOpacity(0.8),
+                                              ],
+                                            )
+                                          : null,
+                                      color: tempFilter == 'T20 Bash' ? null : AppColors.background,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: tempFilter == 'T20 Bash'
+                                            ? AppColors.primary
+                                            : AppColors.divider,
+                                        width: 1.5,
+                                      ),
+                                      boxShadow: tempFilter == 'T20 Bash'
+                                          ? [
+                                              BoxShadow(
+                                                color: AppColors.primary.withOpacity(0.3),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ]
+                                          : null,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'T20 Bash',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: tempFilter == 'T20 Bash' ? FontWeight.w600 : FontWeight.w500,
+                                          color: tempFilter == 'T20 Bash' ? Colors.white : AppColors.textSec,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -2243,6 +2301,13 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
             _buildOpenTournamentsSection(filter: 'Upcoming'),
           ],
         );
+      case 'Past': // Added Past case
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildOpenTournamentsSection(filter: 'Past'),
+          ],
+        );
       case 'T20 Bash':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2490,7 +2555,8 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     
     // Filter tournaments based on selected filter
     if (filter == null || filter == 'All') {
-      filteredTournaments = _allTournaments;
+      filteredTournaments = _allTournaments.toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     } else if (filter == 'Live') {
       filteredTournaments = _allTournaments.where((t) => t.status == 'ongoing').toList();
     } else if (filter == 'Upcoming') {
@@ -2503,6 +2569,13 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     } else if (filter == 'T20') {
       // For now, all tournaments (you can add format field to TournamentModel if needed)
       filteredTournaments = _allTournaments;
+    } else if (filter == 'Past') {
+      filteredTournaments = _allTournaments.where((t) {
+        final isCompletedOrLocked = t.status == 'completed' || t.status == 'locked';
+        final isEndDatePassed = t.endDate != null && t.endDate!.isBefore(DateTime.now());
+        return isCompletedOrLocked || isEndDatePassed;
+      }).toList()
+      ..sort((a, b) => b.startDate.compareTo(a.startDate)); // Sort by start date descending (most recent first)
     }
     
     // Apply search filter
@@ -2570,7 +2643,9 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
                   ? 'Live Tournaments'
                   : filter == 'Upcoming'
                       ? 'Upcoming Tournaments'
-                      : 'T20 Tournaments',
+                      : filter == 'Past'
+                          ? 'Past Tournaments'
+                          : 'T20 Tournaments',
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,

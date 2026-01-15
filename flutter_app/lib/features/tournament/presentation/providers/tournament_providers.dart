@@ -76,6 +76,8 @@ final filteredTournamentsProvider = FutureProvider<List<TournamentModel>>((ref) 
     dbStatus = 'ongoing';
   } else if (filters.status == 'Upcoming') {
     dbStatus = 'upcoming';
+  } else if (filters.status == 'Past') {
+    dbStatus = 'past';
   } else if (filters.status != 'All') {
     dbStatus = filters.status.toLowerCase();
   }

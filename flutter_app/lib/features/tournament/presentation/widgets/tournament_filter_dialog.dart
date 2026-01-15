@@ -68,7 +68,7 @@ class _TournamentFilterDialogState extends ConsumerState<TournamentFilterDialog>
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: ['All', 'Live Now', 'Upcoming', 'Completed'].map((status) {
+              children: ['All', 'Live Now', 'Upcoming', 'Completed', 'Past'].map((status) {
                 final isSelected = selectedStatus == status;
                 return GestureDetector(
                   onTap: () {

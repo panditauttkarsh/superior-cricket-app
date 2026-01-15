@@ -17,6 +17,12 @@ class TournamentModel {
   final String? logoUrl;
   final String inviteLink;
   final String? category;
+  final String city;
+  final String? ground;
+  final String organizerName;
+  final String organizerMobile;
+  final String? ballType;
+  final String? pitchType;
 
   TournamentModel({
     required this.id,
@@ -37,6 +43,12 @@ class TournamentModel {
     this.logoUrl,
     this.inviteLink = '',
     this.category,
+    this.city = '',
+    this.ground,
+    this.organizerName = '',
+    this.organizerMobile = '',
+    this.ballType,
+    this.pitchType,
   });
 
   factory TournamentModel.fromJson(Map<String, dynamic> json) {
@@ -63,6 +75,12 @@ class TournamentModel {
       logoUrl: json['logo_url'] as String?,
       inviteLink: json['invite_link'] as String? ?? '',
       category: json['category'] as String?,
+      city: json['city'] as String? ?? '',
+      ground: json['ground'] as String?,
+      organizerName: json['organizer_name'] as String? ?? '',
+      organizerMobile: json['organizer_mobile'] as String? ?? '',
+      ballType: json['ball_type'] as String?,
+      pitchType: json['pitch_type'] as String?,
     );
   }
 
@@ -83,6 +101,12 @@ class TournamentModel {
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'category': category,
+      'city': city,
+      'ground': ground,
+      'organizer_name': organizerName,
+      'organizer_mobile': organizerMobile,
+      'ball_type': ballType,
+      'pitch_type': pitchType,
     };
   }
 }

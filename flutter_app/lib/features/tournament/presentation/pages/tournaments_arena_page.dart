@@ -580,7 +580,7 @@ class _TournamentsArenaPageState extends ConsumerState<TournamentsArenaPage> {
 
   Widget _buildFilterTabs() {
     final filters = ref.watch(tournamentFiltersProvider);
-    final tabs = ['All', 'Live Now', 'Upcoming', 'T20 Bash'];
+    final tabs = ['All', 'Live Now', 'Upcoming', 'Past', 'T20 Bash'];
     
     return SizedBox(
       height: 40,

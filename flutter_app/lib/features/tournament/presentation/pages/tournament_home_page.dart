@@ -165,13 +165,25 @@ class _TournamentHomePageState extends ConsumerState<TournamentHomePage>
                       PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert, color: Colors.white),
                         onSelected: (value) {
-                          if (value == 'seed_test_data') {
+                          if (value == 'edit') {
+                            context.push('/create-tournament', extra: tournament);
+                          } else if (value == 'seed_test_data') {
                             _seedIntoKPL(context, ref);
                           } else if (value == 'share') {
                             // Share tournament
                           }
                         },
                         itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 20),
+                                SizedBox(width: 8),
+                                Text('Edit Tournament Details'),
+                              ],
+                            ),
+                          ),
                           const PopupMenuItem(
                             value: 'seed_test_data',
                             child: Row(

@@ -97,6 +97,62 @@ class _Delivery {
     this.shotType,
     required this.timestamp,
   });
+
+  // Convert to JSON for storage
+  Map<String, dynamic> toJson() {
+    return {
+      'deliveryNumber': deliveryNumber,
+      'over': over,
+      'ball': ball,
+      'striker': striker,
+      'nonStriker': nonStriker,
+      'bowler': bowler,
+      'runs': runs,
+      'teamTotal': teamTotal,
+      'strikerRuns': strikerRuns,
+      'strikerBalls': strikerBalls,
+      'bowlerRuns': bowlerRuns,
+      'bowlerLegalBalls': bowlerLegalBalls,
+      'wickets': wickets,
+      'wicketType': wicketType,
+      'extraType': extraType,
+      'extraRuns': extraRuns,
+      'isLegalBall': isLegalBall,
+      'isShortRun': isShortRun,
+      'commentaryId': commentaryId,
+      'shotDirection': shotDirection,
+      'shotType': shotType,
+      'timestamp': timestamp.toIso8601String(),
+    };
+  }
+
+  // Create from JSON
+  factory _Delivery.fromJson(Map<String, dynamic> json) {
+    return _Delivery(
+      deliveryNumber: json['deliveryNumber'] as int,
+      over: json['over'] as int,
+      ball: json['ball'] as int,
+      striker: json['striker'] as String,
+      nonStriker: json['nonStriker'] as String,
+      bowler: json['bowler'] as String,
+      runs: json['runs'] as int,
+      teamTotal: json['teamTotal'] as int,
+      strikerRuns: json['strikerRuns'] as int,
+      strikerBalls: json['strikerBalls'] as int,
+      bowlerRuns: json['bowlerRuns'] as int,
+      bowlerLegalBalls: json['bowlerLegalBalls'] as int,
+      wickets: json['wickets'] as int,
+      wicketType: json['wicketType'] as String?,
+      extraType: json['extraType'] as String?,
+      extraRuns: json['extraRuns'] as int?,
+      isLegalBall: json['isLegalBall'] as bool,
+      isShortRun: json['isShortRun'] as bool,
+      commentaryId: json['commentaryId'] as String?,
+      shotDirection: json['shotDirection'] as String?,
+      shotType: json['shotType'] as String?,
+      timestamp: DateTime.parse(json['timestamp'] as String),
+    );
+  }
 }
 
 // Batting statistics for a single player in an innings
@@ -721,6 +777,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             'bowler_stats_map': bowlerStatsMapSerialized,
             'first_innings_player_stats': firstInningsPlayerStatsSerialized,
             'first_innings_bowler_stats': firstInningsBowlerStatsSerialized,
+            'deliveries': _deliveries.map((d) => d.toJson()).toList(),
+            'first_innings_deliveries': _firstInningsDeliveries.map((d) => d.toJson()).toList(),
           };
         
         await matchRepo.updateScorecard(widget.matchId!, scorecard);
@@ -1015,10 +1073,14 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _deliveries.add(delivery);
     
     // Update player stats from delivery
-    _updatePlayerStatsFromDelivery(delivery);
+    // Note: We now recalculate ALL stats from scratch to ensure mathematical correctness
+    // This seems expensive but for < 300 deliveries it's negligible and guarantees 
+    // strict adherence to rules (maidens, economy, etc.) defined by user.
+    _recalculateStatsFromDeliveries();
     
-    // Update bowler stats from delivery
-    _updateBowlerStatsFromDelivery(delivery);
+    // Legacy calls kept if needed but _recalculate updates the same maps
+    // _updatePlayerStatsFromDelivery(delivery);
+    // _updateBowlerStatsFromDelivery(delivery);
     
     // Update extras from delivery
     _updateExtrasFromDelivery(delivery);
@@ -1107,77 +1169,122 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     }
   }
   
-  // Recalculate all stats from deliveries (for undo/editing)
+  // Recalculate all stats from deliveries (Single Source of Truth)
+  // This ensures mathematical correctness for Maidens, Economy, and Wickets
   void _recalculateStatsFromDeliveries() {
-    // Reset all stats
+    // ABORT if no deliveries (Legacy match support)
+    // If we clear stats when we have no deliveries, we lose all historical data for old matches
+    if (_deliveries.isEmpty) return;
+
+    // 1. Reset all stats maps
     _playerStatsMap.clear();
     _bowlerStatsMap.clear();
     _extrasMap.clear();
     
-    // Recalculate from all deliveries - build up incrementally
+    // Temporary helper structures for Maiden calculation
+    final overRuns = <int, int>{}; // Over # -> Bowler Runs Conceded
+    final overLegalBalls = <int, int>{}; // Over # -> Legal Ball Count
+    final overBowler = <int, String>{}; // Over # -> Bowler Name
+    
+    // 2. Iterate through ALL deliveries to build up stats
     for (final delivery in _deliveries) {
-      // Initialize player stats if not exists
+      // --- Player Stats ---
       if (!_playerStatsMap.containsKey(delivery.striker)) {
         _playerStatsMap[delivery.striker] = _PlayerInningsStats();
         if (_playerStartTime[delivery.striker] != null) {
           _playerStatsMap[delivery.striker]!.startTime = _playerStartTime[delivery.striker];
         }
       }
-      
       final playerStats = _playerStatsMap[delivery.striker]!;
       
-      // Update runs - only if off the bat (not extras)
+      // Update runs (off bat only)
       if (delivery.extraType == null) {
-        // Regular ball: runs off bat
-        playerStats.runs = delivery.strikerRuns;
+        playerStats.runs += delivery.strikerRuns;
       } else if (delivery.extraType == 'NB') {
-        // No-ball: runs off bat count
-        playerStats.runs = delivery.strikerRuns;
+        playerStats.runs += delivery.strikerRuns; // Runs off bat on NB count
       }
-      // For wides, byes, leg-byes: strikerRuns doesn't change
       
-      // Update balls (only legal balls)
+      // Update balls faced (legal only)
       if (delivery.isLegalBall) {
-        playerStats.balls = delivery.strikerBalls;
+        playerStats.balls += 1;
       }
       
-      // Track boundaries incrementally
+      // Boundaries
       if (delivery.extraType == null || delivery.extraType == 'NB') {
-        if (delivery.runs == 4) {
-          playerStats.fours++;
-        } else if (delivery.runs == 6) {
-          playerStats.sixes++;
-        }
+        if (delivery.runs == 4) playerStats.fours++;
+        if (delivery.runs == 6) playerStats.sixes++;
       }
-      
-      // Update bowler stats
+
+      // --- Bowler Stats Accumulation ---
       if (!_bowlerStatsMap.containsKey(delivery.bowler)) {
         _bowlerStatsMap[delivery.bowler] = _BowlerInningsStats();
       }
-      
       final bowlerStats = _bowlerStatsMap[delivery.bowler]!;
-      bowlerStats.legalBalls = delivery.bowlerLegalBalls;
-      bowlerStats.runs = delivery.bowlerRuns;
       
-      if (delivery.wicketType != null && delivery.wicketType != 'Run Out') {
-        bowlerStats.wickets = delivery.wickets;
+      // Legal balls
+      if (delivery.isLegalBall) {
+        bowlerStats.legalBalls++;
       }
       
-      // Track extras by type
-      if (delivery.extraType == 'WD') {
-        bowlerStats.wides += (delivery.extraRuns ?? 0);
-      } else if (delivery.extraType == 'NB') {
-        bowlerStats.noBalls += (delivery.extraRuns ?? 0);
-      } else if (delivery.extraType == 'B') {
-        bowlerStats.byes += (delivery.extraRuns ?? 0);
-      } else if (delivery.extraType == 'LB') {
-        bowlerStats.legByes += (delivery.extraRuns ?? 0);
+      // Runs Conceded (strictly tracked per delivery)
+      bowlerStats.runs += delivery.bowlerRuns;
+      
+      // Wickets (Strict filtering)
+      if (delivery.wicketType != null) {
+        // Credited to bowler: Bowled, Caught, LBW, Stumped, Hit Wicket
+        // NOT Credited: Run Out, Retired Hurt, Obstructing field, etc.
+        const creditToBowler = [
+          'Bowled', 'Caught', 'LBW', 'Stumped', 'Hit Wicket'
+        ];
+        // Simple string check (case insensitive or exact based on data)
+        // Assuming data is consistently capitalized as in valid_dismissals
+        bool isCredited = false;
+        for (final type in creditToBowler) {
+           if (delivery.wicketType!.contains(type)) { // 'Caught behind' -> 'Caught'
+             isCredited = true;
+             break;
+           }
+        }
+        
+        if (isCredited) {
+          bowlerStats.wickets++;
+        }
       }
       
-      // Update extras
-      if (delivery.extraType != null && delivery.extraRuns != null) {
-        final extraKey = delivery.extraType!.toLowerCase();
-        _extrasMap[extraKey] = (_extrasMap[extraKey] ?? 0) + delivery.extraRuns!;
+      // Extras breakdown
+      if (delivery.extraType != null) {
+        if (delivery.extraType == 'WD') bowlerStats.wides += (delivery.extraRuns ?? 0);
+        else if (delivery.extraType == 'NB') bowlerStats.noBalls += (delivery.extraRuns ?? 0);
+        else if (delivery.extraType == 'B') bowlerStats.byes += (delivery.extraRuns ?? 0);
+        else if (delivery.extraType == 'LB') bowlerStats.legByes += (delivery.extraRuns ?? 0);
+        
+        // Aggregate global extras
+        final key = delivery.extraType!.toLowerCase();
+        _extrasMap[key] = (_extrasMap[key] ?? 0) + (delivery.extraRuns ?? 0);
+      }
+      
+      // --- Maiden Calculation Pre-processing ---
+      // Group data by Over
+      overBowler[delivery.over] = delivery.bowler;
+      overRuns[delivery.over] = (overRuns[delivery.over] ?? 0) + delivery.bowlerRuns;
+      if (delivery.isLegalBall) {
+        overLegalBalls[delivery.over] = (overLegalBalls[delivery.over] ?? 0) + 1;
+      }
+    }
+    
+    // 3. Finalize Turn: Calculate Maidens
+    // Iterate through all overs that have started
+    for (final overNum in overBowler.keys) {
+      final bowlerName = overBowler[overNum]!;
+      final runsConceded = overRuns[overNum] ?? 0;
+      final legalBalls = overLegalBalls[overNum] ?? 0;
+      
+      // Maiden Rule: 6 (or more?? usually exactly 6 legal) legal balls AND 0 runs conceded
+      // We check >= 6 to potentialy handle unusual overs, but standard is 6.
+      if (legalBalls == 6 && runsConceded == 0) {
+         if (_bowlerStatsMap.containsKey(bowlerName)) {
+           _bowlerStatsMap[bowlerName]!.maidens++;
+         }
       }
     }
   }
@@ -2555,6 +2662,35 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             if (scorecard['batsmen_who_have_batted'] != null) {
               _batsmenWhoHaveBatted = Set<String>.from(scorecard['batsmen_who_have_batted'] as List);
             }
+            
+            // Restore deliveries (CRITICAL for stats logic)
+            if (scorecard['deliveries'] != null) {
+              _deliveries = (scorecard['deliveries'] as List)
+                  .map((e) => _Delivery.fromJson(e as Map<String, dynamic>))
+                  .toList();
+            } else {
+              _deliveries = [];
+            }
+            
+            if (scorecard['first_innings_deliveries'] != null) {
+              _firstInningsDeliveries = (scorecard['first_innings_deliveries'] as List)
+                  .map((e) => _Delivery.fromJson(e as Map<String, dynamic>))
+                  .toList();
+            } else {
+              _firstInningsDeliveries = [];
+            }
+            
+            // CRITICAL: Recalculate stats from deliveries to ensure data integrity
+            // This fixes legacy data issues (like 0.0 overs) and ensures consistency
+            if (_deliveries.isNotEmpty) {
+              _recalculateStatsFromDeliveries();
+              
+              // Force save to persist the corrected stats to Supabase
+              // This acts as the actual "repair" step for the database
+              Future.delayed(const Duration(milliseconds: 500), () {
+                 if (mounted) _saveScorecardToSupabase();
+              });
+            }
           });
         }
       }
@@ -2896,8 +3032,15 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // For Run Out: Strike changes based on runs completed
       // Odd runs → strike changes, Even runs → strike remains same
+      // CRITICAL: Apply swaps SEQUENTIALLY
       if (isRunOut) {
-        if (runsCompleted % 2 == 1 || overComplete) {
+        // Step 1: Run-based swap
+        if (runsCompleted % 2 == 1) {
+          _swapBatsmen();
+        }
+        
+        // Step 2: Over-end swap
+        if (overComplete) {
           _swapBatsmen();
         }
       } else if (overComplete) {
@@ -6171,9 +6314,15 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // ICC Rule: Strike rotation based on ACTUAL runs (after short run reduction)
       // No automatic penalty runs affect strike rotation
-      // 1. Odd runs (1, 3, 5) - batsmen swap ends
-      // 2. End of over (6 balls) - batsmen always swap
-      if (actualRuns % 2 == 1 || overComplete) {
+      // CRITICAL: Apply swaps SEQUENTIALLY to ensure correct net result
+      // Step 1: Run-based swap
+      if (actualRuns % 2 == 1) {
+        _swapBatsmen();
+      }
+      
+      // Step 2: End of over swap (always happens if over is complete)
+      // This might swap them back (e.g., 1 run on last ball -> swap then swap back -> same striker)
+      if (overComplete) {
         _swapBatsmen();
       }
       
