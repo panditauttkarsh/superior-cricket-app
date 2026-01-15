@@ -24,6 +24,8 @@ class ScorecardPage extends ConsumerStatefulWidget {
   final String? initialStriker;
   final String? initialNonStriker;
   final String? initialBowler;
+  final String? tossWinner; // Team that won the toss
+  final String? tossChoice; // 'Bat' or 'Bowl'
   
   const ScorecardPage({
     super.key,
@@ -38,6 +40,8 @@ class ScorecardPage extends ConsumerStatefulWidget {
     this.initialStriker,
     this.initialNonStriker,
     this.initialBowler,
+    this.tossWinner,
+    this.tossChoice,
   });
 
   @override
@@ -333,6 +337,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   // Flag to track if we're waiting for bowler selection (end-of-over lock)
   bool _waitingForBowlerSelection = false;
   
+  // Track previous over's bowler (cannot bowl consecutive overs)
+  String _previousOverBowler = '';
+  
   List<String> _battingTeamPlayers = [];
   List<String> _bowlingTeamPlayers = [];
   List<String> _dismissedPlayers = []; // Track dismissed batsmen
@@ -409,16 +416,85 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.team1 != null) _battingTeam = widget.team1!;
-    if (widget.team2 != null) _bowlingTeam = widget.team2!;
     
-    // CRITICAL: Use squad data from match setup, NOT hardcoded players
-    if (widget.myTeamPlayers != null && widget.myTeamPlayers!.isNotEmpty) {
-      _battingTeamPlayers = List<String>.from(widget.myTeamPlayers!);
+    // Determine batting and bowling teams based on toss result
+    // This is CRITICAL - we cannot assume myTeam always bats first!
+    String myTeam = widget.team1 ?? 'Team 1';
+    String opponentTeam = widget.team2 ?? 'Team 2';
+    
+    print('DEBUG initState:');
+    print('  myTeam: $myTeam');
+    print('  opponentTeam: $opponentTeam');
+    print('  tossWinner: ${widget.tossWinner}');
+    print('  tossChoice: ${widget.tossChoice}');
+    print('  myTeamPlayers: ${widget.myTeamPlayers}');
+    print('  opponentTeamPlayers: ${widget.opponentTeamPlayers}');
+    
+    if (widget.tossWinner != null && widget.tossChoice != null) {
+      // Use toss data to determine teams
+      if (widget.tossWinner == myTeam && widget.tossChoice == 'Bat') {
+        // myTeam won and chose to bat → myTeam bats, opponent bowls
+        print('  → Case 1: myTeam won and chose Bat');
+        _battingTeam = myTeam;
+        _bowlingTeam = opponentTeam;
+        if (widget.myTeamPlayers != null && widget.myTeamPlayers!.isNotEmpty) {
+          _battingTeamPlayers = List<String>.from(widget.myTeamPlayers!);
+        }
+        if (widget.opponentTeamPlayers != null && widget.opponentTeamPlayers!.isNotEmpty) {
+          _bowlingTeamPlayers = List<String>.from(widget.opponentTeamPlayers!);
+        }
+      } else if (widget.tossWinner == myTeam && widget.tossChoice == 'Bowl') {
+        // myTeam won and chose to bowl → myTeam bowls, opponent bats
+        print('  → Case 2: myTeam won and chose Bowl');
+        _battingTeam = opponentTeam;
+        _bowlingTeam = myTeam;
+        if (widget.opponentTeamPlayers != null && widget.opponentTeamPlayers!.isNotEmpty) {
+          _battingTeamPlayers = List<String>.from(widget.opponentTeamPlayers!);
+        }
+        if (widget.myTeamPlayers != null && widget.myTeamPlayers!.isNotEmpty) {
+          _bowlingTeamPlayers = List<String>.from(widget.myTeamPlayers!);
+        }
+      } else if (widget.tossWinner == opponentTeam && widget.tossChoice == 'Bat') {
+        // opponentTeam won and chose to bat → opponent bats, myTeam bowls
+        print('  → Case 3: opponentTeam won and chose Bat');
+        _battingTeam = opponentTeam;
+        _bowlingTeam = myTeam;
+        if (widget.opponentTeamPlayers != null && widget.opponentTeamPlayers!.isNotEmpty) {
+          _battingTeamPlayers = List<String>.from(widget.opponentTeamPlayers!);
+        }
+        if (widget.myTeamPlayers != null && widget.myTeamPlayers!.isNotEmpty) {
+          _bowlingTeamPlayers = List<String>.from(widget.myTeamPlayers!);
+        }
+      } else {
+        // opponentTeam won and chose to bowl → opponent bowls, myTeam bats
+        print('  → Case 4: opponentTeam won and chose Bowl');
+        _battingTeam = myTeam;
+        _bowlingTeam = opponentTeam;
+        if (widget.myTeamPlayers != null && widget.myTeamPlayers!.isNotEmpty) {
+          _battingTeamPlayers = List<String>.from(widget.myTeamPlayers!);
+        }
+        if (widget.opponentTeamPlayers != null && widget.opponentTeamPlayers!.isNotEmpty) {
+          _bowlingTeamPlayers = List<String>.from(widget.opponentTeamPlayers!);
+        }
+      }
+    } else {
+      // Fallback: No toss data, use default assignment
+      print('  → Fallback: No toss data');
+      _battingTeam = myTeam;
+      _bowlingTeam = opponentTeam;
+      if (widget.myTeamPlayers != null && widget.myTeamPlayers!.isNotEmpty) {
+        _battingTeamPlayers = List<String>.from(widget.myTeamPlayers!);
+      }
+      if (widget.opponentTeamPlayers != null && widget.opponentTeamPlayers!.isNotEmpty) {
+        _bowlingTeamPlayers = List<String>.from(widget.opponentTeamPlayers!);
+      }
     }
-    if (widget.opponentTeamPlayers != null && widget.opponentTeamPlayers!.isNotEmpty) {
-      _bowlingTeamPlayers = List<String>.from(widget.opponentTeamPlayers!);
-    }
+    
+    print('  RESULT:');
+    print('    _battingTeam: $_battingTeam');
+    print('    _bowlingTeam: $_bowlingTeam');
+    print('    _battingTeamPlayers: $_battingTeamPlayers');
+    print('    _bowlingTeamPlayers: $_bowlingTeamPlayers');
     
     // If no squad data provided, use empty lists (will be loaded from match data)
     if (_battingTeamPlayers.isEmpty && _bowlingTeamPlayers.isEmpty) {
@@ -446,23 +522,6 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _trackPlayerStartTime(_nonStriker);
     }
     
-    // Show batting type selection for opening batsmen if not already set (after data load)
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Wait for match data to load first
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (mounted) {
-        if (_striker.isNotEmpty && !_battingTypeMap.containsKey(_striker)) {
-          _showBattingTypeSelection(_striker);
-        } else if (_nonStriker.isNotEmpty && !_battingTypeMap.containsKey(_nonStriker)) {
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) {
-              _showBattingTypeSelection(_nonStriker);
-            }
-          });
-        }
-      }
-    });
-    
     // Initialize first bowler from squad or provided initial value
     if (widget.initialBowler != null && widget.initialBowler!.isNotEmpty) {
       _bowler = widget.initialBowler!;
@@ -473,6 +532,28 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     if (_bowler.isNotEmpty) {
       _usedBowlers.add(_bowler);
     }
+    
+    // Show batting/bowling type selection for opening players (after data load)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Wait for match data to load first
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) {
+        // Show batting style for striker if not already set
+        if (_striker.isNotEmpty && !_battingTypeMap.containsKey(_striker)) {
+          await _showBattingTypeSelection(_striker);
+        }
+        
+        // Show batting style for non-striker if not already set
+        if (_nonStriker.isNotEmpty && !_battingTypeMap.containsKey(_nonStriker)) {
+          await _showBattingTypeSelection(_nonStriker);
+        }
+        
+        // Show bowling style for bowler if not already set
+        if (_bowler.isNotEmpty && !_bowlerMetadata.containsKey(_bowler)) {
+          await _showBowlerTypeSelection(_bowler);
+        }
+      }
+    });
     
     // Initialize YouTube player if video ID is provided
     if (widget.youtubeVideoId != null && widget.youtubeVideoId!.isNotEmpty) {
@@ -1382,24 +1463,42 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     
     // Get available bowlers ONLY from bowling team squad
     // Exclude:
-    // 1. Current bowler (previous over bowler)
+    // 1. Previous over's bowler (cannot bowl consecutive overs - ICC rule)
     // 2. Batting team players
     // 3. Bowlers who have completed their max overs
+    
+    print('DEBUG _showSelectNextBowler:');
+    print('  _previousOverBowler: "$_previousOverBowler"');
+    print('  _bowler: "$_bowler"');
+    print('  _bowlingTeamPlayers: $_bowlingTeamPlayers');
+    
     final availableBowlers = _bowlingTeamPlayers
         .where((player) {
-          // Exclude current bowler (previous over)
-          if (player == _bowler) return false;
+          // Exclude previous over's bowler (cannot bowl consecutive overs)
+          if (player == _previousOverBowler) {
+            print('  → Excluding "$player" (previous over bowler)');
+            return false;
+          }
           
           // Exclude batting team players
-          if (_battingTeamPlayers.contains(player)) return false;
+          if (_battingTeamPlayers.contains(player)) {
+            print('  → Excluding "$player" (batting team player)');
+            return false;
+          }
           
           // Exclude bowlers who have completed max overs
           final oversBowled = _bowlerOversMap[player] ?? 0.0;
-          if (oversBowled >= maxOversPerBowler) return false;
+          if (oversBowled >= maxOversPerBowler) {
+            print('  → Excluding "$player" (max overs)');
+            return false;
+          }
           
+          print('  → Including "$player" (eligible)');
           return true;
         })
         .toList();
+    
+    print('  Final available bowlers: $availableBowlers');
     
     if (availableBowlers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2791,6 +2890,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
+        // CRITICAL: Set previous over bowler BEFORE showing selection dialog
+        _previousOverBowler = _bowler;
       }
       
       // For Run Out: Strike changes based on runs completed
@@ -5373,6 +5474,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
+        // CRITICAL: Set previous over bowler BEFORE showing selection dialog
+        _previousOverBowler = _bowler;
       }
       
       // ICC Rule 5: Strike rotation - odd runs (1,3,5) = swap, even (0,2,4) = no swap
@@ -5539,6 +5642,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
+        // CRITICAL: Set previous over bowler BEFORE showing selection dialog
+        _previousOverBowler = _bowler;
       }
       
       // ICC Rule 5: Strike rotation - odd runs (1,3,5) = swap, even (0,2,4) = no swap
@@ -6060,6 +6165,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         // _currentOverBalls = []; // Moved to bowler selection
         // Set flag to wait for bowler selection (end-of-over lock)
         _waitingForBowlerSelection = true;
+        // CRITICAL: Set previous over bowler BEFORE showing selection dialog
+        _previousOverBowler = _bowler;
       }
       
       // ICC Rule: Strike rotation based on ACTUAL runs (after short run reduction)

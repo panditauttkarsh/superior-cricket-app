@@ -391,6 +391,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             initialStriker: extra?['initialStriker'],
             initialNonStriker: extra?['initialNonStriker'],
             initialBowler: extra?['initialBowler'],
+            tossWinner: extra?['tossWinner'],
+            tossChoice: extra?['tossChoice'],
           );
         },
       ),
