@@ -2,33 +2,68 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/models/mvp_model.dart';
-import './tournament_leaderboard_page.dart';
+import '../../../../core/providers/repository_providers.dart';
 
-class LeaderboardTab extends ConsumerStatefulWidget {
+/// Provider for tournament leaderboard data
+final tournamentLeaderboardProvider = FutureProvider.autoDispose.family<
+  Map<String, List<PlayerMvpModel>>, 
+  String
+>((ref, tournamentId) async {
+  final mvpRepo = ref.watch(mvpRepositoryProvider);
+  
+  // Get all MVP data for the tournament (aggregated across all matches)
+  final allMvpData = await mvpRepo.getTournamentMvpData(tournamentId);
+  
+  if (allMvpData.isEmpty) {
+    return {
+      'mvp': [],
+      'batting': [],
+      'bowling': [],
+    };
+  }
+  
+  // Sort by different criteria
+  final mvpList = List<PlayerMvpModel>.from(allMvpData)
+    ..sort((a, b) => b.totalMvp.compareTo(a.totalMvp));
+  
+  final battingList = List<PlayerMvpModel>.from(allMvpData)
+    ..sort((a, b) => b.battingMvp.compareTo(a.battingMvp));
+  
+  final bowlingList = List<PlayerMvpModel>.from(allMvpData)
+    ..sort((a, b) => b.bowlingMvp.compareTo(a.bowlingMvp));
+  
+  return {
+    'mvp': mvpList,
+    'batting': battingList,
+    'bowling': bowlingList,
+  };
+});
+
+class TournamentLeaderboardPage extends ConsumerStatefulWidget {
   final String tournamentId;
-
-  const LeaderboardTab({
+  
+  const TournamentLeaderboardPage({
     super.key,
     required this.tournamentId,
   });
 
   @override
-  ConsumerState<LeaderboardTab> createState() => _LeaderboardTabState();
+  ConsumerState<TournamentLeaderboardPage> createState() => _TournamentLeaderboardPageState();
 }
 
-class _LeaderboardTabState extends ConsumerState<LeaderboardTab>
+class _TournamentLeaderboardPageState extends ConsumerState<TournamentLeaderboardPage>
     with SingleTickerProviderStateMixin {
-  late TabController _subTabController;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _subTabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
   void dispose() {
-    _subTabController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -36,72 +71,68 @@ class _LeaderboardTabState extends ConsumerState<LeaderboardTab>
   Widget build(BuildContext context) {
     final leaderboardAsync = ref.watch(tournamentLeaderboardProvider(widget.tournamentId));
 
-    return Column(
-      children: [
-        // Tab Bar
-        Container(
-          height: 48,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
-          ),
-          child: TabBar(
-            controller: _subTabController,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: AppColors.primary,
-            indicatorWeight: 3,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            tabs: const [
-              Tab(text: 'MVP'),
-              Tab(text: 'Batting'),
-              Tab(text: 'Bowling'),
-            ],
-          ),
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          'Tournament Leaderboard',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        
-        // Calculation Link
-        Padding(
-          padding: const EdgeInsets.only(right: 16, top: 12),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              'How is Most Valuable Players Calculated?',
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.teal[600],
-                fontWeight: FontWeight.w500,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0.5,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: AppColors.primary,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          tabs: const [
+            Tab(text: 'MVP'),
+            Tab(text: 'Batting'),
+            Tab(text: 'Bowling'),
+          ],
+        ),
+      ),
+      body: leaderboardAsync.when(
+        data: (data) {
+          final mvpList = data['mvp'] ?? [];
+          final battingList = data['batting'] ?? [];
+          final bowlingList = data['bowling'] ?? [];
+
+          if (mvpList.isEmpty && battingList.isEmpty && bowlingList.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 16, top: 12),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'How is Most Valuable Players Calculated?',
+                    style: TextStyle(fontSize: 11, color: Colors.teal[600], fontWeight: FontWeight.w500),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
-
-        // Tab Content
-        Expanded(
-          child: leaderboardAsync.when(
-            data: (data) {
-              final mvpList = data['mvp'] ?? [];
-              final battingList = data['batting'] ?? [];
-              final bowlingList = data['bowling'] ?? [];
-
-              if (mvpList.isEmpty && battingList.isEmpty && bowlingList.isEmpty) {
-                return _buildEmptyState();
-              }
-
-              return TabBarView(
-                controller: _subTabController,
-                children: [
-                  _buildLeaderboardList(mvpList, 'mvp'),
-                  _buildLeaderboardList(battingList, 'batting'),
-                  _buildLeaderboardList(bowlingList, 'bowling'),
-                ],
-              );
-            },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stack) => Center(child: Text('Error: $error')),
-          ),
-        ),
-      ],
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildLeaderboardList(mvpList, 'mvp'),
+                    _buildLeaderboardList(battingList, 'batting'),
+                    _buildLeaderboardList(bowlingList, 'bowling'),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => Center(child: Text('Error: $error')),
+      ),
     );
   }
 
@@ -110,12 +141,9 @@ class _LeaderboardTabState extends ConsumerState<LeaderboardTab>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.emoji_events_outlined, size: 64, color: Colors.grey[300]),
+          Icon(Icons.emoji_events_outlined, size: 80, color: Colors.grey[200]),
           const SizedBox(height: 16),
-          const Text(
-            'No leaderboard data yet',
-            style: TextStyle(fontSize: 16, color: Colors.grey, fontWeight: FontWeight.bold),
-          ),
+          const Text('No leaderboard data found', style: TextStyle(color: Colors.grey, fontSize: 18)),
         ],
       ),
     );
@@ -123,7 +151,7 @@ class _LeaderboardTabState extends ConsumerState<LeaderboardTab>
 
   Widget _buildLeaderboardList(List<PlayerMvpModel> players, String type) {
     if (players.isEmpty) {
-      return Center(child: Text('No $type data yet', style: const TextStyle(color: Colors.grey)));
+      return Center(child: Text('No $type data found', style: const TextStyle(color: Colors.grey)));
     }
 
     return ListView.separated(

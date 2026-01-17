@@ -158,9 +158,33 @@ class TournamentDetailsPage extends StatelessWidget {
 
   Widget _buildLeaderboards(BuildContext context) {
     return Center(
-      child: ElevatedButton(
-        onPressed: () => context.push('/tournament/$tournamentId/leaderboards'),
-        child: const Text('View Leaderboards'),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.leaderboard,
+            size: 80,
+            color: Colors.grey,
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'View Tournament Leaderboard',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => context.push('/tournament/$tournamentId/leaderboard'),
+            icon: const Icon(Icons.emoji_events),
+            label: const Text('Open Leaderboard'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              textStyle: const TextStyle(fontSize: 16),
+            ),
+          ),
+        ],
       ),
     );
   }

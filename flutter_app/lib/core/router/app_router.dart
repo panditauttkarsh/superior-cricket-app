@@ -25,6 +25,7 @@ import '../../features/tournament/presentation/pages/points_table_page.dart';
 import '../../features/tournament/presentation/pages/tournaments_arena_page.dart';
 import '../../features/tournament/presentation/pages/add_teams_page.dart';
 import '../../features/tournament/presentation/pages/add_tournament_page.dart';
+import '../../features/tournament/presentation/pages/tournament_leaderboard_page.dart';
 import '../../features/academy/presentation/pages/academy_dashboard_page.dart';
 import '../../features/academy/presentation/pages/academy_detail_page.dart';
 import '../../features/academy/presentation/pages/training_programs_page.dart';
@@ -335,6 +336,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final tournamentId = state.pathParameters['id']!;
           return AddTeamsPage(tournamentId: tournamentId);
+        },
+      ),
+      GoRoute(
+        path: '/tournament/:id/leaderboard',
+        builder: (context, state) {
+          final tournamentId = state.pathParameters['id']!;
+          return TournamentLeaderboardPage(tournamentId: tournamentId);
         },
       ),
       

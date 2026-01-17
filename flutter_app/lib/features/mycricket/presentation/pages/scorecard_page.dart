@@ -11,6 +11,10 @@ import '../../../../core/services/commentary_service.dart';
 import '../../../../core/repositories/commentary_repository.dart';
 import 'dart:async';
 import 'package:uuid/uuid.dart';
+import '../../../../core/services/mvp_calculation_service.dart';
+import '../../../../core/models/mvp_model.dart';
+import '../../../match/presentation/widgets/mvp_award_card.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ScorecardPage extends ConsumerStatefulWidget {
   final String? matchId;
@@ -64,6 +68,8 @@ class _Delivery {
   final int bowlerLegalBalls; // Bowler legal balls after this delivery
   final int wickets; // Total wickets after this delivery
   final String? wicketType; // Type of dismissal if wicket
+  final String? fielder; // Player who took catch/stumping/run-out
+  final String? assistFielder; // Player who assisted (for run-outs)
   final String? extraType; // 'WD', 'NB', 'B', 'LB' if extra
   final int? extraRuns; // Extra runs if applicable
   final bool isLegalBall; // true for legal, false for wide/no-ball
@@ -88,6 +94,8 @@ class _Delivery {
     required this.bowlerLegalBalls,
     required this.wickets,
     this.wicketType,
+    this.fielder,
+    this.assistFielder,
     this.extraType,
     this.extraRuns,
     required this.isLegalBall,
@@ -115,6 +123,8 @@ class _Delivery {
       'bowlerLegalBalls': bowlerLegalBalls,
       'wickets': wickets,
       'wicketType': wicketType,
+      'fielder': fielder,
+      'assistFielder': assistFielder,
       'extraType': extraType,
       'extraRuns': extraRuns,
       'isLegalBall': isLegalBall,
@@ -143,6 +153,8 @@ class _Delivery {
       bowlerLegalBalls: json['bowlerLegalBalls'] as int,
       wickets: json['wickets'] as int,
       wicketType: json['wicketType'] as String?,
+      fielder: json['fielder'] as String?,
+      assistFielder: json['assistFielder'] as String?,
       extraType: json['extraType'] as String?,
       extraRuns: json['extraRuns'] as int?,
       isLegalBall: json['isLegalBall'] as bool,
@@ -1037,6 +1049,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     required int bowlerLegalBalls,
     required int wickets,
     String? wicketType,
+    String? fielder,
+    String? assistFielder,
     String? extraType,
     int? extraRuns,
     required bool isLegalBall,
@@ -1060,6 +1074,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       bowlerLegalBalls: bowlerLegalBalls,
       wickets: wickets,
       wicketType: wicketType,
+      fielder: fielder,
+      assistFielder: assistFielder,
       extraType: extraType,
       extraRuns: extraRuns,
       isLegalBall: isLegalBall,
@@ -2505,29 +2521,18 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     // Determine winner ID
     String? winnerId;
     if (winningTeam == _battingTeam) {
-      // If batting team won, we need to know if they were Team 1 or Team 2 initially
-      // Assuming _battingTeam name matches one of the initial team names
-      // But simpler: if _currentInnings == 1, batting team is Team 1. If 2, it's Team 2.
-      // Wait, strictly:
-      // If Team 1 batted first:
-      // Innings 1: Batting = Team 1
-      // Innings 2: Batting = Team 2
-      
-      // If the winner is the CURRENT batting team:
       if (_currentInnings == 1) {
          winnerId = _team1Id;
       } else {
          winnerId = _team2Id;
       }
     } else if (winningTeam == _bowlingTeam) {
-       // Winner is bowling team
        if (_currentInnings == 1) {
          winnerId = _team2Id;
        } else {
          winnerId = _team1Id;
        }
     } else {
-      // Draw or Tie
       winnerId = null;
     }
 
@@ -2537,15 +2542,239 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         widget.matchId!,
         {
           'status': 'completed',
-          // 'result': result, // Removed: Column does not exist
-          // 'winning_team': winningTeam, // Removed: Column does not exist
           'winner_id': winnerId, 
           'completed_at': DateTime.now().toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         },
       );
+      
+      // Calculate and save MVP data
+      await _calculateAndSaveMvp(winnerId);
     } catch (e) {
       debugPrint('Error saving final match data: $e');
+    }
+  }
+
+  // Helper function to get player ID from name (creates player if not found)
+  Future<String?> _getPlayerIdFromName(String playerName) async {
+    try {
+      final supabase = Supabase.instance.client;
+      
+      // Try to find existing player
+      var response = await supabase
+          .from('players')
+          .select('id')
+          .eq('name', playerName)
+          .maybeSingle();
+      
+      // If player exists, return their ID
+      if (response != null) {
+        return response['id'] as String;
+      }
+      
+      // Player doesn't exist - create them!
+      debugPrint('📝 Creating new player: $playerName');
+      final newPlayer = await supabase
+          .from('players')
+          .insert({
+            'name': playerName,
+            'created_at': DateTime.now().toIso8601String(),
+          })
+          .select('id')
+          .single();
+      
+      final playerId = newPlayer['id'] as String;
+      debugPrint('✅ Created player $playerName with ID: ${playerId.substring(0, 8)}...');
+      return playerId;
+      
+    } catch (e) {
+      debugPrint('⚠️ Could not get/create player ID for $playerName: $e');
+      return null;
+    }
+  }
+
+  // Calculate and save MVP for all players
+  Future<void> _calculateAndSaveMvp(String? winnerId) async {
+    if (widget.matchId == null) return;
+    
+    try {
+      debugPrint('🏆 Starting MVP calculation for match ${widget.matchId}');
+      
+      final mvpRepo = ref.read(mvpRepositoryProvider);
+      final List<PlayerMvpModel> allMvpData = [];
+      
+      // Get all unique players who participated
+      final allPlayerNames = <String>{};
+      allPlayerNames.addAll(_playerStatsMap.keys);
+      allPlayerNames.addAll(_bowlerStatsMap.keys);
+      
+      debugPrint('📋 Found ${allPlayerNames.length} unique players');
+      
+      // Calculate team totals for both innings
+      final team1TotalRuns = _firstInningsRuns;
+      final team1TotalBalls = (_firstInningsOvers * 6).toInt();
+      final team2TotalRuns = _totalRuns;
+      final team2TotalBalls = (_currentOver * 6 + _currentBall);
+      
+      debugPrint('📊 Team 1: $team1TotalRuns runs in $team1TotalBalls balls');
+      debugPrint('📊 Team 2: $team2TotalRuns runs in $team2TotalBalls balls');
+      
+      
+      // Process each player
+      for (final playerName in allPlayerNames) {
+        // Look up player ID from database
+        final playerId = await _getPlayerIdFromName(playerName);
+        
+        if (playerId == null) {
+          debugPrint('⚠️ Skipping $playerName - no player ID found');
+          continue;
+        }
+        
+        // Get batting stats
+        final battingStats = _playerStatsMap[playerName];
+        final runsScored = battingStats?.runs ?? 0;
+        final ballsFaced = battingStats?.balls ?? 0;
+        
+        // Get bowling stats
+        final bowlingStats = _bowlerStatsMap[playerName];
+        final ballsBowled = bowlingStats?.legalBalls ?? 0;
+        final runsConceded = bowlingStats?.runs ?? 0;
+        final wicketsTaken = bowlingStats?.wickets ?? 0;
+        
+        // Determine which team this player belongs to
+        final isTeam1Player = _battingTeamPlayers.contains(playerName) && _currentInnings == 2;
+        
+        // Use team IDs or generate placeholder UUIDs if not available
+        final teamId = isTeam1Player 
+            ? (_team1Id?.isNotEmpty == true ? _team1Id! : const Uuid().v4())
+            : (_team2Id?.isNotEmpty == true ? _team2Id! : const Uuid().v4());
+            
+        final teamName = isTeam1Player ? 
+          (_currentInnings == 2 ? _bowlingTeam : _battingTeam) : 
+          (_currentInnings == 2 ? _battingTeam : _bowlingTeam);
+        final teamTotalRuns = isTeam1Player ? team1TotalRuns : team2TotalRuns;
+        final teamTotalBalls = isTeam1Player ? team1TotalBalls : team2TotalBalls;
+        
+        // Calculate batting MVP
+        double battingMvp = 0.0;
+        if (runsScored > 0) {
+          final battingOrder = _playerStatsMap.keys.toList().indexOf(playerName) + 1;
+          
+          battingMvp = MvpCalculationService.calculateBattingMvp(
+            runsScored: runsScored,
+            ballsFaced: ballsFaced,
+            battingOrder: battingOrder,
+            teamTotalRuns: teamTotalRuns,
+            teamTotalBalls: teamTotalBalls,
+          );
+        }
+        
+        // Calculate bowling MVP
+        double bowlingMvp = 0.0;
+        if (wicketsTaken > 0 || ballsBowled > 0) {
+          final wickets = _deliveries
+              .where((d) => d.bowler == playerName && d.wicketType != null)
+              .map((d) => {
+                    'battingOrder': 5,
+                    'dismissalType': d.wicketType ?? 'caught',
+                    'runsScored': _playerStatsMap[d.striker]?.runs ?? 0,
+                  })
+              .toList();
+          
+          final maidenOvers = bowlingStats?.maidens ?? 0;
+          
+          bowlingMvp = MvpCalculationService.calculateBowlingMvp(
+            wickets: wickets,
+            runsConceded: runsConceded,
+            ballsBowled: ballsBowled,
+            maidenOvers: maidenOvers,
+            teamTotalRuns: teamTotalRuns,
+            teamTotalBalls: teamTotalBalls,
+            totalOvers: 20,
+          );
+        }
+        
+        // Calculate fielding MVP using actual catches and run-outs
+        double fieldingMvp = 0.0;
+        
+        // Count catches for this player
+        final catches = _deliveries
+            .where((d) => d.fielder == playerName && d.wicketType == 'Catch Out')
+            .length;
+        
+        // Count run-outs
+        final runOuts = _deliveries
+            .where((d) => d.fielder == playerName && d.wicketType == 'Run Out')
+            .length;
+        
+        // Count stumpings (if wicket keeper)
+        final stumpings = _deliveries
+            .where((d) => d.fielder == playerName && d.wicketType == 'Stumped')
+            .length;
+        
+        if (catches > 0 || runOuts > 0 || stumpings > 0) {
+          final assists = List.generate(catches + stumpings, (_) => {'battingOrder': 5});
+          final runOutsList = List.generate(runOuts, (_) => {'battingOrder': 5});
+          
+          fieldingMvp = MvpCalculationService.calculateFieldingMvp(
+            assists: assists,
+            runOuts: runOutsList,
+            totalOvers: 20,
+          );
+          
+          debugPrint('🧤 $playerName fielding: $catches catches, $runOuts run-outs, $stumpings stumpings');
+        }
+        
+        final totalMvp = battingMvp + bowlingMvp + fieldingMvp;
+        
+        // Only save if player contributed
+        if (totalMvp > 0) {
+          final strikeRate = ballsFaced > 0 ? (runsScored / ballsFaced) * 100 : null;
+          final economy = ballsBowled > 0 ? (runsConceded / (ballsBowled / 6)) : null;
+          
+          final mvpData = PlayerMvpModel(
+            playerId: playerId, // NOW USING ACTUAL UUID!
+            playerName: playerName,
+            matchId: widget.matchId!,
+            teamId: teamId ?? '',
+            teamName: teamName ?? '',
+            battingMvp: battingMvp,
+            bowlingMvp: bowlingMvp,
+            fieldingMvp: fieldingMvp,
+            totalMvp: totalMvp,
+            runsScored: runsScored,
+            ballsFaced: ballsFaced,
+            wicketsTaken: wicketsTaken,
+            runsConceded: runsConceded,
+            ballsBowled: ballsBowled,
+            catches: catches,
+            runOuts: runOuts,
+            stumpings: stumpings,
+            battingOrder: _playerStatsMap.keys.toList().indexOf(playerName) + 1,
+            strikeRate: strikeRate,
+            bowlingEconomy: economy,
+            performanceGrade: MvpCalculationService.getPerformanceGrade(totalMvp),
+            calculatedAt: DateTime.now(),
+          );
+          
+          allMvpData.add(mvpData);
+          debugPrint('✅ $playerName (ID: ${playerId.substring(0, 8)}...): ${totalMvp.toStringAsFixed(2)} MVP (B: ${battingMvp.toStringAsFixed(1)}, Bo: ${bowlingMvp.toStringAsFixed(1)}, F: ${fieldingMvp.toStringAsFixed(1)})');
+        }
+      }
+      
+      // Save all MVP data
+      if (allMvpData.isNotEmpty) {
+        await mvpRepo.saveBatchMvpData(allMvpData);
+        debugPrint('💾 Saved ${allMvpData.length} player MVP records to database');
+        await mvpRepo.updatePlayerOfTheMatch(widget.matchId!);
+        debugPrint('👑 Player of the Match determined and saved');
+      } else {
+        debugPrint('⚠️ No MVP data to save');
+      }
+      
+      debugPrint('🎉 MVP calculation complete!');
+    } catch (e) {
+      debugPrint('❌ Error calculating MVP: $e');
     }
   }
 
@@ -2942,8 +3171,92 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     );
   }
   
+  // Show dialog to select fielder for catches/run-outs
+  Future<String?> _showFielderSelectionDialog({
+    required String dismissalType,
+  }) async {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            dismissalType == 'Catch Out' 
+                ? '🧤 Who took the catch?' 
+                : '🏃 Who did the run-out?',
+            style: const TextStyle(
+              color: AppColors.textMain,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _bowlingTeamPlayers.length,
+              itemBuilder: (context, index) {
+                final player = _bowlingTeamPlayers[index];
+                return InkWell(
+                  onTap: () => Navigator.pop(context, player),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.elevated,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: AppColors.primary.withOpacity(0.2),
+                          child: Text(
+                            player[0].toUpperCase(),
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          player,
+                          style: const TextStyle(
+                            color: AppColors.textMain,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Skip',
+                style: TextStyle(color: AppColors.textMeta),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
   // Handle out type selection
-  void _handleOutType(String outType, {int runsCompleted = 0}) {
+  Future<void> _handleOutType(String outType, {int runsCompleted = 0}) async {
     // ICC Rule: Block all scoring when waiting for bowler selection (end-of-over lock)
     if (_waitingForBowlerSelection) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2959,6 +3272,14 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       );
       _endInnings();
       return;
+    }
+    
+    // Ask for fielder if catch or run-out
+    String? fielder;
+    if (outType == 'Catch Out' || outType == 'Run Out') {
+      fielder = await _showFielderSelectionDialog(
+        dismissalType: outType,
+      );
     }
     
     final isRetiredHurt = outType == 'Retired Hurt';
@@ -3068,6 +3389,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
         wickets: _wickets,
         wicketType: outType,
+        fielder: fielder, // Pass the selected fielder
+        assistFielder: null, // Can be enhanced later for run-outs
         extraType: null,
         extraRuns: null,
         isLegalBall: true, // Wicket counts as legal ball
@@ -5346,6 +5669,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
         wickets: _wickets,
         wicketType: null,
+        fielder: null,
+        assistFielder: null,
         extraType: 'WD',
         extraRuns: totalRuns,
         isLegalBall: false, // Wide is not a legal ball
@@ -5492,6 +5817,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
         wickets: _wickets,
         wicketType: null,
+        fielder: null,
+        assistFielder: null,
         extraType: 'NB',
         extraRuns: totalRuns,
         isLegalBall: false, // No-ball is not a legal ball
@@ -5647,6 +5974,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
         wickets: _wickets,
         wicketType: null,
+        fielder: null,
+        assistFielder: null,
         extraType: 'B',
         extraRuns: runs,
         isLegalBall: true, // Byes count as legal ball
@@ -6346,6 +6675,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
         wickets: _wickets,
         wicketType: null, // No wicket on regular scoring
+        fielder: null,
+        assistFielder: null,
         extraType: null, // Regular ball
         extraRuns: null,
         isLegalBall: true,
@@ -7323,7 +7654,7 @@ class _BattingScorecardTable extends StatelessWidget {
   }
 }
 
-class _MatchResultScreen extends StatelessWidget {
+class _MatchResultScreen extends ConsumerStatefulWidget {
   final String winningTeam;
   final String result;
   final String team1Name;
@@ -7347,12 +7678,59 @@ class _MatchResultScreen extends StatelessWidget {
   });
 
   @override
+  ConsumerState<_MatchResultScreen> createState() => _MatchResultScreenState();
+}
+
+class _MatchResultScreenState extends ConsumerState<_MatchResultScreen> {
+  PlayerMvpModel? _playerOfTheMatch;
+  List<PlayerMvpModel> _topPerformers = [];
+  bool _isLoadingMvp = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMvpData();
+  }
+
+  Future<void> _loadMvpData() async {
+    if (widget.matchId == null) {
+      setState(() => _isLoadingMvp = false);
+      return;
+    }
+
+    try {
+      final mvpRepo = ref.read(mvpRepositoryProvider);
+      
+      // Get Player of the Match
+      final potm = await mvpRepo.getPlayerOfTheMatch(widget.matchId!);
+      
+      // Get top 5 performers
+      final topPerformers = await mvpRepo.getTopPerformers(
+        widget.matchId!,
+        limit: 5,
+      );
+
+      if (mounted) {
+        setState(() {
+          _playerOfTheMatch = potm;
+          _topPerformers = topPerformers;
+          _isLoadingMvp = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading MVP data: $e');
+      if (mounted) {
+        setState(() => _isLoadingMvp = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
-        // Navigate to dashboard instead of going back
         if (context.mounted) {
           context.go('/');
         }
@@ -7360,191 +7738,341 @@ class _MatchResultScreen extends StatelessWidget {
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(height: 40),
-              // Match Result Title
-              Text(
-                'Match Result',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textMain,
-                  fontFamily: 'Inter',
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 40),
-              // Winning Team Card
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: AppColors.primary.withOpacity(0.3),
-                    width: 2,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const SizedBox(height: 40),
+                
+                // Match Result Title
+                Text(
+                  'Match Result',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMain,
+                    fontFamily: 'Inter',
+                    letterSpacing: -0.5,
                   ),
                 ),
-                child: Column(
-                  children: [
-                    Text(
-                      winningTeam.isNotEmpty ? winningTeam : 'Match Tied',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                        fontFamily: 'Inter',
-                      ),
+                
+                const SizedBox(height: 40),
+                
+                // Winning Team Card
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(0.3),
+                      width: 2,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      result,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSec,
-                        fontFamily: 'Inter',
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        widget.winningTeam.isNotEmpty ? widget.winningTeam : 'Match Tied',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          fontFamily: 'Inter',
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.result,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSec,
+                          fontFamily: 'Inter',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 40),
-              // Team Scores
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [AppShadows.card],
-                ),
-                child: Column(
-                  children: [
-                    // Team 1
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                team1Name,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textMain,
-                                  fontFamily: 'Inter',
+                
+                const SizedBox(height: 40),
+                
+                // Team Scores
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [AppShadows.card],
+                  ),
+                  child: Column(
+                    children: [
+                      // Team 1
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.team1Name,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textMain,
+                                    fontFamily: 'Inter',
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                team1Score,
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                  fontFamily: 'Inter',
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.team1Score,
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                    fontFamily: 'Inter',
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${team1Overs.toStringAsFixed(1)} overs',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.textSec,
-                                  fontFamily: 'Inter',
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${widget.team1Overs.toStringAsFixed(1)} overs',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.textSec,
+                                    fontFamily: 'Inter',
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
+                          Container(
+                            width: 1,
+                            height: 60,
+                            color: AppColors.divider,
+                          ),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  widget.team2Name,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textMain,
+                                    fontFamily: 'Inter',
+                                  ),
+                                  textAlign: TextAlign.end,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.team2Score,
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                    fontFamily: 'Inter',
+                                  ),
+                                  textAlign: TextAlign.end,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${widget.team2Overs.toStringAsFixed(1)} overs',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.textSec,
+                                    fontFamily: 'Inter',
+                                  ),
+                                  textAlign: TextAlign.end,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // MVP SECTION - NEW!
+                if (!_isLoadingMvp) ...[
+                  const SizedBox(height: 40),
+                  
+                  // Player of the Match
+                  if (_playerOfTheMatch != null) ...[
+                    // Section Header
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.emoji_events,
+                          color: Colors.amber,
+                          size: 28,
                         ),
-                        Container(
-                          width: 1,
-                          height: 60,
-                          color: AppColors.divider,
-                        ),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                team2Name,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textMain,
-                                  fontFamily: 'Inter',
-                                ),
-                                textAlign: TextAlign.end,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                team2Score,
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                  fontFamily: 'Inter',
-                                ),
-                                textAlign: TextAlign.end,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${team2Overs.toStringAsFixed(1)} overs',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.textSec,
-                                  fontFamily: 'Inter',
-                                ),
-                                textAlign: TextAlign.end,
-                              ),
-                            ],
+                        const SizedBox(width: 12),
+                        Text(
+                          'Player of the Match',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textMain,
+                            fontFamily: 'Inter',
                           ),
                         ),
                       ],
                     ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // POTM Card
+                    MvpAwardCard(
+                      mvpData: _playerOfTheMatch!,
+                      isPlayerOfTheMatch: true,
+                      onTap: () {
+                        // Optional: Show detailed stats
+                      },
+                    ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 40),
-              // Action Buttons
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Navigate to dashboard instead of going back
-                    if (context.mounted) {
-                      context.go('/');
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  
+                  // Top Performers
+                  if (_topPerformers.isNotEmpty) ...[
+                    const SizedBox(height: 40),
+                    
+                    // Section Header
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.stars,
+                          color: AppColors.primary,
+                          size: 28,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Top Performers',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textMain,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // Top Performers List
+                    ..._topPerformers.map((performer) => Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: MvpAwardCard(
+                        mvpData: performer,
+                        isPlayerOfTheMatch: false,
+                        onTap: () {
+                          // Optional: Show detailed stats
+                        },
+                      ),
+                    )),
+                  ],
+                  
+                  // No MVP Data Message
+                  if (_playerOfTheMatch == null && _topPerformers.isEmpty) ...[
+                    const SizedBox(height: 40),
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.borderLight),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 48,
+                            color: AppColors.textSec,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'MVP data not available',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSec,
+                              fontFamily: 'Inter',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Player statistics will be calculated automatically in future matches',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSec,
+                              fontFamily: 'Inter',
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ] else ...[
+                  // Loading MVP
+                  const SizedBox(height: 40),
+                  Container(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      children: [
+                        CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Loading MVP data...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: AppColors.textSec,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: const Text(
-                    'Done',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Inter',
+                ],
+                
+                const SizedBox(height: 40),
+                
+                // Action Buttons
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      if (context.mounted) {
+                        context.go('/');
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Inter',
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }

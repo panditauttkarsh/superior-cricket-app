@@ -12,8 +12,10 @@ import '../repositories/notification_repository.dart';
 import '../repositories/match_player_repository.dart';
 import '../repositories/tournament_team_repository.dart';
 import '../repositories/player_repository.dart';
+import '../repositories/mvp_repository.dart';
 import '../models/player_model.dart';
 import '../services/storage_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 final storageServiceProvider = Provider<StorageService>((ref) {
   return StorageService();
@@ -65,6 +67,10 @@ final tournamentTeamRepositoryProvider = Provider<TournamentTeamRepository>((ref
 
 final playerRepositoryProvider = Provider<PlayerRepository>((ref) {
   return PlayerRepository();
+});
+
+final mvpRepositoryProvider = Provider<MvpRepository>((ref) {
+  return MvpRepository(Supabase.instance.client);
 });
 
 final playerDataProvider = FutureProvider<PlayerModel?>((ref) async {

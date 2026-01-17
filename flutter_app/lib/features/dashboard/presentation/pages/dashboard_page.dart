@@ -340,7 +340,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                   ),
                   
-                  const SizedBox(height: 100), // Reduced slightly as padding covers some space, but ensuring clearing floating footer
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
@@ -394,6 +394,19 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             ],
           ),
         ),
+        
+        // Center - PitchPoint Logo (clickable to go home)
+        GestureDetector(
+          onTap: () {
+            // Already on dashboard, could add scroll to top or refresh
+          },
+          child: Image.asset(
+            'assets/images/home_logo.png',
+            height: 40,
+            fit: BoxFit.contain,
+          ),
+        ),
+        
         const Spacer(),
         // Notification Button with Badge
         Consumer(

@@ -12,6 +12,7 @@ import '../../../../core/theme/app_colors.dart';
 import 'commentary_page.dart';
 import '../../../live/presentation/pages/go_live_screen.dart';
 import '../widgets/assign_scorer_dialog.dart';
+import '../../../../core/models/mvp_model.dart';
 
 /// Provider for match data
 final matchDetailProvider = StreamProvider.autoDispose.family<MatchModel?, String>((ref, matchId) {
@@ -23,6 +24,12 @@ final matchDetailProvider = StreamProvider.autoDispose.family<MatchModel?, Strin
 final matchPlayersProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>((ref, matchId) async {
   final repository = ref.watch(matchPlayerRepositoryProvider);
   return await repository.getMatchPlayers(matchId);
+});
+
+// MVP data provider
+final matchMvpProvider = FutureProvider.autoDispose.family<List<PlayerMvpModel>, String>((ref, matchId) async {
+  final repository = ref.watch(mvpRepositoryProvider);
+  return await repository.getMatchMvpData(matchId);
 });
 
 class MatchDetailPageComprehensive extends ConsumerStatefulWidget {
@@ -45,7 +52,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -270,6 +277,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
                         Tab(text: 'Squads'),
                         Tab(text: 'Scorecard'),
                         Tab(text: 'Comms'),
+                        Tab(text: 'MVP'),
                       ],
                     ),
                   ),
@@ -284,6 +292,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
                 _buildSquadsTab(match, playersAsync),
                 _buildScorecardTab(match),
                 _buildCommentaryTab(match),
+                _buildMvpTab(match),
               ],
             ),
           );
@@ -446,6 +455,32 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
         return Colors.blue;
       default:
         return Colors.grey;
+    }
+  }
+
+  Widget _buildMvpBreakdownRow(String label, double value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: 14, color: AppColors.textSec)),
+          Text(
+            value.toStringAsFixed(2),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getGradeColor(String grade) {
+    switch (grade) {
+      case 'S': return const Color(0xFFFFD700);
+      case 'A': return const Color(0xFF00D9FF);
+      case 'B': return const Color(0xFF00FF88);
+      case 'C': return const Color(0xFFFFA500);
+      default: return AppColors.textMeta;
     }
   }
 
@@ -756,6 +791,201 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
               economy: bowlerEconomy,
             ),
           ],
+          
+          // MVP SECTION - NEW!
+          const SizedBox(height: 32),
+          Consumer(
+            builder: (context, ref, child) {
+              final mvpAsync = ref.watch(matchMvpProvider(widget.matchId));
+              
+              return mvpAsync.when(
+                data: (mvpData) {
+                  if (mvpData.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  
+                  final potm = mvpData.firstWhere(
+                    (p) => p.isPlayerOfTheMatch == true,
+                    orElse: () => mvpData.first,
+                  );
+                  
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // MVP Header
+                      Row(
+                        children: [
+                          const Icon(Icons.emoji_events, color: AppColors.primary, size: 24),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Top Performers',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textMain,
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Player of the Match Card
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppColors.primary.withOpacity(0.2),
+                              AppColors.accent.withOpacity(0.1),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.primary, width: 2),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.emoji_events, color: AppColors.primary, size: 32),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Player of the Match',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: AppColors.textMeta,
+                                        ),
+                                      ),
+                                      Text(
+                                        potm.playerName,
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.textMain,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: _getGradeColor(potm.performanceGrade),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    potm.performanceGrade,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.elevated,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Total MVP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                      Text(
+                                        potm.totalMvp.toStringAsFixed(2),
+                                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildMvpBreakdownRow('🏏 Batting', potm.battingMvp),
+                                  _buildMvpBreakdownRow('⚾ Bowling', potm.bowlingMvp),
+                                  _buildMvpBreakdownRow('🧤 Fielding', potm.fieldingMvp),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Top 5 Performers
+                      ...mvpData.take(5).toList().asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final player = entry.value;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.elevated,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: index < 3 ? AppColors.primary.withOpacity(0.2) : AppColors.textMeta.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: index < 3 ? AppColors.primary : AppColors.textMeta,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      player.playerName,
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                    ),
+                                    Text(
+                                      'B: ${player.battingMvp.toStringAsFixed(1)} • Bo: ${player.bowlingMvp.toStringAsFixed(1)} • F: ${player.fieldingMvp.toStringAsFixed(1)}',
+                                      style: TextStyle(fontSize: 12, color: AppColors.textSec),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                player.totalMvp.toStringAsFixed(2),
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, stack) => const SizedBox.shrink(),
+              );
+            },
+          ),
         ],
       ),
     ),
@@ -1221,6 +1451,225 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMvpTab(MatchModel match) {
+    final mvpAsync = ref.watch(matchMvpProvider(match.id));
+
+    return mvpAsync.when(
+      data: (players) {
+        if (players.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.emoji_events_outlined, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'MVP data not available',
+                  style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            // Calculation Link
+            Padding(
+              padding: const EdgeInsets.only(right: 16, top: 12, bottom: 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'How is Most Valuable Players Calculated?',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.teal[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            
+            // Player List
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 0),
+                itemCount: players.length,
+                separatorBuilder: (context, index) => const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                itemBuilder: (context, index) {
+                  return _buildExpandableMvpRow(players[index], index + 1);
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stack) => Center(child: Text('Error: $error')),
+    );
+  }
+
+  Widget _buildExpandableMvpRow(PlayerMvpModel player, int rank) {
+    return ExpansionTile(
+      shape: const Border(),
+      collapsedShape: const Border(),
+      tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      leading: SizedBox(
+        width: 80,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Rank
+            SizedBox(
+              width: 24,
+              child: Text(
+                '$rank',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Avatar
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.grey[100],
+                border: rank <= 3 ? Border.all(color: Colors.red, width: 1.5) : null,
+              ),
+              child: ClipOval(
+                child: player.playerAvatar != null
+                    ? Image.network(player.playerAvatar!, fit: BoxFit.cover)
+                    : Center(
+                        child: Text(
+                          player.playerName[0].toUpperCase(),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold, 
+                            color: rank <= 3 ? Colors.red : Colors.grey, 
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            player.playerName,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          Text(
+            player.teamName.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontStyle: FontStyle.italic,
+              color: Colors.grey[500],
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+      trailing: Text(
+        player.totalMvp.toStringAsFixed(3),
+        style: const TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w500,
+          color: Colors.black87,
+        ),
+      ),
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          color: Colors.grey[50],
+          child: Column(
+            children: [
+              const Divider(),
+              const SizedBox(height: 8),
+              // Breakdown String
+              Text(
+                'Batting: ${player.battingMvp.toStringAsFixed(3)} + Bowling: ${player.bowlingMvp.toStringAsFixed(3)} + Fielding: ${player.fieldingMvp.toStringAsFixed(3)} = ${player.totalMvp.toStringAsFixed(3)}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.teal[700],
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              // Detailed Stat Boxes
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _buildMiniStatBox('Batting', [
+                    _miniStat('R', '${player.runsScored}'),
+                    _miniStat('B', '${player.ballsFaced}'),
+                    _miniStat('SR', player.strikeRate?.toStringAsFixed(1) ?? '-'),
+                  ])),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildMiniStatBox('Bowling', [
+                    _miniStat('W', '${player.wicketsTaken}'),
+                    _miniStat('R', '${player.runsConceded}'),
+                    _miniStat('EC', player.bowlingEconomy?.toStringAsFixed(1) ?? '-'),
+                  ])),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildMiniStatBox('Fielding', [
+                    _miniStat('C', '${player.catches}'),
+                    _miniStat('RO', '${player.runOuts}'),
+                    _miniStat('ST', '${player.stumpings}'),
+                  ])),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMiniStatBox(String title, List<Widget> stats) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        children: [
+          Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red)),
+          const SizedBox(height: 8),
+          ...stats,
+        ],
+      ),
+    );
+  }
+
+  Widget _miniStat(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: 9, color: Colors.grey[600])),
+          Text(value, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 
