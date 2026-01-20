@@ -48,6 +48,7 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
           title: const Text('Match Details'),
           bottom: const TabBar(
             isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: 'Summary'),
               Tab(text: 'Info'),

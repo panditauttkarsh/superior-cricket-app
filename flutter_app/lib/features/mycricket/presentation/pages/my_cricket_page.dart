@@ -36,6 +36,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
   
   // Supabase data
   List<MatchModel> _allMatches = [];
+  Set<String> _myMatchIds = {};
   List<TeamModel> _allTeams = [];
   List<TournamentModel> _allTournaments = [];
   final Set<String> _followedTeamIds = {};
@@ -56,6 +57,17 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     });
   }
 
+  @override
+  void didUpdateWidget(MyCricketPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialTab != oldWidget.initialTab && widget.initialTab != null) {
+      setState(() {
+        _activeTab = widget.initialTab!;
+      });
+      _loadData();
+    }
+  }
+
   Future<void> _loadData() async {
     await Future.wait([
       _loadMatches(),
@@ -74,15 +86,64 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     try {
       final matchRepo = ref.read(matchRepositoryProvider);
       final user = ref.read(authStateProvider).user;
+      final userId = user?.id;
       
-      final matches = await matchRepo.getMatches(
-        userId: user?.id,
-        limit: 50,
+      // 1. Fetch global live matches (same as dashboard)
+      final liveMatches = await matchRepo.getMatches(
+        status: 'live',
+        limit: 20,
       );
+      
+      // 2. Fetch personal matches if user is logged in
+      List<MatchModel> personalMatches = [];
+      Set<String> myIds = {};
+      
+      if (userId != null) {
+        // Fetch matches involving user as player, creator, or team owner
+        personalMatches = await matchRepo.getMatches(
+          userId: userId,
+          includePlayerMatches: true,
+          limit: 50,
+        );
+        
+        // Also ensure explicitly tagged player matches are included (from match_players table)
+        final playerMatches = await matchRepo.getPlayerMatches(userId);
+        
+        final combinedPersonal = [...personalMatches];
+        for (var pm in playerMatches) {
+          if (!combinedPersonal.any((m) => m.id == pm.id)) {
+            combinedPersonal.add(pm);
+          }
+        }
+        
+        for (var m in combinedPersonal) {
+          myIds.add(m.id);
+        }
+        
+        personalMatches = combinedPersonal;
+      }
+      
+      // Combine all matches, avoiding duplicates
+      List<MatchModel> allMatches = [...liveMatches];
+      for (var pm in personalMatches) {
+        if (!allMatches.any((m) => m.id == pm.id)) {
+          allMatches.add(pm);
+        }
+      }
+      
+      // Sort: Live first, then newest first
+      allMatches.sort((a, b) {
+        final aLive = a.status.toLowerCase() == 'live';
+        final bLive = b.status.toLowerCase() == 'live';
+        if (aLive && !bLive) return -1;
+        if (!aLive && bLive) return 1;
+        return b.createdAt.compareTo(a.createdAt);
+      });
       
       if (mounted) {
         setState(() {
-          _allMatches = matches;
+          _allMatches = allMatches;
+          _myMatchIds = myIds;
           _isLoadingMatches = false;
         });
       }
@@ -176,16 +237,21 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
           
           // Content
           Expanded(
-            child: SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      _buildTabContent(),
-                      const SizedBox(height: 130), // Increased space for floating footer
-                    ],
+            child: RefreshIndicator(
+              onRefresh: _loadData,
+              color: AppColors.primary,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 430),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        _buildTabContent(),
+                        const SizedBox(height: 130), // Increased space for floating footer
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -364,15 +430,22 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     final user = ref.read(authStateProvider).user;
     
     if (_matchesFilter == 'My') {
-      // Get matches where user's team is involved, but only started matches (live or completed)
+      // Include if it's Live (public or mine) OR if it's personal (live or completed)
       filteredMatches = _allMatches.where((match) {
-        // Check if user's teams are involved (simplified - you might need to check team membership)
-        final isUserMatch = match.createdBy == user?.id || 
-                           match.team1Id == user?.id || 
-                           match.team2Id == user?.id;
-        // Only include matches that have been started (live or completed), exclude upcoming
-        final isStarted = match.status == 'live' || match.status == 'completed';
-        return isUserMatch && isStarted;
+        final status = match.status.toLowerCase();
+        final isLive = status == 'live';
+        final isPersonal = _myMatchIds.contains(match.id) || 
+                          match.createdBy == user?.id || 
+                          match.team1Id == user?.id || 
+                          match.team2Id == user?.id;
+        
+        // Only include started matches (live or completed) for the "My" tab
+        final isStarted = status == 'live' || status == 'completed';
+        
+        // For the "My" tab, show:
+        // 1. All live matches (to match dashboard)
+        // 2. Personalized started matches (live or completed)
+        return isLive || (isPersonal && isStarted);
       }).toList();
     } else if (_matchesFilter == 'Upcoming') {
       // Show all upcoming matches
@@ -1083,7 +1156,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
 
 
   Widget _buildMatchCard(Map<String, dynamic> match) {
-    final status = match['status'] as String? ?? 'upcoming';
+    final status = (match['status'] as String? ?? 'upcoming').toLowerCase();
     final isCompleted = status == 'completed';
     final isUpcoming = status == 'upcoming';
     final isLive = status == 'live';

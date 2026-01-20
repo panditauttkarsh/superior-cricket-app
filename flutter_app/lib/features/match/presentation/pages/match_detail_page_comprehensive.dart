@@ -259,18 +259,19 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
                   child: _buildMatchHeader(match, currentUserId),
                 ),
                 
-                // Tabs (Pinned)
                 SliverPersistentHeader(
                   pinned: true,
                   delegate: _SliverAppBarDelegate(
                     TabBar(
                       controller: _tabController,
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
                       labelColor: AppColors.primary,
                       unselectedLabelColor: Colors.grey,
                       indicatorColor: AppColors.primary,
                       labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       unselectedLabelStyle: const TextStyle(fontSize: 13),
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 16),
                       tabs: const [
                         Tab(text: 'Info'),
                         Tab(text: 'Summary'),
