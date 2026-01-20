@@ -1099,7 +1099,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     // _updateBowlerStatsFromDelivery(delivery);
     
     // Update extras from delivery
-    _updateExtrasFromDelivery(delivery);
+    // _updateExtrasFromDelivery(delivery);
   }
   
   // Update player stats from a delivery
@@ -1196,6 +1196,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _playerStatsMap.clear();
     _bowlerStatsMap.clear();
     _extrasMap.clear();
+    _bowlerLegalBallsMap.clear(); // Ensure this is also reset to reconstruct from deliveries
     
     // Temporary helper structures for Maiden calculation
     final overRuns = <int, int>{}; // Over # -> Bowler Runs Conceded
@@ -1215,9 +1216,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // Update runs (off bat only)
       if (delivery.extraType == null) {
-        playerStats.runs += delivery.strikerRuns;
+        playerStats.runs += delivery.runs;
       } else if (delivery.extraType == 'NB') {
-        playerStats.runs += delivery.strikerRuns; // Runs off bat on NB count
+        playerStats.runs += delivery.runs; // Runs off bat on NB count
       }
       
       // Update balls faced (legal only)
@@ -1240,10 +1241,19 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       // Legal balls
       if (delivery.isLegalBall) {
         bowlerStats.legalBalls++;
+        // Also update the map used for current bowler display
+        _bowlerLegalBallsMap[delivery.bowler] = (_bowlerLegalBallsMap[delivery.bowler] ?? 0) + 1;
       }
       
       // Runs Conceded (strictly tracked per delivery)
-      bowlerStats.runs += delivery.bowlerRuns;
+      // For extras like Wide and No Ball, the bowler concedes the total (1 penalty + runs)
+      // For regular balls, the bowler concedes the runs off the bat
+      // For Byes/Leg-byes, the bowler concedes 0 (delivery.runs is 0 and extraType is B/LB)
+      if (delivery.extraType == 'WD' || delivery.extraType == 'NB') {
+        bowlerStats.runs += (delivery.extraRuns ?? 0);
+      } else {
+        bowlerStats.runs += delivery.runs;
+      }
       
       // Wickets (Strict filtering)
       if (delivery.wicketType != null) {
