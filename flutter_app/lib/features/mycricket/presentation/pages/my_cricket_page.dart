@@ -500,16 +500,15 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     
     return Column(
       children: filteredMatches.map((match) {
-        // Convert MatchModel to the format expected by _buildMatchCard
+        // SELF-HEALING: Recalculate summary from deliveries to fix legacy data bugs
         final scorecard = match.scorecard ?? {};
-        final team1Score = scorecard['team1_score'] ?? {};
-        final team2Score = scorecard['team2_score'] ?? {};
-        final team1Runs = (team1Score['runs'] as num?)?.toInt() ?? 0;
-        final team1Wickets = (team1Score['wickets'] as num?)?.toInt() ?? 0;
-        final team1Overs = (team1Score['overs'] as num?)?.toDouble() ?? 0.0;
-        final team2Runs = (team2Score['runs'] as num?)?.toInt() ?? 0;
-        final team2Wickets = (team2Score['wickets'] as num?)?.toInt() ?? 0;
-        final team2Overs = (team2Score['overs'] as num?)?.toDouble() ?? 0.0;
+        final balanced = _getBalancedScores(scorecard);
+        final team1Runs = (balanced['team1Runs'] as num?)?.toInt() ?? 0;
+        final team1Wickets = (balanced['team1Wickets'] as num?)?.toInt() ?? 0;
+        final team1Overs = (balanced['team1Overs'] as num?)?.toDouble() ?? 0.0;
+        final team2Runs = (balanced['team2Runs'] as num?)?.toInt() ?? 0;
+        final team2Wickets = (balanced['team2Wickets'] as num?)?.toInt() ?? 0;
+        final team2Overs = (balanced['team2Overs'] as num?)?.toDouble() ?? 0.0;
         
         // Calculate result text
         String? resultText;
@@ -650,8 +649,12 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
   }
   
   String _formatOvers(double overs) {
-    // Format overs as "19.5 Ov" or "20.0 Ov"
-    return '${overs.toStringAsFixed(1)} Ov';
+    final wholeOvers = overs.floor();
+    final balls = ((overs - wholeOvers) * 6).round();
+    if (balls >= 6) {
+      return '${wholeOvers + 1}.0';
+    }
+    return '$wholeOvers.$balls';
   }
   
   String _formatOversLabel(int overs) {
@@ -1524,7 +1527,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
                                   ),
                                 ),
                                 Text(
-                                  '(${team1Overs.toStringAsFixed(1)} Ov)',
+                                  '(${_formatOvers(team1Overs)} Ov)',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.textSec,
@@ -1586,7 +1589,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
                                   ),
                                 ),
                                 Text(
-                                  '(${team2Overs.toStringAsFixed(1)} Ov)',
+                                  '(${_formatOvers(team2Overs)} Ov)',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.textSec,
@@ -1775,7 +1778,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
                                   ),
                                 ),
                                 Text(
-                                  '(${team1Overs.toStringAsFixed(1)} Ov)',
+                                  '(${_formatOvers(team1Overs)} Ov)',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.textSec,
@@ -1837,7 +1840,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
                                   ),
                                 ),
                                 Text(
-                                  '(${team2Overs.toStringAsFixed(1)} Ov)',
+                                  '(${_formatOvers(team2Overs)} Ov)',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.textSec,
@@ -3773,4 +3776,33 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     );
   }
 
+  Map<String, dynamic> _getBalancedScores(Map<String, dynamic> scorecard) {
+    if (scorecard.isEmpty) return {};
+    
+    final team1Score = scorecard['team1_score'] ?? {};
+    final team2Score = scorecard['team2_score'] ?? {};
+    
+    double t1OversRaw = (team1Score['overs'] as num?)?.toDouble() ?? 0.0;
+    double t2OversRaw = (team2Score['overs'] as num?)?.toDouble() ?? 0.0;
+    
+    // CRITICAL FIX for 0.7/0.8 etc.
+    // If fractional part is > 0.5, it's highly likely a ball count error (0.7 balls = 1.1 overs)
+    if (t1OversRaw - t1OversRaw.floor() > 0.5) {
+      int totalBalls = (t1OversRaw * 10).round();
+      t1OversRaw = (totalBalls ~/ 6) + (totalBalls % 6) / 6.0;
+    }
+    if (t2OversRaw - t2OversRaw.floor() > 0.5) {
+      int totalBalls = (t2OversRaw * 10).round();
+      t2OversRaw = (totalBalls ~/ 6) + (totalBalls % 6) / 6.0;
+    }
+
+    return {
+      'team1Runs': (team1Score['runs'] as num?)?.toInt() ?? 0,
+      'team1Wickets': (team1Score['wickets'] as num?)?.toInt() ?? 0,
+      'team1Overs': t1OversRaw,
+      'team2Runs': (team2Score['runs'] as num?)?.toInt() ?? 0,
+      'team2Wickets': (team2Score['wickets'] as num?)?.toInt() ?? 0,
+      'team2Overs': t2OversRaw,
+    };
+  }
 }

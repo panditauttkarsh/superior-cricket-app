@@ -523,21 +523,25 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
     }
 
     // Extract data from scorecard
+    final balanced = _getBalancedScores(scorecard);
+    final team1Runs = (balanced['team1Runs'] as num?)?.toInt() ?? 0;
+    final team1Wickets = (balanced['team1Wickets'] as num?)?.toInt() ?? 0;
+    final team1Overs = (balanced['team1Overs'] as num?)?.toDouble() ?? 0.0;
+    final team2Runs = (balanced['team2Runs'] as num?)?.toInt() ?? 0;
+    final team2Wickets = (balanced['team2Wickets'] as num?)?.toInt() ?? 0;
+    final team2Overs = (balanced['team2Overs'] as num?)?.toDouble() ?? 0.0;
+
     final currentInnings = scorecard['current_innings'] as int? ?? 1;
-    final team1Score = scorecard['team1_score'] as Map<String, dynamic>? ?? {};
-    final team2Score = scorecard['team2_score'] as Map<String, dynamic>? ?? {};
     final crr = (scorecard['crr'] as num?)?.toDouble() ?? 0.0;
     final projected = scorecard['projected'] as int? ?? 0;
     
     // Current batting team data
-    final currentScore = currentInnings == 1 ? team1Score : team2Score;
-    final currentRuns = (currentScore['runs'] as num?)?.toInt() ?? 0;
-    final currentWickets = (currentScore['wickets'] as num?)?.toInt() ?? 0;
-    final currentOvers = (currentScore['overs'] as num?)?.toDouble() ?? 0.0;
+    final currentRuns = currentInnings == 1 ? team1Runs : team2Runs;
+    final currentWickets = currentInnings == 1 ? team1Wickets : team2Wickets;
+    final currentOvers = currentInnings == 1 ? team1Overs : team2Overs;
     
     // Previous innings data
-    final previousScore = currentInnings == 2 ? team1Score : null;
-    final previousRuns = previousScore != null ? ((previousScore['runs'] as num?)?.toInt() ?? 0) : null;
+    final previousRuns = currentInnings == 2 ? team1Runs : null;
     
     // Team names
     final currentBattingTeam = currentInnings == 1 ? (match.team1Name ?? 'Team 1') : (match.team2Name ?? 'Team 2');
@@ -1345,13 +1349,16 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
       );
     }
 
-    // Extract innings data
-    final team1Score = scorecard['team1_score'] as Map<String, dynamic>? ?? {};
-    final team2Score = scorecard['team2_score'] as Map<String, dynamic>? ?? {};
+    // Extract innings data from balanced scorecard
+    final balanced = _getBalancedScores(scorecard);
+    final team1Runs = (balanced['team1Runs'] as num?)?.toInt() ?? 0;
+    final team1Wickets = (balanced['team1Wickets'] as num?)?.toInt() ?? 0;
+    final team1Overs = (balanced['team1Overs'] as num?)?.toDouble() ?? 0.0;
+    final team2Runs = (balanced['team2Runs'] as num?)?.toInt() ?? 0;
+    final team2Wickets = (balanced['team2Wickets'] as num?)?.toInt() ?? 0;
+    final team2Overs = (balanced['team2Overs'] as num?)?.toDouble() ?? 0.0;
+
     final currentInnings = scorecard['current_innings'] as int? ?? 1;
-    final firstInningsRuns = scorecard['first_innings_runs'] as int? ?? 0;
-    final firstInningsWickets = scorecard['first_innings_wickets'] as int? ?? 0;
-    final firstInningsOvers = (scorecard['first_innings_overs'] as num?)?.toDouble() ?? 0.0;
     
     // Determine team names
     final team1Name = match.team1Name ?? 'Team 1';
@@ -1361,11 +1368,14 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
     final firstInningsTeam = currentInnings == 2 ? team1Name : team2Name;
     final secondInningsTeam = currentInnings == 2 ? team2Name : team1Name;
     
-    // Get current innings data
-    final currentScore = currentInnings == 1 ? team1Score : team2Score;
-    final currentRuns = (currentScore['runs'] as num?)?.toInt() ?? 0;
-    final currentWickets = (currentScore['wickets'] as num?)?.toInt() ?? 0;
-    final currentOvers = (currentScore['overs'] as num?)?.toDouble() ?? 0.0;
+    // Mapping for Innings Widget
+    final firstInningsRuns = currentInnings == 2 ? team1Runs : 0;
+    final firstInningsWickets = currentInnings == 2 ? team1Wickets : 0;
+    final firstInningsOvers = currentInnings == 2 ? team1Overs : 0.0;
+
+    final currentRuns = currentInnings == 1 ? team1Runs : team2Runs;
+    final currentWickets = currentInnings == 1 ? team1Wickets : team2Wickets;
+    final currentOvers = currentInnings == 1 ? team1Overs : team2Overs;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -3306,5 +3316,86 @@ class _BattingScorecardTable extends StatelessWidget {
         height: 1.3,
       ),
     );
+  }
+
+  Map<String, dynamic> _getBalancedScores(Map<String, dynamic> scorecard) {
+    if (scorecard.isEmpty) return {};
+    
+    final team1Score = scorecard['team1_score'] ?? {};
+    final team2Score = scorecard['team2_score'] ?? {};
+    
+    int t1Runs = (team1Score['runs'] as num?)?.toInt() ?? 0;
+    int t1Wickets = (team1Score['wickets'] as num?)?.toInt() ?? 0;
+    double t1OversRaw = (team1Score['overs'] as num?)?.toDouble() ?? 0.0;
+    
+    int t2Runs = (team2Score['runs'] as num?)?.toInt() ?? 0;
+    int t2Wickets = (team2Score['wickets'] as num?)?.toInt() ?? 0;
+    double t2OversRaw = (team2Score['overs'] as num?)?.toDouble() ?? 0.0;
+
+    // SELF-HEALING: If deliveries exist, recalculate from the source of truth
+    final deliveries = scorecard['deliveries'] as List<dynamic>?;
+    if (deliveries != null && deliveries.isNotEmpty) {
+      int calcRuns = 0;
+      int calcWickets = 0;
+      int calcLegalBalls = 0;
+      
+      for (final json in deliveries) {
+        final d = json as Map<String, dynamic>;
+        // Use raw increment values to reconstruct truth
+        int ballRuns = 0;
+        final extraType = d['extraType'] as String?;
+        final r = (d['runs'] as num?)?.toInt() ?? 0;
+        final er = (d['extraRuns'] as num?)?.toInt() ?? 0;
+        
+        if (extraType == 'WD' || extraType == 'NB') {
+          ballRuns = er;
+        } else {
+          ballRuns = r;
+        }
+        
+        calcRuns += ballRuns;
+        if (d['wicketType'] != null) calcWickets++;
+        if (d['isLegalBall'] == true) calcLegalBalls++;
+      }
+      
+      // We assume calculations are for the CURRENT innings shown in header
+      // This is a simplified healer.
+      final currentInnings = (scorecard['current_innings'] as num?)?.toInt() ?? 1;
+      if (currentInnings == 1) {
+        t1Runs = calcRuns;
+        t1Wickets = calcWickets;
+        t1OversRaw = (calcLegalBalls ~/ 6) + (calcLegalBalls % 6) / 6.0;
+      } else {
+        t2Runs = calcRuns;
+        t2Wickets = calcWickets;
+        t2OversRaw = (calcLegalBalls ~/ 6) + (calcLegalBalls % 6) / 6.0;
+        
+        // Try to get first innings from stored keys if available
+        if (scorecard.containsKey('first_innings_runs')) {
+          t1Runs = (scorecard['first_innings_runs'] as num?)?.toInt() ?? t1Runs;
+          t1Wickets = (scorecard['first_innings_wickets'] as num?)?.toInt() ?? t1Wickets;
+          t1OversRaw = (scorecard['first_innings_overs'] as num?)?.toDouble() ?? t1OversRaw;
+        }
+      }
+    } else {
+      // Legacy Fix for 0.7/0.8 etc.
+      if (t1OversRaw - t1OversRaw.floor() > 0.5) {
+        int totalBalls = (t1OversRaw * 10).round();
+        t1OversRaw = (totalBalls ~/ 6) + (totalBalls % 6) / 6.0;
+      }
+      if (t2OversRaw - t2OversRaw.floor() > 0.5) {
+        int totalBalls = (t2OversRaw * 10).round();
+        t2OversRaw = (totalBalls ~/ 6) + (totalBalls % 6) / 6.0;
+      }
+    }
+
+    return {
+      'team1Runs': t1Runs,
+      'team1Wickets': t1Wickets,
+      'team1Overs': t1OversRaw,
+      'team2Runs': t2Runs,
+      'team2Wickets': t2Wickets,
+      'team2Overs': t2OversRaw,
+    };
   }
 }
