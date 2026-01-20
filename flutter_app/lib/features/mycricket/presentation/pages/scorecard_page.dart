@@ -1292,7 +1292,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       // --- Maiden Calculation Pre-processing ---
       // Group data by Over
       overBowler[delivery.over] = delivery.bowler;
-      overRuns[delivery.over] = (overRuns[delivery.over] ?? 0) + delivery.bowlerRuns;
+      int incrementalBowlerRuns = 0;
+      if (delivery.extraType == 'WD' || delivery.extraType == 'NB') {
+        incrementalBowlerRuns = (delivery.extraRuns ?? 0);
+      } else {
+        incrementalBowlerRuns = delivery.runs;
+      }
+      overRuns[delivery.over] = (overRuns[delivery.over] ?? 0) + incrementalBowlerRuns;
       if (delivery.isLegalBall) {
         overLegalBalls[delivery.over] = (overLegalBalls[delivery.over] ?? 0) + 1;
       }
@@ -1313,6 +1319,43 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
          }
       }
     }
+    
+    // Final step: Sync live state variables with the correctly recalculated mapping
+    _syncLiveStateFromRecalculatedStats();
+  }
+  
+  // Update root state variables from recalculated stats maps
+  // This ensures that even if live counters drifted, they are corrected to match the delivery history
+  void _syncLiveStateFromRecalculatedStats() {
+    // 1. Sync Batsmen
+    if (_striker.isNotEmpty && _playerStatsMap.containsKey(_striker)) {
+      _strikerRuns = _playerStatsMap[_striker]!.runs;
+      _strikerBalls = _playerStatsMap[_striker]!.balls;
+      _strikerSR = _strikerBalls > 0 ? (_strikerRuns / _strikerBalls) * 100 : 0.0;
+    }
+    if (_nonStriker.isNotEmpty && _playerStatsMap.containsKey(_nonStriker)) {
+      _nonStrikerRuns = _playerStatsMap[_nonStriker]!.runs;
+      _nonStrikerBalls = _playerStatsMap[_nonStriker]!.balls;
+      _nonStrikerSR = _nonStrikerBalls > 0 ? (_nonStrikerRuns / _nonStrikerBalls) * 100 : 0.0;
+    }
+    
+    // 2. Sync Bowler
+    if (_bowler.isNotEmpty && _bowlerStatsMap.containsKey(_bowler)) {
+      _bowlerRuns = _bowlerStatsMap[_bowler]!.runs;
+      _bowlerWickets = _bowlerStatsMap[_bowler]!.wickets;
+      // Overs are calculated from legal balls in _updateBowlerOvers usually, 
+      // but let's ensure the count is right
+      _bowlerLegalBallsMap[_bowler] = _bowlerStatsMap[_bowler]!.legalBalls;
+    }
+    
+    // 3. Sync Total Runs (sum of all batsman runs + all extras)
+    int totalBatruns = 0;
+    _playerStatsMap.forEach((_, stats) => totalBatruns += stats.runs);
+    
+    int totalExtras = 0;
+    _extrasMap.forEach((_, count) => totalExtras += count);
+    
+    _totalRuns = totalBatruns + totalExtras;
   }
   
   // Build batting statistics for current innings from deliveries

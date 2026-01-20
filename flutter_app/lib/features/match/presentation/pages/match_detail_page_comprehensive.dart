@@ -2347,15 +2347,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
         int fours = (playerStats['fours'] as num?)?.toInt() ?? 0;
         int sixes = (playerStats['sixes'] as num?)?.toInt() ?? 0;
         
-        // Override with root keys for active players if isCurrent
-        // This ensures Scorecard matches Summary tab exactly
-        if (isCurrent && player == striker && striker.isNotEmpty) {
-           runs = (scorecard['striker_runs'] as num?)?.toInt() ?? runs;
-           balls = (scorecard['striker_balls'] as num?)?.toInt() ?? balls;
-        } else if (isCurrent && player == nonStriker && nonStriker.isNotEmpty) {
-           runs = (scorecard['non_striker_runs'] as num?)?.toInt() ?? runs;
-           balls = (scorecard['non_striker_balls'] as num?)?.toInt() ?? balls;
-        }
+        // Use values from the stats map - the single source of truth recalculated from deliveries
         
         final strikeRate = balls > 0 ? (runs / balls) * 100 : 0.0;
         // startTime -> minutes calculation omitted for brevity/simplicity in read-only view
@@ -2544,14 +2536,8 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
         int runs = (bowlerStats['runs'] as num?)?.toInt() ?? 0;
         int wickets = (bowlerStats['wickets'] as num?)?.toInt() ?? 0;
         
-        // Override with root keys for active bowler if isCurrent
-        if (isCurrent && bowler == currentBowler && currentBowler.isNotEmpty) {
-          overs = (scorecard['bowler_overs'] as num?)?.toDouble() ?? overs;
-          runs = (scorecard['bowler_runs'] as num?)?.toInt() ?? runs;
-          wickets = (scorecard['bowler_wickets'] as num?)?.toInt() ?? wickets;
-        }
-
-        final economy = overs > 0 ? runs / overs : 0.0; // Rough eco calc
+        // Use values from the stats map - the single source of truth recalculated from deliveries
+        final economy = overs > 0 ? runs / overs : 0.0;
         
         stats.add(_PlayerBowlingStat(
           bowlerName: bowler,
