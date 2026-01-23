@@ -33,6 +33,14 @@ class _LoginPageState extends ConsumerState<LoginPage>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _floatAnimation;
+  
+  // Cricket specific animations
+  late AnimationController _cricketBallController;
+  late Animation<double> _cricketBallAnimation;
+
+  // Shine animation for main title
+  late AnimationController _shineController;
+  late Animation<double> _shineAnimation;
 
   @override
   void initState() {
@@ -72,11 +80,32 @@ class _LoginPageState extends ConsumerState<LoginPage>
 
     // Floating animation for background elements
     _floatController = AnimationController(
-      duration: const Duration(milliseconds: 3000),
+      duration: const Duration(milliseconds: 10000), // Slower for smoother movement
       vsync: this,
     )..repeat();
     _floatAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _floatController, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _floatController, curve: Curves.linear),
+    );
+    
+    // Cricket ball zip animation
+    _cricketBallController = AnimationController(
+      duration: const Duration(milliseconds: 20000), // Even slower speed (20 seconds)
+      vsync: this,
+    )..repeat();
+    _cricketBallAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(
+        parent: _cricketBallController,
+        curve: const Interval(0.2, 0.7, curve: Curves.easeInOutQuart),
+      ),
+    );
+    
+    // Shine animation for text tagline - faster and continuous
+    _shineController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    _shineAnimation = Tween<double>(begin: -1.0, end: 1.0).animate(
+      CurvedAnimation(parent: _shineController, curve: Curves.linear),
     );
   }
 
@@ -86,6 +115,8 @@ class _LoginPageState extends ConsumerState<LoginPage>
     _fadeController.dispose();
     _slideController.dispose();
     _floatController.dispose();
+    _cricketBallController.dispose();
+    _shineController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -192,139 +223,204 @@ class _LoginPageState extends ConsumerState<LoginPage>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.primary, // #2563EB - Dark blue from logo
-              AppColors.primary.withOpacity(0.95),
-              AppColors.primary.withOpacity(0.9), // Keep it dark blue
-            ],
-            stops: const [0.0, 0.5, 1.0],
-          ),
-        ),
-        child: Stack(
-          children: [
-            // Animated background pattern
-            _buildAnimatedBackground(),
+        color: AppColors.primary,
+        child: AnimatedBuilder(
+          animation: _floatAnimation,
+          builder: (context, child) {
+            return Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment(
+                    math.cos(_floatAnimation.value * 2 * math.pi) * 0.5 - 0.5,
+                    math.sin(_floatAnimation.value * 2 * math.pi) * 0.5 - 0.5,
+                  ),
+                  end: Alignment(
+                    math.cos(_floatAnimation.value * 2 * math.pi + math.pi) * 0.5 + 0.5,
+                    math.sin(_floatAnimation.value * 2 * math.pi + math.pi) * 0.5 + 0.5,
+                  ),
+                  colors: [
+                    AppColors.primary,
+                    const Color(0xFF1E40AF), // Deep blue
+                    const Color(0xFF1D4ED8), // Royal blue
+                    AppColors.primary.withOpacity(0.8),
+                  ],
+                  stops: const [0.0, 0.3, 0.7, 1.0],
+                ),
+              ),
+              child: child,
+            );
+          },
+          child: Stack(
+            children: [
+              // Animated background pattern
+              _buildAnimatedBackground(),
 
-            // Floating cricket elements
-            _buildFloatingElements(),
+              // Floating cricket elements/particles
+              _buildFloatingElements(),
+              
+              // Cricket specific zip animations
+              _buildCricketAnimations(),
 
-            SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 400),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 60),
-                        
-                        // Logo Section with fade animation
-                        FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: _buildLogo(),
-                        ),
-                        
-                        const SizedBox(height: 48),
-                        
-                        // Title with fade animation
-                        FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: Column(
-                            children: [
-                              const Text(
-                                'PITCH POINT',
-                                style: TextStyle(
-                                  fontSize: 48,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'LIVE THE GAME',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey[400],
-                                  letterSpacing: 4,
-                                ),
-                              ),
-                            ],
+              SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 400),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 60),
+                          
+                          // Logo Section with fade animation
+                          FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: _buildLogo(),
                           ),
-                        ),
-                        
-                        const SizedBox(height: 32),
-                        
-                        // Form with slide animation
-                        SlideTransition(
-                          position: _slideAnimation,
-                          child: FadeTransition(
+                          
+                          const SizedBox(height: 48),
+                          
+                          // Title with fade and shine animation
+                          FadeTransition(
                             opacity: _fadeAnimation,
                             child: Column(
                               children: [
-                                // Tab Switcher
-                                _buildTabSwitcher(),
-                                
-                                const SizedBox(height: 24),
-                                
-                                // Form
-                                Form(
-                                  key: _formKey,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      // Email Field
-                                      _buildEmailField(),
-                                      
-                                      const SizedBox(height: 24),
-                                      
-                                      // Password Field
-                                      _buildPasswordField(),
-                                      
-                                      // Error/Message Display
-                                      if (_error != null) _buildErrorWidget(),
-                                      if (_message != null) _buildMessageWidget(),
-                                      
-                                      const SizedBox(height: 24),
-                                      
-                                      // Submit Button
-                                      _buildSubmitButton(),
-                                      
-                                      const SizedBox(height: 32),
-                                      
-                                      // Divider
-                                      _buildDivider(),
-                                      
-                                      const SizedBox(height: 24),
-                                      
-                                      // Social Login Buttons
-                                      _buildSocialButtons(),
-                                      
-                                      const SizedBox(height: 32),
-                                      
-                                      // Toggle Link
-                                      _buildToggleLink(),
-                                    ],
+                                const Text(
+                                  'PITCH POINT',
+                                  style: TextStyle(
+                                    fontSize: 48,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
                                   ),
+                                ),
+                                const SizedBox(height: 12),
+                                AnimatedBuilder(
+                                  animation: Listenable.merge([_glowAnimation, _shineAnimation]),
+                                  builder: (context, child) {
+                                    return ShaderMask(
+                                      shaderCallback: (Rect bounds) {
+                                        return LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            Colors.white.withOpacity(0.7),
+                                            Colors.white.withOpacity(0.7),
+                                            Colors.white,
+                                            Colors.white.withOpacity(0.7),
+                                            Colors.white.withOpacity(0.7),
+                                          ],
+                                          stops: [
+                                            0.0,
+                                            (_shineAnimation.value - 0.15).clamp(0.0, 1.0),
+                                            _shineAnimation.value.clamp(0.0, 1.0),
+                                            (_shineAnimation.value + 0.15).clamp(0.0, 1.0),
+                                            1.0,
+                                          ],
+                                        ).createShader(bounds);
+                                      },
+                                      child: Text(
+                                        'LIVE THE GAME',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          color: Colors.white,
+                                          letterSpacing: 4 + (_glowAnimation.value * 2),
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                        
-                        const SizedBox(height: 40),
-                      ],
+                          
+                          const SizedBox(height: 32),
+                          
+                          // Form with staggered entrance
+                          Column(
+                            children: [
+                              _buildStaggeredItem(
+                                index: 1,
+                                child: _buildTabSwitcher(),
+                              ),
+                              const SizedBox(height: 24),
+                              Form(
+                                key: _formKey,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildStaggeredItem(
+                                      index: 2,
+                                      child: _buildEmailField(),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    _buildStaggeredItem(
+                                      index: 3,
+                                      child: _buildPasswordField(),
+                                    ),
+                                    if (_error != null) _buildErrorWidget(),
+                                    if (_message != null) _buildMessageWidget(),
+                                    const SizedBox(height: 24),
+                                    _buildStaggeredItem(
+                                      index: 4,
+                                      child: _buildSubmitButton(),
+                                    ),
+                                    const SizedBox(height: 32),
+                                    _buildStaggeredItem(
+                                      index: 5,
+                                      child: _buildDivider(),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    _buildStaggeredItem(
+                                      index: 6,
+                                      child: _buildSocialButtons(),
+                                    ),
+                                    const SizedBox(height: 32),
+                                    _buildStaggeredItem(
+                                      index: 7,
+                                      child: _buildToggleLink(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 40),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStaggeredItem({required int index, required Widget child}) {
+    return AnimatedBuilder(
+      animation: _slideController,
+      builder: (context, child) {
+        final double delay = index * 0.1;
+        final double start = (delay).clamp(0.0, 1.0);
+        final double end = (delay + 0.6).clamp(0.0, 1.0);
+        
+        final animation = CurvedAnimation(
+          parent: _slideController,
+          curve: Interval(start, end, curve: Curves.easeOutQuart),
+        );
+
+        return Opacity(
+          opacity: animation.value,
+          child: Transform.translate(
+            offset: Offset(0, 50 * (1 - animation.value)),
+            child: child,
+          ),
+        );
+      },
+      child: child,
     );
   }
 
@@ -338,21 +434,16 @@ class _LoginPageState extends ConsumerState<LoginPage>
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
-              // Pulsing glow effect
+              // Pulsing white glow effect
               BoxShadow(
-                color: AppColors.accent.withOpacity(_glowAnimation.value * 0.6),
-                blurRadius: 50,
-                spreadRadius: 15,
-              ),
-              BoxShadow(
-                color: AppColors.primary.withOpacity(_glowAnimation.value * 0.4),
-                blurRadius: 70,
-                spreadRadius: 25,
-              ),
-              BoxShadow(
-                color: Colors.white.withOpacity(_glowAnimation.value * 0.3),
+                color: Colors.white.withOpacity(_glowAnimation.value * 0.4),
                 blurRadius: 40,
                 spreadRadius: 10,
+              ),
+              BoxShadow(
+                color: Colors.white.withOpacity(_glowAnimation.value * 0.2),
+                blurRadius: 60,
+                spreadRadius: 20,
               ),
             ],
           ),
@@ -360,17 +451,18 @@ class _LoginPageState extends ConsumerState<LoginPage>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.accent.withOpacity(0.5 + (_glowAnimation.value * 0.3)),
-                width: 2,
+                color: Colors.white.withOpacity(0.8 + (_glowAnimation.value * 0.2)),
+                width: 3,
               ),
+              color: Colors.white.withOpacity(0.1),
             ),
             child: Center(
               child: Container(
                 width: 100,
                 height: 100,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.primary, // Dark blue from logo
+                  color: Colors.white, // Inner background now white
                 ),
                 child: ClipOval(
                   child: Image.asset(
@@ -380,9 +472,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppColors.primary,
+                          color: Colors.white,
                         ),
                         child: const Center(
                           child: Text(
@@ -426,25 +518,116 @@ class _LoginPageState extends ConsumerState<LoginPage>
       builder: (context, child) {
         return Stack(
           children: [
-            // Floating cricket balls
-            for (int i = 0; i < 4; i++)
+            // Floating cricket balls/particles
+            for (int i = 0; i < 15; i++)
               Positioned(
-                left: (i * 100.0) + 50,
-                top: 100 + (i % 2 * 200.0) + (math.sin(_floatAnimation.value * 2 * math.pi + i) * 30),
-                child: Opacity(
-                  opacity: 0.1,
-                  child: Transform.rotate(
-                    angle: _floatAnimation.value * 2 * math.pi + i,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.2),
-                        border: Border.all(
-                          color: AppColors.accent.withOpacity(0.3),
-                          width: 1,
+                left: (math.sin(i * 1.5) * 200) + 200 + (math.cos(_floatAnimation.value * 2 * math.pi + i) * 100),
+                top: (math.cos(i * 2.5) * 300) + 400 + (math.sin(_floatAnimation.value * 2 * math.pi + i) * 150),
+                child: AnimatedBuilder(
+                  animation: _floatAnimation,
+                  builder: (context, child) {
+                    final double size = 5 + (math.sin(_floatAnimation.value * math.pi + i) * 10).abs();
+                    return Opacity(
+                      opacity: 0.05 + (0.1 * math.sin(_floatAnimation.value * math.pi + i).abs()),
+                      child: Container(
+                        width: size,
+                        height: size,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.white.withOpacity(0.5),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCricketAnimations() {
+    return AnimatedBuilder(
+      animation: _cricketBallAnimation,
+      builder: (context, child) {
+        final double screenWidth = MediaQuery.of(context).size.width;
+        final double screenHeight = MediaQuery.of(context).size.height;
+        
+        return Stack(
+          children: [
+            // Zipping cricket ball
+            if (_cricketBallAnimation.value > -0.5 && _cricketBallAnimation.value < 1.5)
+              Positioned(
+                left: _cricketBallAnimation.value * screenWidth,
+                top: screenHeight * 0.4 + (math.sin(_cricketBallAnimation.value * math.pi) * 100),
+                child: Transform.rotate(
+                  angle: _cricketBallAnimation.value * 4 * math.pi,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.red[800],
+                      boxShadow: [
+                        // White highlight glow
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.8),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.4),
+                          blurRadius: 30,
+                          spreadRadius: 10,
+                        ),
+                      ],
+                      gradient: const RadialGradient(
+                        colors: [Color(0xFFEF4444), Color(0xFF991B1B)],
+                        center: Alignment(-0.3, -0.3),
+                      ),
+                    ),
+                    child: Center(
+                      child: Container(
+                        width: 36,
+                        height: 2,
+                        color: Colors.white.withOpacity(0.3), // Seam
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              
+            // Floating Cricket Icons (Bats/Stumps)
+            for (int i = 0; i < 6; i++)
+              Positioned(
+                left: (i * (screenWidth / 6)) + (math.sin(_floatAnimation.value * 2 * math.pi + i) * 30),
+                top: (i % 2 == 0 ? 100.0 : screenHeight - 200) + (math.cos(_floatAnimation.value * 2 * math.pi + i) * 50),
+                child: Opacity(
+                  opacity: 0.15, // Slightly higher opacity
+                  child: Transform.rotate(
+                    angle: _floatAnimation.value * 1 * math.pi + (i * 0.5),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.white.withOpacity(0.2),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        i % 2 == 0 ? Icons.sports_cricket : Icons.sports_baseball,
+                        size: 60 + (i * 10.0),
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -458,33 +641,39 @@ class _LoginPageState extends ConsumerState<LoginPage>
 
   Widget _buildTabSwitcher() {
     return Container(
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[700]!),
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.black.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _isLogin = true),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                  color: _isLogin ? Colors.white.withOpacity(0.1) : Colors.transparent,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: _isLogin ? AppColors.accent : Colors.transparent,
-                      width: 2,
-                    ),
-                  ),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: _isLogin ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: _isLogin
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : [],
                 ),
                 child: Text(
                   'Log In',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    color: _isLogin ? Colors.white : Colors.grey[400],
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: _isLogin ? AppColors.primary : Colors.white,
                   ),
                 ),
               ),
@@ -493,24 +682,29 @@ class _LoginPageState extends ConsumerState<LoginPage>
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _isLogin = false),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                  color: !_isLogin ? Colors.white.withOpacity(0.1) : Colors.transparent,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: !_isLogin ? AppColors.accent : Colors.transparent,
-                      width: 2,
-                    ),
-                  ),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: !_isLogin ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: !_isLogin
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : [],
                 ),
                 child: Text(
                   'Sign Up',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    color: !_isLogin ? Colors.white : Colors.grey[400],
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: !_isLogin ? AppColors.primary : Colors.white,
                   ),
                 ),
               ),
@@ -537,23 +731,23 @@ class _LoginPageState extends ConsumerState<LoginPage>
         TextFormField(
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
           decoration: InputDecoration(
             hintText: 'coach@cricplay.com',
-            hintStyle: TextStyle(color: Colors.grey[500]),
-            prefixIcon: const Icon(Icons.email_outlined, color: Colors.grey, size: 20),
+            hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+            prefixIcon: const Icon(Icons.email_outlined, color: Colors.white, size: 20),
             filled: false,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[700]!),
+              borderSide: BorderSide(color: Colors.white.withOpacity(0.5)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[700]!),
+              borderSide: BorderSide(color: Colors.white.withOpacity(0.5)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.accent, width: 2),
+              borderSide: const BorderSide(color: Colors.white, width: 2),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           ),
@@ -594,10 +788,10 @@ class _LoginPageState extends ConsumerState<LoginPage>
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                  child: Text(
+                  child: const Text(
                   'Forgot Password?',
                   style: TextStyle(
-                    color: AppColors.accent,
+                    color: Colors.white,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
@@ -609,15 +803,15 @@ class _LoginPageState extends ConsumerState<LoginPage>
         TextFormField(
           controller: _passwordController,
           obscureText: !_showPassword,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
           decoration: InputDecoration(
             hintText: '••••••••',
-            hintStyle: TextStyle(color: Colors.grey[400]),
-            prefixIcon: const Icon(Icons.lock_outlined, color: Colors.grey, size: 20),
+            hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+            prefixIcon: const Icon(Icons.lock_outlined, color: Colors.white, size: 20),
             suffixIcon: IconButton(
               icon: Icon(
                 _showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                color: Colors.grey,
+                color: Colors.white,
                 size: 20,
               ),
               onPressed: () {
@@ -627,15 +821,15 @@ class _LoginPageState extends ConsumerState<LoginPage>
             filled: false,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[700]!),
+              borderSide: BorderSide(color: Colors.white.withOpacity(0.5)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[700]!),
+              borderSide: BorderSide(color: Colors.white.withOpacity(0.5)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.accent, width: 2),
+              borderSide: const BorderSide(color: Colors.white, width: 2),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           ),
@@ -692,12 +886,13 @@ class _LoginPageState extends ConsumerState<LoginPage>
       child: ElevatedButton(
         onPressed: _isLoading ? null : _handleAuth,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accent, // Sky blue
+          backgroundColor: AppColors.accent,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          elevation: 0,
+          elevation: 4,
+          shadowColor: AppColors.accent.withOpacity(0.4),
         ),
         child: _isLoading
             ? const Text(
@@ -730,7 +925,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
       children: [
         Expanded(
           child: Divider(
-            color: Colors.grey[700],
+            color: Colors.white.withOpacity(0.3),
             thickness: 1,
           ),
         ),
@@ -738,16 +933,17 @@ class _LoginPageState extends ConsumerState<LoginPage>
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             'OR CONTINUE WITH',
-            style: TextStyle(
-              color: Colors.grey[400],
+            style: const TextStyle(
+              color: Colors.white,
               fontSize: 12,
               letterSpacing: 1.5,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
         Expanded(
           child: Divider(
-            color: Colors.grey[700],
+            color: Colors.white.withOpacity(0.3),
             thickness: 1,
           ),
         ),
@@ -795,35 +991,25 @@ class _LoginPageState extends ConsumerState<LoginPage>
         Expanded(
           child: OutlinedButton.icon(
             onPressed: _isLoading ? null : _handleGoogleLogin,
-            icon: Container(
+            icon: Image.network(
+              'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
               width: 20,
               height: 20,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Center(
-                child: Text(
-                  'G',
-                  style: TextStyle(
-                    color: Colors.blue,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
             ),
             label: const Text(
               'Google',
               style: TextStyle(
-                color: Colors.white,
+                color: Color(0xFF1F2937),
                 fontSize: 16,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
             ),
             style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
-              side: BorderSide(color: Colors.grey[700]!),
+              side: BorderSide.none,
+              elevation: 2,
+              shadowColor: Colors.black.withOpacity(0.1),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -834,18 +1020,21 @@ class _LoginPageState extends ConsumerState<LoginPage>
         Expanded(
           child: OutlinedButton.icon(
             onPressed: () {},
-            icon: const Icon(Icons.apple, color: Colors.white, size: 20),
+            icon: const Icon(Icons.apple, color: Colors.black, size: 24),
             label: const Text(
               'Apple',
               style: TextStyle(
-                color: Colors.white,
+                color: Color(0xFF1F2937),
                 fontSize: 16,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
             ),
             style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
-              side: BorderSide(color: Colors.grey[700]!),
+              side: BorderSide.none,
+              elevation: 2,
+              shadowColor: Colors.black.withOpacity(0.1),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -862,7 +1051,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
       children: [
         Text(
           _isLogin ? "Don't have an account? " : 'Already have an account? ',
-          style: TextStyle(color: Colors.grey[400], fontSize: 14),
+          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
         ),
         TextButton(
           onPressed: () => setState(() => _isLogin = !_isLogin),
@@ -873,10 +1062,10 @@ class _LoginPageState extends ConsumerState<LoginPage>
           ),
           child: Text(
             _isLogin ? 'Sign Up' : 'Log In',
-            style: TextStyle(
-              color: AppColors.accent,
+            style: const TextStyle(
+              color: Colors.white,
               fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ),
@@ -897,22 +1086,7 @@ class BackgroundPatternPainter extends CustomPainter {
       ..color = Colors.white.withOpacity(0.03)
       ..strokeWidth = 1;
 
-    // Animated grid pattern
-    final offset = animationValue * 40;
-    for (double i = -offset; i < size.width + 40; i += 40) {
-      canvas.drawLine(
-        Offset(i, 0),
-        Offset(i, size.height),
-        paint,
-      );
-    }
-    for (double i = -offset; i < size.height + 40; i += 40) {
-      canvas.drawLine(
-        Offset(0, i),
-        Offset(size.width, i),
-        paint,
-      );
-    }
+    // Grid pattern removed for a cleaner look
 
     // Radial gradient overlays for depth
     final glowPaint1 = Paint()

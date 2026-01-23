@@ -789,6 +789,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             'bowler_stats_map': bowlerStatsMapSerialized,
             'first_innings_player_stats': firstInningsPlayerStatsSerialized,
             'first_innings_bowler_stats': firstInningsBowlerStatsSerialized,
+            'extras_map': _extrasMap,
+            'first_innings_extras': _firstInningsExtras,
             'deliveries': _deliveries.map((d) => d.toJson()).toList(),
             'first_innings_deliveries': _firstInningsDeliveries.map((d) => d.toJson()).toList(),
           };
@@ -6186,6 +6188,32 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       if (widget.overs != null && _currentOver >= widget.overs!) {
         _endInnings();
       }
+
+      // Record delivery (single source of truth)
+      _recordDelivery(
+        over: _currentOver,
+        ball: _currentBall,
+        striker: strikerForCommentary,
+        nonStriker: _nonStriker,
+        bowler: _bowler,
+        runs: 0, // Leg byes are not credited to batsman
+        teamTotal: _totalRuns,
+        strikerRuns: _strikerRuns,
+        strikerBalls: _strikerBalls,
+        bowlerRuns: _bowlerRuns,
+        bowlerLegalBalls: _bowlerLegalBallsMap[_bowler] ?? 0,
+        wickets: _wickets,
+        wicketType: null,
+        fielder: null,
+        assistFielder: null,
+        extraType: 'LB',
+        extraRuns: runs,
+        isLegalBall: true, // Leg bye is a legal ball
+        isShortRun: false,
+        commentaryId: null,
+        shotDirection: null,
+        shotType: null,
+      );
     });
     
     _saveScorecardToSupabase();
