@@ -1790,27 +1790,33 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                           ),
                                         ),
                                         const SizedBox(height: 8),
-                                        // Compact Orange Pill Badge
+                                        // Dynamic Membership Badge
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                           decoration: BoxDecoration(
-                                            gradient: const LinearGradient(
-                                              colors: [Color(0xFFFFB300), Color(0xFFFF8F00)],
-                                              begin: Alignment.centerLeft,
-                                              end: Alignment.centerRight,
-                                            ),
+                                            gradient: user?.subscriptionPlan == 'pro'
+                                              ? const LinearGradient(
+                                                  colors: [Color(0xFF007AFF), Color(0xFF00C6FF)],
+                                                  begin: Alignment.centerLeft,
+                                                  end: Alignment.centerRight,
+                                                )
+                                              : const LinearGradient(
+                                                  colors: [Color(0xFFFFB300), Color(0xFFFF8F00)],
+                                                  begin: Alignment.centerLeft,
+                                                  end: Alignment.centerRight,
+                                                ),
                                             borderRadius: BorderRadius.circular(20),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: Colors.orange.withOpacity(0.3),
+                                                color: (user?.subscriptionPlan == 'pro' ? Colors.blue : Colors.orange).withOpacity(0.3),
                                                 blurRadius: 4,
                                                 offset: const Offset(0, 2),
                                               ),
                                             ],
                                           ),
-                                          child: const Text(
-                                            'BASIC MEMBER',
-                                            style: TextStyle(
+                                          child: Text(
+                                            user?.subscriptionPlan == 'pro' ? 'PRO MEMBER' : 'BASIC MEMBER',
+                                            style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 9,
                                               fontWeight: FontWeight.w700,

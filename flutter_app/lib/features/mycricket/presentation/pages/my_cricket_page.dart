@@ -3,13 +3,15 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/providers/auth_provider.dart';
-import '../../../../core/providers/repository_providers.dart';
-import '../../../../core/models/match_model.dart';
-import '../../../../core/models/team_model.dart';
-import '../../../../core/models/tournament_model.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../widgets/enhanced_create_match_dialog.dart';
+import 'package:superior_cricket_app/core/providers/auth_provider.dart';
+import 'package:superior_cricket_app/core/providers/repository_providers.dart';
+import 'package:superior_cricket_app/core/models/match_model.dart';
+import 'package:superior_cricket_app/core/models/team_model.dart';
+import 'package:superior_cricket_app/core/models/tournament_model.dart';
+import 'package:superior_cricket_app/core/models/player_model.dart';
+import 'package:superior_cricket_app/core/theme/app_colors.dart';
+import 'package:superior_cricket_app/features/mycricket/presentation/widgets/enhanced_create_match_dialog.dart';
+import 'package:superior_cricket_app/features/mycricket/presentation/widgets/player_comparison_dialog.dart';
 
 class MyCricketPage extends ConsumerStatefulWidget {
   final String? initialTab;
@@ -69,6 +71,7 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
   }
 
   Future<void> _loadData() async {
+    ref.invalidate(playerDataProvider);
     await Future.wait([
       _loadMatches(),
       _loadTeams(),
@@ -275,7 +278,18 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const SizedBox(width: 48), // Padding to match the right side button width
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppColors.textMain, size: 24),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/');
+              }
+            },
+          ),
           const Expanded(
             child: Center(
               child: Text(
@@ -3589,32 +3603,79 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
     return colors[key % colors.length];
   }
 
+  void _showPlayerComparison(PlayerModel currentPlayer) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => PlayerComparisonDialog(currentPlayer: currentPlayer),
+    );
+  }
+
   Widget _buildStatsContent() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Stats',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textMain,
-              ),
+        // Decorative background circles
+        Positioned(
+          top: 100,
+          left: -50,
+          child: Container(
+            width: 150,
+            height: 150,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.05),
+              shape: BoxShape.circle,
             ),
+          ),
+        ),
+        Positioned(
+          bottom: 200,
+          right: -30,
+          child: Container(
+            width: 200,
+            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.04),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                TextButton(
-                  onPressed: () {},
-                  child: const Text(
-                    'Overall',
-                    style: TextStyle(color: AppColors.textMain),
+                const Text(
+                  'Stats',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMain,
                   ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: () {},
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () {},
+                      child: const Text(
+                        'Overall',
+                        style: TextStyle(color: AppColors.textMain),
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        debugPrint('🔄 Compare button clicked');
+                        final playerAsync = ref.read(playerDataProvider);
+                        final player = playerAsync.value;
+                        if (player != null) {
+                          debugPrint('👤 Showing comparison for player: ${player.name}');
+                          _showPlayerComparison(player);
+                        } else {
+                          debugPrint('⚠️ Cannot show comparison: Player data is null (status: ${playerAsync.toString()})');
+                        }
+                      },
                   icon: const Icon(Icons.compare_arrows, size: 16),
                   label: const Text('Compare'),
                   style: ElevatedButton.styleFrom(
@@ -3623,88 +3684,130 @@ class _MyCricketPageState extends ConsumerState<MyCricketPage> {
                     elevation: 0,
                   ),
                 ),
+                  ],
+                ),
               ],
             ),
+            const SizedBox(height: 16),
+            
+            // Animated Filter Tabs
+            _buildAnimatedFilterTabBar(
+              tabs: ['Batting', 'Bowling', 'Fielding', 'Captain'],
+              selectedValue: _statsFilter,
+              onChanged: (value) => setState(() => _statsFilter = value),
+            ),
+            const SizedBox(height: 24),
+            
+            // Stats Grid - Dynamic based on filter
+            _buildStatsGrid(),
           ],
         ),
-        const SizedBox(height: 16),
-        
-        // Animated Filter Tabs
-        _buildAnimatedFilterTabBar(
-          tabs: ['Batting', 'Bowling', 'Fielding', 'Captain'],
-          selectedValue: _statsFilter,
-          onChanged: (value) => setState(() => _statsFilter = value),
-        ),
-        const SizedBox(height: 24),
-        
-        // Stats Grid - Dynamic based on filter
-        _buildStatsGrid(),
       ],
     );
   }
 
   Widget _buildStatsGrid() {
-    List<Map<String, dynamic>> stats = [];
+    final playerAsync = ref.watch(playerDataProvider);
     
-    switch (_statsFilter) {
-      case 'Batting':
-        stats = [
-          {'title': 'Matches', 'value': '25', 'icon': Icons.calendar_today, 'color': Colors.blue},
-          {'title': 'Runs', 'value': '1,245', 'icon': Icons.trending_up, 'color': AppColors.primary},
-          {'title': 'Average', 'value': '49.8', 'icon': Icons.bar_chart, 'color': Colors.orange},
-          {'title': 'Strike Rate', 'value': '142.5', 'icon': Icons.speed, 'color': Colors.purple},
-          {'title': '50s', 'value': '8', 'icon': Icons.star, 'color': const Color(0xFFFFB800)},
-          {'title': '100s', 'value': '3', 'icon': Icons.emoji_events, 'color': Colors.amber},
-        ];
-        break;
-      case 'Bowling':
-        stats = [
-          {'title': 'Matches', 'value': '20', 'icon': Icons.calendar_today, 'color': Colors.blue},
-          {'title': 'Wickets', 'value': '42', 'icon': Icons.sports_cricket, 'color': AppColors.primary},
-          {'title': 'Average', 'value': '18.5', 'icon': Icons.bar_chart, 'color': Colors.orange},
-          {'title': 'Economy', 'value': '7.2', 'icon': Icons.speed, 'color': Colors.purple},
-          {'title': 'Best', 'value': '5/25', 'icon': Icons.emoji_events, 'color': const Color(0xFF8B5CF6)},
-          {'title': '4 Wickets', 'value': '3', 'icon': Icons.star, 'color': Colors.amber},
-        ];
-        break;
-      case 'Fielding':
-        stats = [
-          {'title': 'Matches', 'value': '25', 'icon': Icons.calendar_today, 'color': Colors.blue},
-          {'title': 'Catches', 'value': '18', 'icon': Icons.handshake, 'color': AppColors.primary},
-          {'title': 'Stumpings', 'value': '5', 'icon': Icons.sports_handball, 'color': Colors.orange},
-          {'title': 'Run Outs', 'value': '7', 'icon': Icons.running_with_errors, 'color': Colors.purple},
-        ];
-        break;
-      case 'Captain':
-        stats = [
-          {'title': 'Matches', 'value': '15', 'icon': Icons.calendar_today, 'color': Colors.blue},
-          {'title': 'Won', 'value': '10', 'icon': Icons.emoji_events, 'color': AppColors.primary},
-          {'title': 'Lost', 'value': '4', 'icon': Icons.thumb_down, 'color': const Color(0xFF64748B)},
-          {'title': 'Win %', 'value': '66.7%', 'icon': Icons.trending_up, 'color': Colors.orange},
-        ];
-        break;
-    }
-    
-    return GridView.builder(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 1.1,
-      ),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: stats.length,
-      itemBuilder: (context, index) {
-        final stat = stats[index];
-        return _buildStatBox(
-          title: stat['title'] as String,
-          value: stat['value'] as String,
-          icon: stat['icon'] as IconData,
-          color: stat['color'] as Color,
-          imageUrl: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=200&h=200&fit=crop',
+    debugPrint('📊 Stats Grid: state=${playerAsync.isLoading ? "loading" : playerAsync.hasError ? "error" : "data"}, player=${playerAsync.value?.name}');
+
+    return playerAsync.when(
+      data: (player) {
+        if (player == null) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: Column(
+                children: [
+                  Icon(Icons.analytics_outlined, size: 64, color: AppColors.textMeta),
+                  SizedBox(height: 16),
+                  Text(
+                    'Initializing your stats...',
+                    style: TextStyle(fontSize: 16, color: AppColors.textSec),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        List<Map<String, dynamic>> stats = [];
+        final batting = player.battingStats ?? {};
+        final bowling = player.bowlingStats ?? {};
+
+        switch (_statsFilter) {
+          case 'Batting':
+            stats = [
+              {'title': 'Matches', 'value': '${player.totalMatches ?? 0}', 'icon': Icons.calendar_today, 'color': Colors.blue},
+              {'title': 'Runs', 'value': '${batting['runs'] ?? 0}', 'icon': Icons.trending_up, 'color': AppColors.primary},
+              {'title': 'Average', 'value': '${(batting['average'] ?? 0.0).toStringAsFixed(1)}', 'icon': Icons.bar_chart, 'color': Colors.orange},
+              {'title': 'Strike Rate', 'value': '${(batting['strike_rate'] ?? 0.0).toStringAsFixed(1)}', 'icon': Icons.speed, 'color': Colors.purple},
+              {'title': '50s', 'value': '${batting['fifties'] ?? 0}', 'icon': Icons.star, 'color': const Color(0xFFFFB800)},
+              {'title': '100s', 'value': '${batting['hundreds'] ?? 0}', 'icon': Icons.emoji_events, 'color': Colors.amber},
+            ];
+            break;
+          case 'Bowling':
+            stats = [
+              {'title': 'Matches', 'value': '${player.totalMatches ?? 0}', 'icon': Icons.calendar_today, 'color': Colors.blue},
+              {'title': 'Wickets', 'value': '${bowling['wickets'] ?? 0}', 'icon': Icons.sports_cricket, 'color': AppColors.primary},
+              {'title': 'Average', 'value': '${(bowling['average'] ?? 0.0).toStringAsFixed(1)}', 'icon': Icons.bar_chart, 'color': Colors.orange},
+              {'title': 'Economy', 'value': '${(bowling['economy'] ?? 0.0).toStringAsFixed(2)}', 'icon': Icons.speed, 'color': Colors.purple},
+              {'title': 'Best', 'value': '${bowling['best_bowling'] ?? '-/-'}', 'icon': Icons.emoji_events, 'color': const Color(0xFF8B5CF6)},
+              {'title': '5 Wickets', 'value': '${bowling['five_w'] ?? 0}', 'icon': Icons.star, 'color': Colors.amber},
+            ];
+            break;
+          case 'Fielding':
+            stats = [
+              {'title': 'Matches', 'value': '${player.totalMatches ?? 0}', 'icon': Icons.calendar_today, 'color': Colors.blue},
+              {'title': 'Catches', 'value': '${batting['catches'] ?? 0}', 'icon': Icons.handshake, 'color': AppColors.primary},
+              {'title': 'Stumpings', 'value': '${batting['stumpings'] ?? 0}', 'icon': Icons.sports_handball, 'color': Colors.orange},
+              {'title': 'Run Outs', 'value': '${batting['run_outs'] ?? 0}', 'icon': Icons.running_with_errors, 'color': Colors.purple},
+            ];
+            break;
+          case 'Captain':
+            stats = [
+              {'title': 'Matches', 'value': '${batting['captain_matches'] ?? 0}', 'icon': Icons.calendar_today, 'color': Colors.blue},
+              {'title': 'Won', 'value': '${batting['captain_won'] ?? 0}', 'icon': Icons.emoji_events, 'color': AppColors.primary},
+              {'title': 'Lost', 'value': '${batting['captain_lost'] ?? 0}', 'icon': Icons.thumb_down, 'color': const Color(0xFF64748B)},
+              {'title': 'Win %', 'value': '${batting['captain_win_rate'] ?? '0.0'}%', 'icon': Icons.trending_up, 'color': Colors.orange},
+            ];
+            break;
+        }
+
+        return GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 1.1,
+          ),
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: stats.length,
+          itemBuilder: (context, index) {
+            final stat = stats[index];
+            return _buildStatBox(
+              title: stat['title'] as String,
+              value: stat['value'] as String,
+              icon: stat['icon'] as IconData,
+              color: stat['color'] as Color,
+              imageUrl: player.profileImageUrl ?? 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=200&h=200&fit=crop',
+            );
+          },
         );
       },
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (err, stack) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Text('Error loading stats: $err'),
+        ),
+      ),
     );
   }
 

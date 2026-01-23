@@ -208,8 +208,7 @@ class _PlayerInningsStats {
   
   double get strikeRate => balls > 0 ? (runs / balls) * 100 : 0.0;
   int get minutes {
-    if (startTime == null) return 0;
-    return DateTime.now().difference(startTime!).inMinutes;
+    return 0;
   }
 }
 
@@ -1030,10 +1029,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   
   // Calculate minutes at crease for a player
   int _calculateMinutes(String player) {
-    final startTime = _playerStartTime[player];
-    if (startTime == null) return 0;
-    final duration = DateTime.now().difference(startTime);
-    return duration.inMinutes;
+    return 0;
   }
   
   // Record a delivery (single source of truth)
@@ -2817,12 +2813,20 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         }
       }
       
-      // Save all MVP data
+      // Save all MVP data and update player aggregates
       if (allMvpData.isNotEmpty) {
         await mvpRepo.saveBatchMvpData(allMvpData);
         debugPrint('💾 Saved ${allMvpData.length} player MVP records to database');
+        
         await mvpRepo.updatePlayerOfTheMatch(widget.matchId!);
         debugPrint('👑 Player of the Match determined and saved');
+
+        // 🔥 CRITICAL: Update aggregate career stats for all players in this match
+        final playerRepo = ref.read(playerRepositoryProvider);
+        for (final mvp in allMvpData) {
+          await playerRepo.updatePlayerAggregateStats(mvp.playerId);
+        }
+        debugPrint('📈 All career aggregate stats updated');
       } else {
         debugPrint('⚠️ No MVP data to save');
       }

@@ -371,9 +371,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     ref.read(authStateProvider).user?.username ?? _profileData['name'] ?? 'User Name',
                   ),
                   _buildDivider(),
-                  _buildProfileField(
+                  _buildProfileRow(
                     'Subscription Plan',
-                    _profileData['subscription']?.toUpperCase() ?? 'BASIC',
+                    user?.subscriptionPlan?.toUpperCase() ?? 'BASIC',
+                    isBadge: true,
+                    isPro: user?.subscriptionPlan == 'pro',
                   ),
                   _buildDivider(),
                   _buildProfileField(
@@ -478,12 +480,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     );
   }
 
-  Widget _buildProfileField(String label, String value) {
+  Widget _buildProfileField(String label, String value, {bool isBadge = false, bool isPro = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
             label,
@@ -494,20 +496,68 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ),
           ),
           const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.black,
-                fontWeight: FontWeight.w500,
+          if (isBadge)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: isPro 
+                  ? const LinearGradient(
+                      colors: [Color(0xFF007AFF), Color(0xFF00C6FF)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    )
+                  : const LinearGradient(
+                      colors: [Color(0xFFFFB300), Color(0xFFFF8F00)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: (isPro ? Colors.blue : Colors.orange).withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isPro) ...[
+                    const Icon(Icons.verified, color: Colors.white, size: 14),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    isPro ? 'PRO MEMBER' : 'BASIC MEMBER',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Expanded(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
+  }
+
+  Widget _buildProfileRow(String label, String value, {bool isBadge = false, bool isPro = false}) {
+    return _buildProfileField(label, value, isBadge: isBadge, isPro: isPro);
   }
 
   Widget _buildDivider() {

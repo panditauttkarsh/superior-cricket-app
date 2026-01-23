@@ -160,12 +160,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             },
           ),
           
-          // Pro Route
-          GoRoute(
-            path: '/pro',
-            builder: (context, state) => const ProPage(),
-          ),
-
           // Profile Route
           GoRoute(
             path: '/profile',
@@ -175,6 +169,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       
       // Other Routes (Outside of Shell)
+      GoRoute(
+        path: '/pro',
+        builder: (context, state) => const ProPage(),
+      ),
       GoRoute(
         path: '/match-center',
         builder: (context, state) => const MatchCenterPage(),

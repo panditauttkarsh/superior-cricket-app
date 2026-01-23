@@ -79,6 +79,6 @@ final playerDataProvider = FutureProvider<PlayerModel?>((ref) async {
   if (user == null) return null;
   
   final playerRepo = ref.watch(playerRepositoryProvider);
-  return await playerRepo.getPlayerByUserId(user.id);
+  return await playerRepo.getOrCreatePlayerByUserId(user.id);
 });
 
