@@ -9,6 +9,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/repository_providers.dart';
 import '../../../../core/providers/auth_provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Go Live Screen
 /// Allows user to start live streaming from their camera
@@ -40,12 +41,20 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
   String? _rtmpUrl;
   String? _hlsPlaybackUrl;
   Timer? _statusCheckTimer;
+  
+  // Live Scoreboard Data
+  Map<String, dynamic>? _liveScorecard;
+  String? _team1Name;
+  String? _team2Name;
+  String? _tossWinner;
+  String? _tossDecision;
 
   @override
   void initState() {
     super.initState();
     _initializeCamera();
     _fetchUserPlan();
+    _subscribeToLiveScorecard();
   }
 
   Future<void> _fetchUserPlan() async {
@@ -184,12 +193,27 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
         // Continue without YouTube restreaming
       }
       
-      // Create Mux live stream
+      // ============================================
+      // TEMPORARY BYPASS: Comment out Mux for testing scoreboard
+      // Uncomment when Mux PRO plan is activated
+      // ============================================
+      
+      // Create Mux live stream (COMMENTED OUT FOR TESTING)
+      /*
       final muxResponse = await MuxService.createLiveStream(
         matchId: widget.matchId,
         matchTitle: widget.matchTitle,
         youtubeStreamKey: youtubeStreamKey,
         shouldRecord: shouldRecord,
+      );
+      */
+      
+      // MOCK RESPONSE FOR TESTING SCOREBOARD
+      final muxResponse = MuxLiveStreamResponse(
+        id: 'mock-stream-${DateTime.now().millisecondsSinceEpoch}',
+        rtmpUrl: 'rtmp://mock.stream/live/${widget.matchId}',
+        hlsPlaybackUrl: 'https://mock.stream/${widget.matchId}/playlist.m3u8',
+        status: 'active',
       );
 
       setState(() {
@@ -210,8 +234,8 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
         await _startRTMPStream(_rtmpUrl!);
       }
 
-      // Signal Mux that stream is active
-      await MuxService.signalStreamActive(muxResponse.id);
+      // Signal Mux that stream is active (BYPASS FOR TESTING)
+      // await MuxService.signalStreamActive(muxResponse.id);
 
       setState(() {
         _isStreaming = true;
@@ -267,10 +291,10 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
       // Stop RTMP stream
       // TODO: Stop actual RTMP streaming
       
-      // Delete Mux live stream
-      if (_muxStreamId != null) {
-        await MuxService.deleteLiveStream(_muxStreamId!);
-      }
+      // Delete Mux live stream (BYPASS FOR TESTING)
+      // if (_muxStreamId != null) {
+      //   await MuxService.deleteLiveStream(_muxStreamId!);
+      // }
 
       // Update database
       await _updateStreamStatus('ended');
@@ -387,6 +411,352 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
         }
       }
     });
+  }
+
+  // Subscribe to live scorecard updates (using polling)
+  void _subscribeToLiveScorecard() {
+    // Fetch initial scorecard
+    _fetchInitialScorecard();
+    
+    // Poll for updates every 2 seconds
+    Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (mounted && _isStreaming) {
+        _fetchInitialScorecard();
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  Future<void> _fetchInitialScorecard() async {
+    try {
+      final response = await SupabaseConfig.client
+          .from('matches')
+          .select('scorecard, team1_name, team2_name')
+          .eq('id', widget.matchId)
+          .single();
+      
+      if (mounted && response != null) {
+        setState(() {
+          _liveScorecard = response['scorecard'];
+          _team1Name = response['team1_name'];
+          _team2Name = response['team2_name'];
+          _tossWinner = response['toss_winner'];
+          _tossDecision = response['toss_decision'];
+        });
+      }
+    } catch (e) {
+      print('Error fetching initial scorecard: $e');
+    }
+  }
+
+// REAL DATA SCOREBOARD - Replace _buildLiveScoreboardOverlay
+  Widget _buildLiveScoreboardOverlay() {
+    // Use Mock Data if null to ensure visibility
+    Map<String, dynamic> card = (_liveScorecard != null && _liveScorecard!.isNotEmpty) 
+        ? _liveScorecard! 
+        : {
+            'striker': 'Demo Batsman', 'striker_runs': 24, 'striker_balls': 12,
+            'non_striker': 'Non Striker', 'non_striker_runs': 10, 'non_striker_balls': 8,
+            'bowler': 'Demo Bowler', 'bowler_wickets': 1, 'bowler_runs': 18, 'bowler_overs': 2.1,
+            'team1_score': {'runs': 50, 'wickets': 1, 'overs': 4.2},
+            'current_over_balls': ['1', '4', 'W', '0', '6', '1'],
+            'current_innings': 1,
+            'team1_name': 'Team A',
+            'team2_name': 'Team B',
+          };
+
+    // Extract data from scorecard
+    final striker = card['striker'] ?? 'Batsman 1';
+    final nonStriker = card['non_striker'] ?? 'Batsman 2';
+    final bowler = card['bowler'] ?? 'Bowler';
+    
+    final strikerRuns = card['striker_runs'] ?? 0;
+    final strikerBalls = card['striker_balls'] ?? 0;
+    final nonStrikerRuns = card['non_striker_runs'] ?? 0;
+    final nonStrikerBalls = card['non_striker_balls'] ?? 0;
+    
+    final bowlerRuns = card['bowler_runs'] ?? 0;
+    final bowlerWickets = card['bowler_wickets'] ?? 0;
+    final bowlerOvers = card['bowler_overs'] ?? 0;
+    
+    final currentOverBalls = card['current_over_balls'] ?? [];
+    final currentInnings = card['current_innings'] ?? 1;
+    
+    // Get team names with fallback
+    final team1Name = _team1Name ?? 'Team 1';
+    final team2Name = _team2Name ?? 'Team 2';
+    
+    // Determine Batting vs Bowling Team based on innings (Default)
+    final battingTeamName = currentInnings == 1 ? team1Name : team2Name;
+    final bowlingTeamName = currentInnings == 1 ? team2Name : team1Name;
+    
+    // Get team scores
+    final team1Score = card['team1_score'] ?? {};
+    final team2Score = card['team2_score'] ?? {};
+    
+    final battingScore = currentInnings == 1 ? team1Score : team2Score;
+    final runs = battingScore['runs'] ?? 0;
+    final wickets = battingScore['wickets'] ?? 0;
+    final overs = battingScore['overs'] ?? 0.0;
+    
+    // Format overs (e.g., 1.2 overs)
+    final oversInt = overs.floor();
+    final balls = ((overs - oversInt) * 6).round();
+    final oversDisplay = '$oversInt.$balls';
+
+    return Positioned(
+      bottom: 100, // Positioned ABOVE the Stop Streaming button
+      left: 12,
+      right: 12,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+            // PITCHPOINT LOGO
+            Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(bottom: 4, left: 4),
+                child: Row(
+                    children: [
+                        const Icon(Icons.sports_cricket, color: Colors.white, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                            "PitchPoint",
+                            style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 12, 
+                                fontWeight: FontWeight.bold,
+                                shadows: [Shadow(color: Colors.black, blurRadius: 2)]
+                            ),
+                        ),
+                    ],
+                ),
+            ),
+            
+            // SCOREBOARD CARD
+            Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 10,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias, // Ensure child doesn't bleed
+        child: Column(
+          children: [
+            // Top Bar: Batting Team vs Bowling Team & Score
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFE65100), Color(0xFFF57C00)], // Orange Gradient
+                ),
+              ),
+              child: Row(
+                children: [
+                   // Team Names (Batting vs Bowling)
+                   Expanded(
+                     flex: 3,
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         Text(
+                           battingTeamName.toUpperCase(),
+                           style: const TextStyle(
+                             color: Colors.white,
+                             fontWeight: FontWeight.w900,
+                             fontSize: 15,
+                           ),
+                           maxLines: 1, 
+                           overflow: TextOverflow.ellipsis,
+                         ),
+                         Row(
+                           children: [
+                               Text(
+                                   'vs ',
+                                   style: TextStyle(
+                                     color: Colors.white.withOpacity(0.8),
+                                     fontSize: 11,
+                                   ),
+                               ),
+                               Expanded(
+                                   child: Text(
+                                     bowlingTeamName,
+                                     style: const TextStyle(
+                                       color: Colors.white,
+                                       fontWeight: FontWeight.w600,
+                                       fontSize: 12,
+                                     ),
+                                     maxLines: 1,
+                                     overflow: TextOverflow.ellipsis,
+                                   ),
+                               ),
+                           ],
+                         )
+                       ],
+                     ),
+                   ),
+                   
+                   // Score & Overs
+                   Expanded(
+                     flex: 2,
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.end,
+                       children: [
+                         Text(
+                           '$runs/$wickets',
+                           style: const TextStyle(
+                             color: Colors.white,
+                             fontWeight: FontWeight.w900,
+                             fontSize: 24,
+                             height: 1.0,
+                           ),
+                         ),
+                         Container(
+                           margin: const EdgeInsets.only(top: 2),
+                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                           decoration: BoxDecoration(
+                               color: Colors.black.withOpacity(0.2),
+                               borderRadius: BorderRadius.circular(4)
+                           ),
+                           child: Text(
+                             '$oversDisplay Overs',
+                             style: const TextStyle(
+                               color: Colors.white,
+                               fontWeight: FontWeight.bold,
+                               fontSize: 11,
+                             ),
+                           ),
+                         ),
+                       ],
+                     ),
+                   ),
+                ],
+              ),
+            ),
+            
+            // Bottom Section: Batsmen, Bowler, This Over
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              color: Colors.white,
+              child: IntrinsicHeight(
+              child: Row(
+                children: [
+                  // Batsmen (Left)
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildBatsmanRow(striker, strikerRuns, strikerBalls, isStriker: true),
+                        const SizedBox(height: 4),
+                        _buildBatsmanRow(nonStriker, nonStrikerRuns, nonStrikerBalls, isStriker: false),
+                      ],
+                    ),
+                  ),
+                  
+                  // Divider
+                  VerticalDivider(width: 16, thickness: 1, color: Colors.grey.shade300),
+                  
+                  // Bowler (Middle)
+                  Expanded(
+                    flex: 3,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          bowler,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black87),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '$bowlerWickets-$bowlerRuns ($bowlerOvers)',
+                          style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Divider
+                  VerticalDivider(width: 16, thickness: 1, color: Colors.grey.shade300),
+
+                  // This Over (Right)
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('THIS OVER', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey)),
+                        const SizedBox(height: 2),
+                        Wrap(
+                          spacing: 2,
+                          alignment: WrapAlignment.end,
+                          runSpacing: 2,
+                          children: [
+                            for (var ball in currentOverBalls.take(6))
+                              _buildBallIndicator(ball),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      ],
+      ),
+    );
+  }
+
+  Widget _buildBatsmanRow(String name, int runs, int balls, {required bool isStriker}) {
+    return Row(
+      children: [
+        if (isStriker) 
+            const Padding(padding: EdgeInsets.only(right: 2), child: Icon(Icons.play_arrow, size: 10, color: Colors.orange)),
+        Expanded(
+          child: Text(
+            name,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: isStriker ? FontWeight.bold : FontWeight.w600,
+              color: isStriker ? Colors.black : Colors.black87,
+            ),
+            maxLines: 1, 
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Text('$runs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isStriker ? Colors.black : Colors.black87)),
+        Text('($balls)', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+      ],
+    );
+  }
+
+  Widget _buildBallIndicator(String ball) {
+    Color bg = Colors.grey.shade200;
+    Color fg = Colors.black;
+    String text = ball;
+    
+    if (['4','6'].contains(ball)) { bg = Colors.black; fg = Colors.white; }
+    if (['W','w'].contains(ball)) { bg = Colors.red; fg = Colors.white; }
+    if (ball == '0') { text = '•'; fg = Colors.grey; }
+    
+    return Container(
+      width: 14, height: 14,
+      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: Text(text, style: TextStyle(fontSize: 8, color: fg, fontWeight: FontWeight.bold)),
+    );
   }
 
   @override
@@ -596,8 +966,36 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
                                 'Camera not available',
                                 style: TextStyle(color: Colors.white),
                               ),
-                            ),
-                    ),
+                            ),),
+                    
+                    // Live Scoreboard Overlay
+                    if (_isStreaming && _liveScorecard != null)
+                      _buildLiveScoreboardOverlay(),
+                    
+                    // Top Right Live Indicator
+                    if (_isStreaming)
+                      Positioned(
+                        top: 40,
+                        right: 16,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black38, blurRadius: 4, spreadRadius: 1)
+                            ]
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.fiber_manual_record, size: 12, color: Colors.white),
+                              SizedBox(width: 6),
+                              Text('LIVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
                     
                     // Overlay Controls
                     Positioned(
@@ -620,29 +1018,7 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             // Streaming Status
-                            if (_isStreaming)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.fiber_manual_record, size: 12, color: Colors.white),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'LIVE',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            const SizedBox(height: 16),
+                            
                             
                             // Start/Stop Button
                             SizedBox(

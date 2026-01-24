@@ -60,7 +60,7 @@ class PlayerProfilePopup extends ConsumerWidget {
                   child: playerAsyncValue.when(
                     data: (PlayerModel? playerData) {
                       final battingStats = playerData?.battingStats ?? {};
-                      final isPro = playerData?.subscriptionPlan?.toUpperCase() == 'PRO';
+                      final isPro = authUser?.subscriptionPlan?.toLowerCase() == 'pro';
                       
                       return Column(
                         children: [
@@ -133,23 +133,26 @@ class PlayerProfilePopup extends ConsumerWidget {
                                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                                   decoration: BoxDecoration(
                                     gradient: isPro ? const LinearGradient(
-                                      colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                                      colors: [Color(0xFFFFFFFF), Color(0xFFF0F0F0)],
                                     ) : null,
                                     color: isPro ? null : Colors.white.withOpacity(0.15),
                                     borderRadius: BorderRadius.circular(20),
-                                    border: isPro ? Border.all(color: Colors.white.withOpacity(0.5), width: 1) : null,
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(isPro ? 0.8 : 0.3),
+                                      width: isPro ? 2 : 1,
+                                    ),
                                     boxShadow: isPro ? [
                                       BoxShadow(
-                                        color: Colors.orange.withOpacity(0.3),
-                                        blurRadius: 8,
-                                        spreadRadius: 1,
+                                        color: Colors.white.withOpacity(0.4),
+                                        blurRadius: 12,
+                                        spreadRadius: 2,
                                       )
                                     ] : null,
                                   ),
                                   child: Text(
                                     isPro ? 'PRO MEMBER' : 'BASIC MEMBER',
                                     style: TextStyle(
-                                      color: isPro ? Colors.black87 : Colors.white,
+                                      color: isPro ? const Color(0xFF007AFF) : Colors.white,
                                       fontSize: 10,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 1.2,

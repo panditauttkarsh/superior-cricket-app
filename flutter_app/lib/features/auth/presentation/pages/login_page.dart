@@ -262,14 +262,15 @@ class _LoginPageState extends ConsumerState<LoginPage>
               _buildCricketAnimations(),
 
               SafeArea(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Center(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 400),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const SizedBox(height: 60),
+                          const SizedBox(height: 40),
                           
                           // Logo Section with fade animation
                           FadeTransition(
@@ -277,7 +278,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                             child: _buildLogo(),
                           ),
                           
-                          const SizedBox(height: 48),
+                          const SizedBox(height: 16),
                           
                           // Title with fade and shine animation
                           FadeTransition(
@@ -287,12 +288,12 @@ class _LoginPageState extends ConsumerState<LoginPage>
                                 const Text(
                                   'PITCH POINT',
                                   style: TextStyle(
-                                    fontSize: 48,
+                                    fontSize: 36,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 6),
                                 AnimatedBuilder(
                                   animation: Listenable.merge([_glowAnimation, _shineAnimation]),
                                   builder: (context, child) {
@@ -320,9 +321,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
                                       child: Text(
                                         'LIVE THE GAME',
                                         style: TextStyle(
-                                          fontSize: 18,
+                                          fontSize: 14,
                                           color: Colors.white,
-                                          letterSpacing: 4 + (_glowAnimation.value * 2),
+                                          letterSpacing: 3 + (_glowAnimation.value * 1.5),
                                           fontWeight: FontWeight.w400,
                                         ),
                                       ),
@@ -333,7 +334,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                             ),
                           ),
                           
-                          const SizedBox(height: 32),
+                          const SizedBox(height: 16),
                           
                           // Form with staggered entrance
                           Column(
@@ -342,7 +343,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                                 index: 1,
                                 child: _buildTabSwitcher(),
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 12),
                               Form(
                                 key: _formKey,
                                 child: Column(
@@ -352,29 +353,29 @@ class _LoginPageState extends ConsumerState<LoginPage>
                                       index: 2,
                                       child: _buildEmailField(),
                                     ),
-                                    const SizedBox(height: 24),
+                                    const SizedBox(height: 12),
                                     _buildStaggeredItem(
                                       index: 3,
                                       child: _buildPasswordField(),
                                     ),
                                     if (_error != null) _buildErrorWidget(),
                                     if (_message != null) _buildMessageWidget(),
-                                    const SizedBox(height: 24),
+                                    const SizedBox(height: 12),
                                     _buildStaggeredItem(
                                       index: 4,
                                       child: _buildSubmitButton(),
                                     ),
-                                    const SizedBox(height: 32),
+                                    const SizedBox(height: 16),
                                     _buildStaggeredItem(
                                       index: 5,
                                       child: _buildDivider(),
                                     ),
-                                    const SizedBox(height: 24),
+                                    const SizedBox(height: 12),
                                     _buildStaggeredItem(
                                       index: 6,
                                       child: _buildSocialButtons(),
                                     ),
-                                    const SizedBox(height: 32),
+                                    const SizedBox(height: 16),
                                     _buildStaggeredItem(
                                       index: 7,
                                       child: _buildToggleLink(),
@@ -385,7 +386,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                             ],
                           ),
                           
-                          const SizedBox(height: 40),
+                          const SizedBox(height: 16),
                         ],
                       ),
                     ),
@@ -429,21 +430,21 @@ class _LoginPageState extends ConsumerState<LoginPage>
       animation: _glowAnimation,
       builder: (context, child) {
         return Container(
-          width: 120,
-          height: 120,
+          width: 80,
+          height: 80,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
               // Pulsing white glow effect
               BoxShadow(
                 color: Colors.white.withOpacity(_glowAnimation.value * 0.4),
-                blurRadius: 40,
-                spreadRadius: 10,
+                blurRadius: 30,
+                spreadRadius: 8,
               ),
               BoxShadow(
                 color: Colors.white.withOpacity(_glowAnimation.value * 0.2),
-                blurRadius: 60,
-                spreadRadius: 20,
+                blurRadius: 45,
+                spreadRadius: 15,
               ),
             ],
           ),
@@ -452,14 +453,14 @@ class _LoginPageState extends ConsumerState<LoginPage>
               shape: BoxShape.circle,
               border: Border.all(
                 color: Colors.white.withOpacity(0.8 + (_glowAnimation.value * 0.2)),
-                width: 3,
+                width: 2,
               ),
               color: Colors.white.withOpacity(0.1),
             ),
             child: Center(
               child: Container(
-                width: 100,
-                height: 100,
+                width: 66,
+                height: 66,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white, // Inner background now white
@@ -467,8 +468,8 @@ class _LoginPageState extends ConsumerState<LoginPage>
                 child: ClipOval(
                   child: Image.asset(
                     'assets/images/Untitled design-2.png',
-                    width: 100,
-                    height: 100,
+                    width: 66,
+                    height: 66,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
