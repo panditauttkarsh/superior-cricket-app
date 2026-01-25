@@ -31,6 +31,7 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
   String? _tossChoice;
   bool _showYouTubeInput = false;
   bool _youtubeLiveEnabled = false;
+  String? _youtubeVideoId;
   
   List<String> _myTeamPlayers = [];
   List<String> _opponentTeamPlayers = [];
@@ -431,168 +432,272 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
     }
   }
 
+  Widget _buildSectionContainer({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Only apply gradient background for Match Settings step (step 2)
+    final isMatchSettings = _currentStep == 2;
+    
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.primary),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text(
-          'Create New Match',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: AppColors.primary,
-            letterSpacing: -0.5,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: Column(
-        children: [
-          // Progress indicator
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: List.generate(3, (index) {
-                final stepIndex = _currentStep == 0 || _currentStep == 1
-                    ? 0
-                    : _currentStep == 2
-                        ? 1
-                        : 2;
-                final isActive = index <= stepIndex;
-                final isCurrent = index == stepIndex;
-                
-                return Expanded(
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.easeInOutCubic,
-                    height: isCurrent ? 8 : 6,
-                    margin: EdgeInsets.only(right: index < 2 ? 12 : 0),
+      backgroundColor: const Color(0xFFF9FAFB),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Professional App Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
                     decoration: BoxDecoration(
-                      gradient: isActive
-                          ? LinearGradient(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.grey[200]!,
+                        width: 1,
+                      ),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => context.pop(),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Icon(
+                            Icons.arrow_back_ios_new,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Create New Match',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        Text(
+                          isMatchSettings ? 'Configure match settings' : 'Set up your cricket match',
+                          style: TextStyle(
+                            color: AppColors.textMeta,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Progress indicator
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Row(
+                children: List.generate(3, (index) {
+                  final stepIndex = _currentStep == 0 || _currentStep == 1
+                      ? 0
+                      : _currentStep == 2
+                          ? 1
+                          : 2;
+                  final isActive = index <= stepIndex;
+                  final isCurrent = index == stepIndex;
+                  
+                  return Expanded(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeInOutCubic,
+                      height: 6,
+                      margin: EdgeInsets.only(right: index < 2 ? 12 : 0),
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? AppColors.primary
+                            : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: isCurrent
+                            ? [
+                                BoxShadow(
+                                  color: AppColors.primary.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+              // Content with animations
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 500),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (Widget child, Animation<double> animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0.05, 0),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: SingleChildScrollView(
+                    key: ValueKey<int>(_currentStep),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                    child: _buildStepContent(),
+                  ),
+                ),
+              ),
+
+              // Footer button
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: isMatchSettings
+                      ? LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            const Color(0xFF1E3A8A).withOpacity(0.95),
+                            const Color(0xFF1E3A8A),
+                          ],
+                        )
+                      : null,
+                  color: isMatchSettings ? null : Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    decoration: BoxDecoration(
+                      gradient: _canProceed()
+                          ? const LinearGradient(
                               colors: [
-                                AppColors.primary,
-                                AppColors.primary.withOpacity(0.7),
+                                Color(0xFF10B981),
+                                Color(0xFF059669),
                               ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             )
                           : LinearGradient(
-                              colors: [
-                                AppColors.divider.withOpacity(0.3),
-                                AppColors.divider.withOpacity(0.1),
-                              ],
+                              colors: isMatchSettings
+                                  ? [
+                                      Colors.white.withOpacity(0.3),
+                                      Colors.white.withOpacity(0.2),
+                                    ]
+                                  : [
+                                      Colors.grey[300]!,
+                                      Colors.grey[400]!,
+                                    ],
                             ),
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: isCurrent
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: _canProceed()
                           ? [
                               BoxShadow(
-                                color: AppColors.primary.withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
+                                color: const Color(0xFF10B981).withOpacity(0.5),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
                               ),
                             ]
                           : [],
                     ),
-                  ),
-                );
-              }),
-            ),
-          ),
-
-          // Content with animations
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 500),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (Widget child, Animation<double> animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0.05, 0),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  ),
-                );
-              },
-              child: SingleChildScrollView(
-                key: ValueKey<int>(_currentStep),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-                child: _buildStepContent(),
-              ),
-            ),
-          ),
-
-          // Footer button
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _canProceed() ? _handleNext : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 4,
-                    shadowColor: AppColors.primary.withOpacity(0.3),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _getButtonText(),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: _canProceed() ? _handleNext : null,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _canProceed() ? Icons.check_circle : Icons.sports_cricket,
+                                color: Colors.white,
+                                size: 26,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                _getButtonText(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(
+                                Icons.arrow_forward_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.arrow_forward_ios,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
     );
   }
 
@@ -668,22 +773,50 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Match Settings',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF1E3A5F),
-                letterSpacing: -0.5,
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, 20 * (1 - value)),
+                    child: child,
+                  ),
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Match Settings',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF111827),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Configure your match preferences',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             _buildOversStep(),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             _buildGroundTypeStep(),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             _buildBallTypeStep(),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             _buildYouTubeVideoIdStep(),
           ],
         );
@@ -864,63 +997,89 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
 
 
   Widget _buildOversStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 700),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 30 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: _buildSectionContainer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.timer, color: Color(0xFF1E3A5F), size: 24),
-            const SizedBox(width: 8),
-            const Text(
-              'Overs',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E3A5F),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.timer_outlined, color: AppColors.primary, size: 22),
+                ),
+                const SizedBox(width: 14),
+                const Text(
+                  'Overs',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildOversOption('10', 'Quick', false),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildOversOption('20', 'Standard', true),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildOversOption('50', 'ODI', false),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.transparent),
+              ),
+              child: TextField(
+                controller: TextEditingController(),
+                keyboardType: TextInputType.number,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+                decoration: InputDecoration(
+                  hintText: 'Custom overs...',
+                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                  prefixIcon: Icon(Icons.edit_outlined, color: Colors.grey[500], size: 18),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+                onChanged: (value) {
+                  if (value.isNotEmpty) {
+                    setState(() => _overs = value);
+                  }
+                },
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildOversOption('10', 'Quick', false),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildOversOption('20', 'Standard', true),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildOversOption('50', 'ODI', false),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: TextField(
-            controller: TextEditingController(), // Empty controller to ensure no "kings" text
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              hintText: 'Enter custom overs',
-              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-              prefixIcon: const Icon(Icons.edit, color: Colors.grey, size: 18),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
-            onChanged: (value) {
-              if (value.isNotEmpty) {
-                setState(() => _overs = value);
-              }
-            },
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -932,72 +1091,77 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        InkWell(
-          onTap: () => setState(() => _overs = overs),
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 100), // Same as ground type boxes
-            padding: const EdgeInsets.all(16), // Same padding as ground type boxes
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppColors.primary
-                  : const Color(0xFFF3F4F6), // Gray background like ground type boxes
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected
-                    ? AppColors.primary
-                    : Colors.grey[200]!,
-                width: isSelected ? 2 : 1,
-              ),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : null,
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? AppColors.primary : Colors.grey[200]!,
+              width: 1.5,
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  overs,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Montserrat',
-                    color: isSelected ? Colors.white : Colors.black87,
-                  ),
+            // No shadow for flatter look inside card
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => setState(() => _overs = overs),
+              child: Center(
+                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      overs,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: isSelected ? Colors.white : const Color(0xFF1F2937),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? Colors.white.withValues(alpha: 0.9) : Colors.grey[500],
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isSelected ? Colors.white : const Color(0xFF1E3A5F),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
-        if (isPopular) // Always show POPULAR tag on 20 overs
+        if (isPopular)
           Positioned(
             top: -8,
-            right: -8,
+            right: -4,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: const Color(0xFFC72B32),
+                color: const Color(0xFFEF4444),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: const Text(
                 'POPULAR',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 10,
+                  fontSize: 8,
                   fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
@@ -1020,551 +1184,462 @@ class _CreateMatchPageState extends ConsumerState<CreateMatchPage> with SingleTi
       _groundType = 'Turf';
     }
     
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 30 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: _buildSectionContainer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.stadium, color: Color(0xFF1E3A5F), size: 24),
-            const SizedBox(width: 8),
-            const Text(
-              'Ground Type',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E3A5F),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.grass_rounded, color: AppColors.primary, size: 22),
+                ),
+                const SizedBox(width: 14),
+                const Text(
+                  'Ground Type',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              child: Row(
+                children: _groundTypes.map((type) {
+                  final isSelected = _groundType == type;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      constraints: const BoxConstraints(minWidth: 90),
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primary : const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected ? AppColors.primary : Colors.grey[200]!,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => setState(() => _groundType = type),
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? Colors.white.withValues(alpha: 0.2)
+                                      : Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  groundIcons[type] ?? Icons.landscape,
+                                  color: isSelected ? Colors.white : Colors.grey[400],
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                type,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: isSelected ? Colors.white : Colors.grey[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _groundTypes.map((type) {
-              final isSelected = _groundType == type;
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: InkWell(
-                  onTap: () => setState(() => _groundType = type),
-                  child: Container(
-                    constraints: const BoxConstraints(minWidth: 100),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.primary.withOpacity(0.1)
-                          : const Color(0xFFF3F4F6), // Gray background like overs boxes
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected
-                            ? AppColors.primary
-                            : Colors.grey[200]!,
-                        width: isSelected ? 2 : 1,
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.primary.withOpacity(0.1)
-                                : Colors.grey[200],
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            groundIcons[type] ?? Icons.landscape,
-                            color: isSelected
-                                ? AppColors.primary
-                                : Colors.grey[500],
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          type,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: isSelected
-                                ? AppColors.primary
-                                : Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
   Widget _buildBallTypeStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 900),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 30 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: _buildSectionContainer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.sports_cricket, color: Color(0xFF1E3A5F), size: 20),
-            const SizedBox(width: 8),
-            const Text(
-              'Ball Type',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E3A5F),
-              ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.sports_cricket_outlined, color: AppColors.primary, size: 22),
+                ),
+                const SizedBox(width: 14),
+                const Text(
+                  'Ball Type',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildBallTypeOption('Leather', true),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildBallTypeOption('Tennis', false),
+                ),
+              ],
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildBallTypeOption('Leather', true), // Default selected - should be green
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildBallTypeOption('Tennis', false), // Not default
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 
   Widget _buildBallTypeOption(String type, bool isDefaultSelected) {
     final isSelected = _ballType == type;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        InkWell(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+      decoration: BoxDecoration(
+        color: isSelected ? AppColors.primary : const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isSelected ? AppColors.primary : Colors.grey[200]!,
+          width: 1.5,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
           onTap: () => setState(() => _ballType = type),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppColors.primary
-                  : const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected
-                    ? AppColors.primary
-                    : Colors.grey[200]!,
-                width: isSelected ? 1 : 1,
-              ),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.2),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      type,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isSelected ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: isSelected ? Colors.white : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isSelected ? Colors.white : Colors.grey[300]!,
-                          width: 2,
-                        ),
-                      ),
-                      child: isSelected
-                          ? Center(
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF205A28),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            )
-                          : null,
-                    ),
-                  ],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                type,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? Colors.white : const Color(0xFF1F2937),
+                  letterSpacing: 0.3,
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  height: 4,
-                  width: 48,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? (type == 'Tennis' ? Colors.yellow[300] : const Color(0xFFC72B32))
-                        : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
+              ),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white : Colors.transparent,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected ? Colors.white : Colors.grey[300]!,
+                    width: 2,
                   ),
                 ),
-              ],
-            ),
+                child: isSelected
+                    ? Center(
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      )
+                    : null,
+              ),
+            ],
           ),
         ),
-        // Yellow circle for Tennis when selected (like HTML)
-        if (type == 'Tennis' && isSelected)
-          Positioned(
-            bottom: -16,
-            right: -16,
-            child: Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Colors.yellow[300]!.withOpacity(0.3),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.yellow[300]!.withOpacity(0.3),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
+      ),
     );
   }
 
+
   Widget _buildYouTubeVideoIdStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    return _buildSectionContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         Row(
           children: [
-            const Icon(Icons.video_library, color: Color(0xFF205A28), size: 24),
-            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDC2626).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.video_library, color: Color(0xFFDC2626), size: 20),
+            ),
+            const SizedBox(width: 12),
             const Text(
-              'YouTube Live Stream (Optional)',
+              'YouTube Live Stream',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF205A28),
+                color: Color(0xFFDC2626),
+                letterSpacing: 0.5,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        
-        if (!_youtubeLiveEnabled && !_showYouTubeInput) ...[
-          // Go Live Button
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
-              ),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFC72B32).withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  // Navigate directly to Go Live screen
-                  _startGoLive();
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Image.asset(
-                        'assets/images/icon youtube.webp',
-                        width: 24,
-                        height: 24,
-                        errorBuilder: (context, error, stackTrace) => const Icon(
-                          Icons.videocam,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'Go Live on YouTube',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 24),
           
-          // Or Divider
-          Row(
-            children: [
-              Expanded(child: Divider(color: Colors.grey[300])),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  'OR',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              Expanded(child: Divider(color: Colors.grey[300])),
-            ],
-          ),
-          const SizedBox(height: 12),
-          
-          // Connect to Existing Stream Button
-          Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFC72B32), Color(0xFF8B1A1F)],
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  setState(() {
-                    _showYouTubeInput = true;
-                    _youtubeLiveEnabled = false;
-                  });
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Image.asset(
-                        'assets/images/icon youtube.webp',
-                        width: 20,
-                        height: 20,
-                        errorBuilder: (context, error, stackTrace) => const Icon(
-                          Icons.link,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'Connect to Existing Live Stream',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          
-          // Skip Button
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _showYouTubeInput = false;
-                _youtubeLiveEnabled = false;
-                _youtubeVideoIdController.clear();
-              });
-            },
-            child: Text(
-              'Skip - No Live Stream',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ],
-        
-        // YouTube Video ID Input (shown when connecting to existing stream)
-        if (_showYouTubeInput) ...[
-          const SizedBox(height: 16),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.primary.withOpacity(0.1),
-              ),
-            ),
-            child: TextField(
-              controller: _youtubeVideoIdController,
-              style: const TextStyle(
-                color: Color(0xFF205A28),
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-              decoration: InputDecoration(
-                hintText: _youtubeLiveEnabled 
-                    ? 'Enter your YouTube Live Stream ID'
-                    : 'e.g., dQw4w9WgXcQ (from youtube.com/watch?v=...)',
-                hintStyle: TextStyle(
-                  color: AppColors.primary.withOpacity(0.4),
-                  fontSize: 14,
-                ),
-                prefixIcon: Icon(
-                  _youtubeLiveEnabled ? Icons.videocam : Icons.play_circle_outline,
-                  color: AppColors.primary,
-                  size: 20,
-                ),
-                suffixIcon: _showYouTubeInput
-                    ? IconButton(
-                        icon: const Icon(Icons.close, color: Colors.grey),
-                        onPressed: () {
-                          setState(() {
-                            _showYouTubeInput = false;
-                            _youtubeLiveEnabled = false;
-                            _youtubeVideoIdController.clear();
-                          });
-                        },
-                      )
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
-          ),
-          if (_youtubeLiveEnabled) ...[
-            const SizedBox(height: 12),
+          if (!_youtubeLiveEnabled && !_showYouTubeInput) ...[
+            // Go Live Button
             Container(
-              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: AppColors.primary.withOpacity(0.3),
+                  color: const Color(0xFFDC2626).withOpacity(0.5),
+                  width: 1,
                 ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline,
-                    color: Color(0xFF205A28),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'After starting your YouTube live stream, paste the Video ID here',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[700],
-                      ),
-                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFDC2626).withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: _startGoLive,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDC2626).withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.videocam, color: Color(0xFFDC2626), size: 24),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Go Live on YouTube',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1F2937),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Start a new broadcast immediately',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Row(
+                children: [
+                  Expanded(child: Divider(color: Colors.grey[300])),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'OR',
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Expanded(child: Divider(color: Colors.grey[300])),
+                ],
+              ),
+            ),
+            
+            // Connect Existing Button
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.grey[200]!,
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => setState(() => _showYouTubeInput = true),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.link, color: Colors.grey[700], size: 24),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Connect Existing Stream',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1F2937),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Enter video ID manually',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
-        ],
-      ],
-    );
-  }
 
-  void _showGoLiveOptions() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.videocam, color: Color(0xFFC72B32)),
-            SizedBox(width: 8),
-            Text('Go Live on YouTube'),
+          if (_showYouTubeInput) ...[
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Enter YouTube Video ID',
+                        hintStyle: TextStyle(color: Colors.grey[400]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        prefixIcon: Icon(Icons.youtube_searched_for, color: Colors.grey[500]),
+                      ),
+                      style: const TextStyle(color: Colors.black87),
+                      onChanged: (value) => setState(() => _youtubeVideoId = value),
+                    ),
+                  ),
+                  if (_youtubeVideoId?.isNotEmpty ?? false)
+                    IconButton(
+                      icon: const Icon(Icons.check_circle, color: Color(0xFF10B981)),
+                      onPressed: () {
+                        setState(() {
+                          _youtubeLiveEnabled = true;
+                          _showYouTubeInput = false;
+                        });
+                      },
+                    ),
+                ],
+              ),
+            ),
+            
+            TextButton(
+              onPressed: () => setState(() => _showYouTubeInput = false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white.withOpacity(0.7)),
+              ),
+            ),
           ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Choose an option:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 16),
-              // Option 1: Start Live Stream (Go Live)
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  // Navigate to Go Live screen to start streaming
-                  _startGoLive();
-                },
-                icon: const Icon(Icons.videocam, color: Colors.white),
-                label: const Text('Start Live Stream'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFC72B32),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Option 2: Paste Existing Stream Link
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    _showYouTubeInput = true;
-                    _youtubeLiveEnabled = false;
-                  });
-                },
-                icon: const Icon(Icons.link, color: Color(0xFFC72B32)),
-                label: const Text('Paste Existing Stream Link'),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFC72B32), width: 2),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
         ],
       ),
     );

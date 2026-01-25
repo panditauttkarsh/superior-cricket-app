@@ -48,6 +48,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isRefreshing = false;
+  String? _expandedTeam; // Track expanded squad team
 
   Map<String, dynamic> _getBalancedScores(Map<String, dynamic> scorecard) {
     if (scorecard.isEmpty) return {};
@@ -805,7 +806,58 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
           const SizedBox(height: 20),
           
           // Target Info - Simple text, left-aligned
-          if (runsRequired != null && ballsRemaining != null) ...[
+          // Target Info or Match Result
+          if (match.status == 'completed') ...[
+            Builder(
+              builder: (context) {
+                String resultText = 'Match Completed'; // Default fallback
+                
+                // Calculate result based on scores
+                if (runsRequired != null) {
+                  if (runsRequired! <= 0) {
+                     // Chasing team won
+                     final wicketsLeft = 10 - currentWickets;
+                     resultText = '$currentBattingTeam won by $wicketsLeft wickets';
+                  } else {
+                     // Chasing team lost -> Defending team won
+                     // The total target was previousRuns + 1. Scored currentRuns.
+                     // The margin is runsRequired - 1 (since runsRequired includes the +1 for win)
+                     // Actually simplest is: target = prev + 1. margin = target - 1 - current. 
+                     // Or just: margin = previousRuns - currentRuns.
+                     // checks:
+                     // target 150. prev 149. current 140. runsReq = 10. margin = 9 runs.
+                     // runsReq = (149 + 1) - 140 = 10.
+                     // margin = 149 - 140 = 9. 
+                     // correct margin = runsRequired - 1.
+                     
+                     final runMargin = runsRequired! - 1;
+                     
+                     // We need the defending team name.
+                     final defendingTeam = currentBattingTeam == match.team1Name ? match.team2Name : match.team1Name;
+                     resultText = '${defendingTeam ?? "Defending Team"} won by $runMargin runs';
+                  }
+                } 
+                // Fallback using winnerId if runsRequired calculation failed (e.g. first innings only?)
+                else if (match.winnerId != null) {
+                   // Fallback logic if needed, but the above should cover completed 2nd innings matches
+                   // If match is completed but runsRequired is null, it might be a weird state or 1st innings washout?
+                   // For now, keep the default 'Match Completed' or try to use winnerId
+                   final winnerName = match.winnerId == match.team1Id ? match.team1Name : match.team2Name;
+                   resultText = '$winnerName won';
+                }
+                
+                return Text(
+                  resultText,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                );
+              }
+            ),
+            const SizedBox(height: 24),
+          ] else if (runsRequired != null && ballsRemaining != null) ...[
             Text(
               '$currentBattingTeam require $runsRequired runs in $ballsRemaining balls',
               style: TextStyle(
@@ -1216,96 +1268,124 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
         final team1Players = players.where((p) => p['team_type'] == 'team1').toList();
         final team2Players = players.where((p) => p['team_type'] == 'team2').toList();
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Team 1 Squad
-              _buildSquadSection(
-                match.team1Name ?? 'Team 1',
-                team1Players,
-                AppColors.primary,
-              ),
-              const SizedBox(height: 24),
-              // Team 2 Squad
-              _buildSquadSection(
-                match.team2Name ?? 'Team 2',
-                team2Players,
-                Colors.blue,
-              ),
-            ],
-          ),
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(
-        child: Text('Error loading players: $error'),
-      ),
-    );
-  }
-
-  Widget _buildSquadSection(String teamName, List<Map<String, dynamic>> players, Color teamColor) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: teamColor.withOpacity(0.3)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        backgroundColor: Colors.white,
-        collapsedBackgroundColor: teamColor.withOpacity(0.1),
-        shape: const Border(), // Remove default border
-        collapsedShape: const Border(),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        childrenPadding: const EdgeInsets.all(16),
-        title: Row(
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 4,
-              height: 24,
-              decoration: BoxDecoration(
-                color: teamColor,
-                borderRadius: BorderRadius.circular(2),
-              ),
+            // Team 1 Squad
+            _buildSquadSection(
+              match.team1Name ?? 'Team 1',
+              team1Players,
+              AppColors.primary,
+              _expandedTeam == (match.team1Name ?? 'Team 1'),
+              (isExpanded) {
+                setState(() {
+                  _expandedTeam = isExpanded ? (match.team1Name ?? 'Team 1') : null;
+                });
+              },
             ),
-            const SizedBox(width: 12),
-            Text(
-              teamName,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: teamColor,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              '${players.length} Players',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+            const SizedBox(height: 12),
+            // Team 2 Squad
+            _buildSquadSection(
+              match.team2Name ?? 'Team 2',
+              team2Players,
+              Colors.blue,
+              _expandedTeam == (match.team2Name ?? 'Team 2'),
+              (isExpanded) {
+                 setState(() {
+                  _expandedTeam = isExpanded ? (match.team2Name ?? 'Team 2') : null;
+                });
+              },
             ),
           ],
         ),
-        children: [
-          if (players.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Center(
-                child: Text(
-                  'No players added yet',
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 14,
-                  ),
+      );
+    },
+    loading: () => const Center(child: CircularProgressIndicator()),
+    error: (error, _) => Center(
+      child: Text('Error loading players: $error'),
+    ),
+  );
+}
+
+  Widget _buildSquadSection(
+    String teamName, 
+    List<Map<String, dynamic>> players, 
+    Color teamColor,
+    bool isExpanded,
+    Function(bool) onExpansionChanged,
+  ) {
+    return Card(
+      elevation: 0,
+      color: isExpanded ? Colors.white : const Color(0xFFF9F9F9), // Off-white when collapsed
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isExpanded ? teamColor.withOpacity(0.5) : Colors.grey[200]!, // Highlight border when expanded
+          width: isExpanded ? 1.5 : 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: Key(teamName),
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: onExpansionChanged,
+          backgroundColor: Colors.white,
+          collapsedBackgroundColor: const Color(0xFFF9F9F9),
+          shape: const Border(), // Remove default border
+          collapsedShape: const Border(),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          childrenPadding: const EdgeInsets.all(16),
+          title: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: isExpanded ? teamColor : Colors.grey[400], // Grey accent when not selected
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            )
-          else
-            ...players.map((player) => _buildPlayerCard(player)),
-        ],
+              const SizedBox(width: 12),
+              Text(
+                teamName,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isExpanded ? teamColor : Colors.grey[700], // Grey text when not selected
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${players.length} Players',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+          children: [
+            if (players.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Center(
+                  child: Text(
+                    'No players added yet',
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              )
+            else
+              ...players.map((player) => _buildPlayerCard(player)),
+          ],
+        ),
       ),
     );
   }
@@ -1517,16 +1597,6 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Scorecard',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textMain,
-              fontFamily: 'Inter',
-            ),
-          ),
-          const SizedBox(height: 16),
           // Show first innings if second innings has started
           if (currentInnings == 2)
             _InningsScorecardWidget(
@@ -1552,6 +1622,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
             wickets: currentWickets,
             overs: currentOvers,
             isCurrentInnings: true,
+            isMatchCompleted: match.status == 'completed',
             battingStats: _buildBattingStatsFromScorecard(scorecard, secondInningsTeam, isCurrent: true),
             bowlingStats: _buildBowlingStatsFromScorecard(scorecard, secondInningsTeam, isCurrent: true),
             extras: extras2Total,
@@ -2709,18 +2780,18 @@ List<String> _getDidNotBatPlayers(
       for (final bowler in bowlers) {
         final bowlerStats = statsMap[bowler] as Map<String, dynamic>;
         
-        double overs = (bowlerStats['overs'] as num?)?.toDouble() ?? 0.0;
+        // Calculate overs from legalBalls (the database stores legalBalls, not overs)
+        final legalBalls = (bowlerStats['legalBalls'] as num?)?.toInt() ?? 0;
+        final completeOvers = legalBalls ~/ 6;
+        final remainingBalls = legalBalls % 6;
+        final overs = completeOvers + (remainingBalls / 10.0);
+        
         int maidens = (bowlerStats['maidens'] as num?)?.toInt() ?? 0;
         int runs = (bowlerStats['runs'] as num?)?.toInt() ?? 0;
         int wickets = (bowlerStats['wickets'] as num?)?.toInt() ?? 0;
         
-        // Calculate actual balls to get accurate economy
-        final wholeOvers = overs.floor();
-        final extraBalls = ((overs - wholeOvers) * 10).round();
-        final totalBalls = (wholeOvers * 6) + extraBalls;
-        
-        // Use values from the stats map - the single source of truth recalculated from deliveries
-        final economy = totalBalls > 0 ? (runs / totalBalls) * 6 : 0.0;
+        // Calculate economy from legal balls
+        final economy = legalBalls > 0 ? (runs / legalBalls) * 6 : 0.0;
         
         stats.add(_PlayerBowlingStat(
           bowlerName: bowler,
@@ -2813,6 +2884,7 @@ class _InningsScorecardWidget extends StatefulWidget {
   final int wickets;
   final double overs;
   final bool isCurrentInnings;
+  final bool isMatchCompleted;
   final List<_PlayerBattingStat> battingStats;
   final List<_PlayerBowlingStat> bowlingStats;
   final int extras;
@@ -2825,6 +2897,7 @@ class _InningsScorecardWidget extends StatefulWidget {
     required this.wickets,
     required this.overs,
     required this.isCurrentInnings,
+    this.isMatchCompleted = false,
     required this.battingStats,
     required this.bowlingStats,
     this.extras = 0,
@@ -2878,7 +2951,7 @@ class _InningsScorecardWidgetState extends State<_InningsScorecardWidget>
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -2938,7 +3011,9 @@ class _InningsScorecardWidgetState extends State<_InningsScorecardWidget>
                         Row(
                           children: [
                             Text(
-                              widget.isCurrentInnings ? 'CURRENT INNINGS' : 'FIRST INNINGS',
+                              widget.isCurrentInnings 
+                                  ? (widget.isMatchCompleted ? 'SECOND INNINGS' : 'CURRENT INNINGS') 
+                                  : 'FIRST INNINGS',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -2949,7 +3024,7 @@ class _InningsScorecardWidgetState extends State<_InningsScorecardWidget>
                                 fontFamily: 'Inter',
                               ),
                             ),
-                            if (widget.isCurrentInnings) ...[
+                            if (widget.isCurrentInnings && !widget.isMatchCompleted) ...[
                               const SizedBox(width: 10),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -3327,9 +3402,8 @@ class _BattingScorecardTable extends StatelessWidget {
   });
 
   // Fixed column widths for perfect alignment
-  static const double _statColumnWidth = 40.0; // Fixed width for R, B, 4s, 6s
-  static const double _srColumnWidth = 50.0; // Slightly wider for SR
-  static const double _minColumnWidth = 45.0; // Width for Min
+  static const double _statColumnWidth = 32.0; // Fixed width for R, B, 4s, 6s
+  static const double _srColumnWidth = 42.0; // Slightly wider for SR
 
   @override
   Widget build(BuildContext context) {
@@ -3410,10 +3484,6 @@ class _BattingScorecardTable extends StatelessWidget {
                   width: _srColumnWidth,
                   child: _buildHeaderCell('SR'),
                 ),
-                SizedBox(
-                  width: _minColumnWidth,
-                  child: _buildHeaderCell('Min'),
-                ),
               ],
             ),
           ),
@@ -3483,20 +3553,17 @@ class _BattingScorecardTable extends StatelessWidget {
               ],
             ),
           ),
-          SizedBox(
-            width: _statColumnWidth,
-            child: Text(
-              extras.toString(),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textMain,
-                fontFamily: 'Inter',
-              ),
+          const Spacer(),
+          Text(
+            extras.toString(),
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMain,
+              fontFamily: 'Inter',
             ),
           ),
-          const SizedBox(width: _statColumnWidth * 3 + _srColumnWidth + _minColumnWidth),
         ],
       ),
     );
@@ -3510,44 +3577,26 @@ class _BattingScorecardTable extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Total',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textMain,
-                    fontFamily: 'Inter',
-                  ),
-                ),
-                Text(
-                  '($totalWickets wickets, ${_formatOvers(totalOvers)} overs)',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSec.withOpacity(0.7),
-                    fontFamily: 'Inter',
-                  ),
-                ),
-              ],
+          const Text(
+            'Total',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textMain,
+              fontFamily: 'Inter',
             ),
           ),
-          SizedBox(
-            width: _statColumnWidth,
-            child: Text(
-              totalRuns.toString(),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-                fontFamily: 'Inter',
-              ),
+          const Spacer(),
+          Text(
+            '$totalRuns/$totalWickets (${_formatOvers(totalOvers)})',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+              fontFamily: 'Inter',
             ),
           ),
-          const SizedBox(width: _statColumnWidth * 3 + _srColumnWidth + _minColumnWidth),
         ],
       ),
     );
@@ -3665,10 +3714,6 @@ class _BattingScorecardTable extends StatelessWidget {
               stat.strikeRate.toStringAsFixed(1),
               isStrikeRate: true,
             ),
-          ),
-          SizedBox(
-            width: _minColumnWidth,
-            child: _buildDataCell(stat.minutes.toString()),
           ),
         ],
       ),

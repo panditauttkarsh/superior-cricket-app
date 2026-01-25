@@ -15,6 +15,7 @@ import '../../../../core/services/mvp_calculation_service.dart';
 import '../../../../core/models/mvp_model.dart';
 import '../../../match/presentation/widgets/mvp_award_card.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/wagon_wheel_selector.dart';
 
 class ScorecardPage extends ConsumerStatefulWidget {
   final String? matchId;
@@ -420,6 +421,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   
   // Batting metadata
   Map<String, String> _battingTypeMap = {}; // Store batting type (Right-handed/Left-handed) for each batsman
+  Map<String, String> _bowlingTypeMap = {}; // Store bowling type (Right-arm Fast/Spin, Left-arm Fast/Spin) for each bowler
   Set<String> _batsmenWhoHaveBatted = {}; // Track batsmen who have already batted
   
   // Innings tracking
@@ -2057,10 +2059,13 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   
   // Show modal to select new batsman after wicket
   Future<void> _showSelectNewBatsman() async {
-    // Get available batsmen (exclude dismissed players and current non-striker)
+    // Get available batsmen (exclude dismissed players and BOTH current batsmen)
+    // When a batsman gets out, we need a NEW batsman to replace them
+    // So we exclude both the striker and non-striker who are currently on the field
     final availableBatsmen = _battingTeamPlayers
         .where((player) => 
             !_dismissedPlayers.contains(player) && 
+            player != _striker &&
             player != _nonStriker)
         .toList();
     
@@ -2455,29 +2460,51 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   }
   
   // Start second innings
-  void _startSecondInnings() {
+  Future<void> _startSecondInnings() async {
     // Save first innings data before resetting
     _saveFirstInningsData();
+    
+    // Swap teams first to get correct player lists
+    final tempTeam = _battingTeam;
+    final newBattingTeam = _bowlingTeam;
+    final newBowlingTeam = tempTeam;
+    
+    final tempPlayers = _battingTeamPlayers;
+    final newBattingPlayers = _bowlingTeamPlayers;
+    final newBowlingPlayers = tempPlayers;
+    
+    // Show player selection dialog
+    final selectedPlayers = await _showSecondInningsPlayerSelection(
+      newBattingPlayers,
+      newBowlingPlayers,
+    );
+    
+    if (selectedPlayers == null || !mounted) {
+      // User cancelled or widget disposed
+      return;
+    }
+    
+    final selectedStriker = selectedPlayers['striker'] as String;
+    final selectedNonStriker = selectedPlayers['nonStriker'] as String;
+    final selectedBowler = selectedPlayers['bowler'] as String;
     
     setState(() {
       _currentInnings = 2;
       // Swap teams
-      final tempTeam = _battingTeam;
-      _battingTeam = _bowlingTeam;
-      _bowlingTeam = tempTeam;
+      _battingTeam = newBattingTeam;
+      _bowlingTeam = newBowlingTeam;
       
       // Swap player lists
-      final tempPlayers = _battingTeamPlayers;
-      _battingTeamPlayers = _bowlingTeamPlayers;
-      _bowlingTeamPlayers = tempPlayers;
+      _battingTeamPlayers = newBattingPlayers;
+      _bowlingTeamPlayers = newBowlingPlayers;
       
-      // Reset match state
+      // Reset match state with selected players
       _totalRuns = 0;
       _wickets = 0;
       _currentOver = 0;
       _currentBall = 0;
-      _striker = _battingTeamPlayers.isNotEmpty ? _battingTeamPlayers[0] : '';
-      _nonStriker = _battingTeamPlayers.length > 1 ? _battingTeamPlayers[1] : '';
+      _striker = selectedStriker;
+      _nonStriker = selectedNonStriker;
       _strikerRuns = 0;
       _strikerBalls = 0;
       _strikerSR = 0.0;
@@ -2497,22 +2524,313 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _extrasMap.clear();
       
       // Track start time for new batsmen
-      if (_striker.isNotEmpty) _trackPlayerStartTime(_striker);
-      if (_nonStriker.isNotEmpty) _trackPlayerStartTime(_nonStriker);
+      _trackPlayerStartTime(_striker);
+      _trackPlayerStartTime(_nonStriker);
+      _batsmenWhoHaveBatted.add(_striker);
+      _batsmenWhoHaveBatted.add(_nonStriker);
+      
       _crr = 0.0;
       _projected = 0;
       _currentOverBalls = [];
       _overHistory = [];
       _dismissedPlayers = [];
       _usedBowlers = [];
-      _bowler = _bowlingTeamPlayers.isNotEmpty ? _bowlingTeamPlayers[0] : '';
+      _bowler = selectedBowler;
       _bowlerOvers = 0.0;
       _bowlerRuns = 0;
       _bowlerWickets = 0;
       _isDeclaredRun = false;
       _isShortRun = false;
     });
+    
+    // Show batting type selection for striker if needed
+    if (!_battingTypeMap.containsKey(selectedStriker)) {
+      await _showBattingTypeSelection(selectedStriker);
+    }
+    
+    // Show batting type selection for non-striker if needed
+    if (!_battingTypeMap.containsKey(selectedNonStriker)) {
+      await _showBattingTypeSelection(selectedNonStriker);
+    }
+    
+    // Show bowling type selection for bowler if needed
+    if (!_bowlingTypeMap.containsKey(selectedBowler)) {
+      await _showBowlingTypeSelection(selectedBowler);
+    }
+    
     _saveScorecardToSupabase();
+  }
+  
+  // Show player selection dialog for second innings
+  Future<Map<String, String>?> _showSecondInningsPlayerSelection(
+    List<String> battingPlayers,
+    List<String> bowlingPlayers,
+  ) async {
+    String? selectedStriker;
+    String? selectedNonStriker;
+    String? selectedBowler;
+    
+    return showDialog<Map<String, String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text(
+            'Select Opening Players',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Inter',
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Second Innings',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSec,
+                    fontFamily: 'Inter',
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Striker selection
+                const Text(
+                  'Opening Striker',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Inter',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.elevated,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedStriker,
+                      isExpanded: true,
+                      hint: const Text('Select Striker'),
+                      items: battingPlayers.map((player) {
+                        return DropdownMenuItem(
+                          value: player,
+                          child: Text(player),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedStriker = value;
+                          // Clear non-striker if same as striker
+                          if (selectedNonStriker == value) {
+                            selectedNonStriker = null;
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Non-striker selection
+                const Text(
+                  'Opening Non-Striker',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Inter',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.elevated,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedNonStriker,
+                      isExpanded: true,
+                      hint: const Text('Select Non-Striker'),
+                      items: battingPlayers
+                          .where((player) => player != selectedStriker)
+                          .map((player) {
+                        return DropdownMenuItem(
+                          value: player,
+                          child: Text(player),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() => selectedNonStriker = value);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Bowler selection
+                const Text(
+                  'Opening Bowler',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Inter',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.elevated,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedBowler,
+                      isExpanded: true,
+                      hint: const Text('Select Bowler'),
+                      items: bowlingPlayers.map((player) {
+                        return DropdownMenuItem(
+                          value: player,
+                          child: Text(player),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() => selectedBowler = value);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                if (selectedStriker == null ||
+                    selectedNonStriker == null ||
+                    selectedBowler == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please select all players'),
+                      backgroundColor: AppColors.urgent,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(context, {
+                  'striker': selectedStriker!,
+                  'nonStriker': selectedNonStriker!,
+                  'bowler': selectedBowler!,
+                });
+              },
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Confirm',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Inter',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Show bowling type selection (Right/Left-arm Fast/Spin)
+  Future<void> _showBowlingTypeSelection(String bowlerName) async {
+    final selectedType = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Select Bowling Type',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Inter',
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              bowlerName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSec,
+                fontFamily: 'Inter',
+              ),
+            ),
+            const SizedBox(height: 24),
+            _buildBowlingTypeOption(context, 'Right-arm Fast'),
+            const SizedBox(height: 12),
+            _buildBowlingTypeOption(context, 'Left-arm Fast'),
+            const SizedBox(height: 12),
+            _buildBowlingTypeOption(context, 'Right-arm Spin'),
+            const SizedBox(height: 12),
+            _buildBowlingTypeOption(context, 'Left-arm Spin'),
+          ],
+        ),
+      ),
+    );
+    
+    if (selectedType != null && mounted) {
+      setState(() {
+        _bowlingTypeMap[bowlerName] = selectedType;
+      });
+      _saveScorecardToSupabase();
+    }
+  }
+  
+  Widget _buildBowlingTypeOption(BuildContext context, String type) {
+    return InkWell(
+      onTap: () => Navigator.pop(context, type),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.elevated,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.borderLight),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                type,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Inter',
+                ),
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 16),
+          ],
+        ),
+      ),
+    );
   }
   
   // Show match result screen
@@ -6323,10 +6641,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     );
   }
 
-  // Build wagon wheel bottom sheet with image tap detection
+  // Build wagon wheel bottom sheet with new Selector
   Widget _buildWagonWheelSheet(int runs) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: MediaQuery.of(context).size.height * 0.7,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -6347,7 +6665,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
           Padding(
             padding: const EdgeInsets.all(20),
             child: Text(
-              'Tap on Wagon Wheel ($runs runs)',
+              'Select Shot Area ($runs runs)',
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -6356,180 +6674,25 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
               ),
             ),
           ),
-          // Wagon Wheel Image with Tap Detection - SINGLE WHEEL ONLY
+          // Wagon Wheel Selector Widget
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: GestureDetector(
-                onTapDown: (details) {
-                  _handleWagonWheelTap(details.localPosition, runs, context);
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.borderLight, width: 2),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Image.asset(
-                      'assets/images/wagon_wheel.png', // Wagon wheel image
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        // If image not found, show fallback grid with correct names only
-                        return _buildWagonWheelFallback(runs);
-                      },
-                    ),
-                  ),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: WagonWheelSelector(
+                  size: MediaQuery.of(context).size.width - 60,
+                  onRegionSelected: (region) {
+                    // Close wagon wheel and show shot type selection
+                    Navigator.pop(context);
+                    // Add a small delay for visual feedback if needed, but immediate is usually better for UX
+                    _showShotTypeSelection(runs, region);
+                  },
                 ),
               ),
             ),
           ),
+          const SizedBox(height: 20),
         ],
-      ),
-    );
-  }
-  
-  // Handle tap on wagon wheel image
-  void _handleWagonWheelTap(Offset localPosition, int runs, BuildContext context) {
-    // Get image size (assuming square image)
-    final imageSize = MediaQuery.of(context).size.width - 80; // Account for padding
-    final centerX = imageSize / 2;
-    final centerY = imageSize / 2;
-    
-    // Calculate angle and distance from center
-    final dx = localPosition.dx - centerX;
-    final dy = localPosition.dy - centerY;
-    final angle = (180 / math.pi) * (math.atan2(dy, dx) + math.pi); // Convert to degrees (0-360)
-    final distance = math.sqrt(dx * dx + dy * dy);
-    
-    // Map tap location to region
-    String direction = _mapTapToRegion(angle, distance, imageSize);
-    
-    // Close wagon wheel and show shot type selection
-    Navigator.pop(context);
-    _showShotTypeSelection(runs, direction);
-  }
-  
-  // Map tap coordinates to wagon wheel region - Using correct cricket fielding region names
-  String _mapTapToRegion(double angle, double distance, double imageSize) {
-    final radius = imageSize / 2;
-    final normalizedDistance = distance / radius;
-    
-    // Determine region based on angle and distance
-    // Use exact region names: Third Man, Deep Fine Leg, Deep Square Leg, Deep Mid-Wicket,
-    // Long On, Long Off, Deep Cover, Deep Point, Off Side, Leg Side, Straight
-    if (normalizedDistance < 0.3) {
-      return 'Straight';
-    } else if (angle >= 0 && angle < 22.5 || angle >= 337.5) {
-      return 'Third Man';
-    } else if (angle >= 22.5 && angle < 45) {
-      return 'Deep Point';
-    } else if (angle >= 45 && angle < 67.5) {
-      return 'Deep Point';
-    } else if (angle >= 67.5 && angle < 90) {
-      return 'Deep Cover';
-    } else if (angle >= 90 && angle < 112.5) {
-      return 'Deep Cover';
-    } else if (angle >= 112.5 && angle < 135) {
-      return 'Off Side';
-    } else if (angle >= 135 && angle < 157.5) {
-      return 'Off Side';
-    } else if (angle >= 157.5 && angle < 180) {
-      return 'Long Off';
-    } else if (angle >= 180 && angle < 202.5) {
-      return 'Long Off';
-    } else if (angle >= 202.5 && angle < 225) {
-      return 'Long On';
-    } else if (angle >= 225 && angle < 247.5) {
-      return 'Long On';
-    } else if (angle >= 247.5 && angle < 270) {
-      return 'Leg Side';
-    } else if (angle >= 270 && angle < 292.5) {
-      return 'Leg Side';
-    } else if (angle >= 292.5 && angle < 315) {
-      return 'Deep Mid-Wicket';
-    } else if (angle >= 315 && angle < 337.5) {
-      return 'Deep Mid-Wicket';
-    } else {
-      // Default based on distance for edge cases
-      if (normalizedDistance > 0.7) {
-        if (angle >= 270 && angle < 360) {
-          return 'Deep Fine Leg';
-        } else if (angle >= 180 && angle < 270) {
-          return 'Deep Square Leg';
-        }
-      }
-      return 'Straight';
-    }
-  }
-  
-  // Build fallback wagon wheel (if image not available) - Use correct region names only
-  Widget _buildWagonWheelFallback(int runs) {
-    return GridView.count(
-      crossAxisCount: 3,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      padding: const EdgeInsets.all(16),
-      children: [
-        _buildWagonWheelButton('Off Side', () => _showShotTypeSelection(runs, 'Off Side')),
-        _buildWagonWheelButton('Leg Side', () => _showShotTypeSelection(runs, 'Leg Side')),
-        _buildWagonWheelButton('Third Man', () => _showShotTypeSelection(runs, 'Third Man')),
-        _buildWagonWheelButton('Deep Point', () => _showShotTypeSelection(runs, 'Deep Point')),
-        _buildWagonWheelButton('Deep Cover', () => _showShotTypeSelection(runs, 'Deep Cover')),
-        _buildWagonWheelButton('Deep Mid-Wicket', () => _showShotTypeSelection(runs, 'Deep Mid-Wicket')),
-        _buildWagonWheelButton('Long On', () => _showShotTypeSelection(runs, 'Long On')),
-        _buildWagonWheelButton('Long Off', () => _showShotTypeSelection(runs, 'Long Off')),
-        _buildWagonWheelButton('Deep Fine Leg', () => _showShotTypeSelection(runs, 'Deep Fine Leg')),
-        _buildWagonWheelButton('Straight', () => _showShotTypeSelection(runs, 'Straight')),
-      ],
-    );
-  }
-  
-  // Build region label
-  Widget _buildRegionLabel(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.elevated,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.borderLight),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          color: AppColors.textSec,
-          fontFamily: 'Inter',
-        ),
-      ),
-    );
-  }
-
-  // Build wagon wheel button
-  Widget _buildWagonWheelButton(String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: () {
-        Navigator.pop(context);
-        onTap();
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.borderLight),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textMain,
-            ),
-          ),
-        ),
       ),
     );
   }
