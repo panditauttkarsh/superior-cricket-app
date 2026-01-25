@@ -265,6 +265,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
                     },
             ),
           ),
+          // DLS Calculator (Removed)
           // Share Button
           IconButton(
             icon: const Icon(Icons.share, color: Colors.white),
@@ -731,13 +732,36 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Team Name Header - Simple text
-            Text(
-              currentBattingTeam,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textMain,
-              ),
+            // Team Name Header - Simple text with Super Over Badge
+            Row(
+              children: [
+                Text(
+                  currentBattingTeam,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMain,
+                  ),
+                ),
+                if (scorecard['is_super_over'] == true) ...[
+                   const SizedBox(width: 12),
+                   Container(
+                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                     decoration: BoxDecoration(
+                       color: AppColors.urgent,
+                       borderRadius: BorderRadius.circular(4),
+                     ),
+                     child: const Text(
+                       'SUPER OVER',
+                       style: TextStyle(
+                         color: Colors.white,
+                         fontSize: 10,
+                         fontWeight: FontWeight.bold,
+                       ),
+                     ),
+                   ),
+                ]
+              ],
             ),
             const SizedBox(height: 20),
             

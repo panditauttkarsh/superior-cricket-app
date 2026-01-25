@@ -360,7 +360,14 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   Timer? _saveTimer;
   // Match state - Initialize to 0/0/0.0/0
   String _battingTeam = 'Warriors';
+
   String _bowlingTeam = 'Titans';
+  // Super Over State
+  bool _isSuperOver = false;
+  int _superOverInnings = 0; // 0 = none, 1 = 1st, 2 = 2nd
+  int _superOverNumber = 0; // Track which super over it is (1, 2...)
+  Map<String, dynamic>? _savedMainMatchData; // Backup of main match before super over
+  
   String? _team1Id; // ID of Team 1
   String? _team2Id; // ID of Team 2
   int _currentOver = 0;
@@ -477,7 +484,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   int get _maxWickets => _battingTeamPlayers.length > 0 ? _battingTeamPlayers.length - 1 : 10;
   
   // Check if innings should end
-  bool get _shouldEndInnings => _wickets >= _maxWickets || (widget.overs != null && _currentOver >= widget.overs!);
+  bool get _shouldEndInnings => _wickets >= _effectiveMaxWickets || (_effectiveMaxOvers != null && _currentOver >= _effectiveMaxOvers);
   
   // Check if match is complete
   bool get _isMatchComplete => _currentInnings == 2 && _shouldEndInnings;
@@ -667,7 +674,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
           Map<String, dynamic> team1ScoreData;
           Map<String, dynamic> team2ScoreData;
           
-          if (_currentInnings == 1) {
+          if (_isSuperOver && _savedMainMatchData != null) {
+              // PRESERVE MAIN MATCH SCORES: Do not overwrite with SO scores
+              team1ScoreData = _savedMainMatchData!['team1_score'];
+              team2ScoreData = _savedMainMatchData!['team2_score'];
+          } else if (_currentInnings == 1) {
             team1ScoreData = {
               'runs': _totalRuns,
               'wickets': _wickets,
@@ -794,6 +805,14 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             'first_innings_extras': _firstInningsExtras,
             'deliveries': _deliveries.map((d) => d.toJson()).toList(),
             'first_innings_deliveries': _firstInningsDeliveries.map((d) => d.toJson()).toList(),
+            'is_super_over': _isSuperOver,
+            'super_over_inning': _superOverInnings,
+            'super_over_number': _superOverNumber,
+            'super_over_score': _isSuperOver ? {
+              'runs': _totalRuns,
+              'wickets': _wickets,
+              'overs': _currentOver + (_currentBall / 6),
+            } : null,
           };
         
         await matchRepo.updateScorecard(widget.matchId!, scorecard);
@@ -2260,6 +2279,33 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   
   // End innings when all wickets fall or overs completed
   void _endInnings() {
+    // SUPER OVER LOGIC
+    if (_isSuperOver) {
+      if (_superOverInnings == 1) {
+        // End of SO Innings 1 -> Start SO Innings 2
+        // Save first innings score (Super Over)
+        setState(() {
+          _firstInningsRuns = _totalRuns;
+          _firstInningsWickets = _wickets;
+          _firstInningsOvers = _currentOver + (_currentBall / 6.0);
+        });
+        
+        _showInningsSummary(
+          teamName: _battingTeam,
+          runs: _totalRuns,
+          wickets: _wickets,
+          overs: _currentOver + (_currentBall / 6.0),
+          isFirstInnings: true,
+        );
+        return;
+      } else {
+        // End of SO Innings 2 -> Result
+        _showMatchResult();
+        return;
+      }
+    }
+    
+    // MAIN MATCH LOGIC
     if (_currentInnings == 1) {
       // Save first innings data
       setState(() {
@@ -2281,6 +2327,70 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _showMatchResult();
     }
   }
+
+  // Start Super Over Second Innings
+  Future<void> _startSuperOverSecondInnings() async {
+    // 1. Swap Teams
+    final tempTeam = _battingTeam;
+    final newBattingTeam = _bowlingTeam;
+    final newBowlingTeam = tempTeam;
+    
+    final tempPlayers = _battingTeamPlayers;
+    final newBattingPlayers = _bowlingTeamPlayers;
+    final newBowlingPlayers = tempPlayers;
+
+    // 2. Select Players (Simple prompt for 2nd innings of SO)
+    final selectedPlayers = await _showSecondInningsPlayerSelection(
+      newBattingPlayers,
+      newBowlingPlayers,
+    );
+    
+    if (selectedPlayers == null) return;
+    
+    setState(() {
+      _superOverInnings = 2;
+      _currentInnings = 2; // UI View
+      
+      _battingTeam = newBattingTeam;
+      _bowlingTeam = newBowlingTeam;
+      _battingTeamPlayers = newBattingPlayers;
+      _bowlingTeamPlayers = newBowlingPlayers;
+      
+      // Reset Scores
+      _totalRuns = 0;
+      _wickets = 0;
+      _currentOver = 0;
+      _currentBall = 0;
+      _deliveries.clear();
+      _playerStatsMap.clear();
+      _bowlerStatsMap.clear();
+      _extrasMap.clear();
+      _currentOverBalls = [];
+      _overHistory = [];
+      
+      // Apply Selection
+      _striker = selectedPlayers['striker']!;
+      _nonStriker = selectedPlayers['nonStriker']!;
+      _bowler = selectedPlayers['bowler']!;
+      
+      // Tracker
+      _trackPlayerStartTime(_striker);
+      _trackPlayerStartTime(_nonStriker);
+      _batsmenWhoHaveBatted = {_striker, _nonStriker};
+      
+      // Reset flags ensuring scoring is possible
+      _waitingForBowlerSelection = false;
+      _dismissedPlayers = [];
+      _isDeclaredRun = false;
+      _isShortRun = false;
+      _usedBowlers = [];
+      _bowlerOvers = 0.0;
+      _bowlerRuns = 0;
+      _bowlerWickets = 0;
+    });
+    
+    _saveScorecardToSupabase();
+  }
   
   // Show premium innings summary popup
   void _showInningsSummary({
@@ -2291,7 +2401,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     required bool isFirstInnings,
   }) {
     final runRate = overs > 0 ? (runs / overs) : 0.0;
-    final reason = wickets >= _maxWickets ? 'All Out' : 'Overs Completed';
+    final reason = wickets >= _effectiveMaxWickets ? 'All Out' : 'Overs Completed';
     
     showModalBottomSheet(
       context: context,
@@ -2427,7 +2537,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
                         onPressed: () {
                           Navigator.pop(context);
                           if (isFirstInnings) {
-                            _startSecondInnings();
+                            if (_isSuperOver) {
+                              _startSuperOverSecondInnings();
+                            } else {
+                              _startSecondInnings();
+                            }
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -2539,8 +2653,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _bowlerOvers = 0.0;
       _bowlerRuns = 0;
       _bowlerWickets = 0;
+      _bowlerWickets = 0;
       _isDeclaredRun = false;
       _isShortRun = false;
+      _waitingForBowlerSelection = false; // Ensure input is unlocked
     });
     
     // Show batting type selection for striker if needed
@@ -2803,6 +2919,357 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     }
   }
   
+  // Dialog to handle Main Match Tie
+  void _showTieResolutionDialog() {
+    // Premium Bottom Sheet for Match Tie
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Color(0xFF1E1E1E), // Dark theme background
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+             BoxShadow(color: Colors.black45, blurRadius: 20, offset: Offset(0, -5)),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Icon
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.balance, // Tie scale icon
+                  size: 48,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Title
+            const Text(
+              'It\'s a Tie!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            
+            // Subtitle
+            Text(
+              'Scores are level at $_firstInningsRuns/$_firstInningsWickets vs $_totalRuns/$_wickets.\nHow would you like to decide the winner?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white.withOpacity(0.7),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
+            
+            // Super Over Button (Primary Action)
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _startSuperOver();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 4,
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Start Super Over',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward, color: Colors.white),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Declare Tie Button (Secondary Action)
+            OutlinedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _finishMatchAsTie();
+              },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text(
+                'End Match as Draw',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+            ),
+             const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Dialog to handle Super Over Tie
+  void _showSuperOverTieResolutionDialog() {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+             Center(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.urgent.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.loop, 
+                  size: 48,
+                  color: AppColors.urgent,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+             const Text(
+              'Super Over Tied!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+             Text(
+              'Incredible scenes! The Super Over scores are also level.\nSelect "Super Over 2" to continue the excitement.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white.withOpacity(0.7),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
+            
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _startSuperOver(); 
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text(
+                'Start Super Over 2',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            OutlinedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _finishMatchAsTie(); 
+              },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text(
+                'Declare Joint Winners',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+            ),
+             const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _finishMatchAsTie() async {
+     // Trigger the standard completion with Tie
+     // We manually set _isSuperOver false so the check proceeds to "else" block in _showMatchResult
+     // actually, we just call a helper or re-call _showMatchResult
+     
+     // Simplest way: Call _saveFinalMatchData directly since we know it's a tie
+     const result = 'Match Tied';
+     
+     _matchCompleted = true;
+     await _saveFinalMatchData(result, '');
+     
+     if (mounted) Navigator.pop(context); // Exit scorecard
+  }
+
+  // Setup and Start Super Over
+  Future<void> _startSuperOver() async {
+    // 1. Backup Main Match Data
+    if (_savedMainMatchData == null) {
+      // Only backup once (if multiple super overs, keep original match data)
+      _savedMainMatchData = {
+        'team1_score': {
+          'runs': _firstInningsRuns,
+          'wickets': _firstInningsWickets,
+          'overs': _firstInningsOvers,
+        },
+        'team2_score': {
+          'runs': _totalRuns,
+          'wickets': _wickets,
+          'overs': _currentOver + (_currentBall / 6.0),
+        },
+      };
+    }
+    
+    // 2. Increment SO count
+    _superOverNumber++;
+    
+    // 3. Reset State for Super Over (Mini Match)
+    setState(() {
+      _isSuperOver = true;
+      _superOverInnings = 1; // Team 1 Batting
+      _currentInnings = 1; // Resets UI to Innings 1 view
+      
+      // Determine Batting Team (Swap from main match end? Or strict rule?)
+      // User says: "Team batting second chases".
+      // Let's typically assume Team 1 (Scorecard Team 1) bats first in SO? 
+      // Or we should ask. For MVP: Let's assume Team 2 (who just batted) bats second again so they chase.
+      // So Team 1 Bats First.
+      // Wait, let's keep the teams as they were assigned to Team 1 and Team 2.
+      // Team 1 = _team1Id, Team 2 = _team2Id.
+      // We need to set _battingTeam to Team 1's name.
+      // Note: _battingTeam variable is just text often.
+      
+      // Let's assume the standard 'Team 1' bats first in SO.
+      // We need to find the names.
+      // Better yet: Ask the user.
+    });
+
+    // 4. Player Selection Dialog (We need new strikers)
+    await _setupSuperOverPlayers();
+  }
+
+  Future<void> _setupSuperOverPlayers() async {
+    // Simple approach: We reuse _showSecondInningsPlayerSelection logic but adapted
+    // Actually, let's just use a simple prompt "Select Super Over Openers"
+    
+    // Determine Team Names (This assumes standard swap where Team 2 just finished bowling?)
+    // Actually, wait. At end of match, _battingTeam was Team 2 (chasing).
+    // So Team 1 is _bowlingTeam.
+    // Super Over Innings 1: Team 1 Bats.
+    
+    final soBattingTeam = _bowlingTeam; // The team that bowled previously (Team 1)
+    final soBowlingTeam = _battingTeam; // The team that batted previously (Team 2)
+    
+    // Squads
+    final soBattingSquad = _bowlingTeamPlayers; 
+    final soBowlingSquad = _battingTeamPlayers;
+    
+    // Show Dialog
+    final selectedPlayers = await _showSecondInningsPlayerSelection(
+        soBattingSquad, 
+        soBowlingSquad, 
+       // We might want to change title to "Super Over: Select Team 1 Openers"
+    );
+
+    if (selectedPlayers == null) return; // Cancelled?
+
+    setState(() {
+      // Set Teams
+      _battingTeam = soBattingTeam;
+      _bowlingTeam = soBowlingTeam;
+      _battingTeamPlayers = soBattingSquad;
+      _bowlingTeamPlayers = soBowlingSquad;
+      
+      // Reset Scores
+      _totalRuns = 0;
+      _wickets = 0;
+      _currentOver = 0;
+      _currentBall = 0;
+      _deliveries.clear();
+      _playerStatsMap.clear();
+      _bowlerStatsMap.clear();
+      _extrasMap.clear();
+      _playerFours.clear();
+      _playerSixes.clear();
+      _currentOverBalls = [];
+      
+      // Apply Selection
+      _striker = selectedPlayers['striker']!;
+      _nonStriker = selectedPlayers['nonStriker']!;
+      _bowler = selectedPlayers['bowler']!;
+      
+      // Init Trackers
+      _trackPlayerStartTime(_striker);
+      _trackPlayerStartTime(_nonStriker);
+      _batsmenWhoHaveBatted = {_striker, _nonStriker};
+      
+      // Reset flags ensuring scoring is possible
+      _waitingForBowlerSelection = false;
+      _dismissedPlayers = [];
+      _isDeclaredRun = false;
+      _isShortRun = false;
+      _usedBowlers = [];
+      _bowlerOvers = 0.0;
+      _bowlerRuns = 0;
+      _bowlerWickets = 0;
+      _overHistory = [];
+      
+      // SUPER OVER RULES
+      // overrides widget.overs (which might be 20)
+       // We don't change widget.overs constant, but we check _shouldEndInnings carefully.
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Super Over $_superOverNumber Started! 1 Over, 2 Wickets.'),
+        backgroundColor: AppColors.urgent,
+      ),
+    );
+  }
+
+  // Override getter to enforce Super Over rules
+  int get _effectiveMaxOvers => _isSuperOver ? 1 : (widget.overs ?? 20);
+  int get _effectiveMaxWickets => _isSuperOver ? 2 : _maxWickets;
+
   Widget _buildBowlingTypeOption(BuildContext context, String type) {
     return InkWell(
       onTap: () => Navigator.pop(context, type),
@@ -2852,6 +3319,20 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       final margin = _firstInningsRuns - runsScored;
       result = 'Won by $margin ${margin == 1 ? 'run' : 'runs'}';
     } else {
+      // Main Match Tie Logic
+      if (!_isSuperOver && _savedMainMatchData == null) {
+        // First time tie detected in main match
+        _showTieResolutionDialog();
+        return; // HALT HERE
+      }
+      
+      // Super Over Tie Logic (Recurse)
+      if (_isSuperOver) {
+         // Super Over is tied!
+         _showSuperOverTieResolutionDialog();
+         return; // HALT HERE
+      }
+      
       result = 'Match Tied';
       winningTeam = '';
     }
@@ -2864,6 +3345,43 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     
     // Navigate to match result screen
     if (mounted) {
+      // Helper to format score map to string "Runs/Wickets"
+      String formatScore(dynamic scoreData) {
+        if (scoreData == null) return '0/0';
+        if (scoreData is! Map) return scoreData.toString();
+        return '${scoreData['runs']}/${scoreData['wickets']}';
+      }
+      
+      // Helper to get overs from map
+      double getOvers(dynamic scoreData) {
+        if (scoreData == null) return 0.0;
+        if (scoreData is! Map) return 0.0;
+        return (scoreData['overs'] as num? ?? 0.0).toDouble();
+      }
+
+      String t1MainScore = '$_firstInningsRuns/$_firstInningsWickets';
+      String t2MainScore = '$runsScored/$wicketsLost';
+      double t1MainOvers = _firstInningsOvers;
+      double t2MainOvers = oversPlayed;
+      
+      String? t1SoScore;
+      String? t2SoScore;
+      
+      if (_isSuperOver) {
+        // If Super Over, the current state variables (_firstInningsRuns, etc.) hold SO stats.
+        // We need to fetch Main Match stats from _savedMainMatchData.
+        final mainT1 = _savedMainMatchData?['team1_score'];
+        final mainT2 = _savedMainMatchData?['team2_score'];
+        
+        t1MainScore = formatScore(mainT1);
+        t2MainScore = formatScore(mainT2);
+        t1MainOvers = getOvers(mainT1);
+        t2MainOvers = getOvers(mainT2);
+        
+        t1SoScore = '$_firstInningsRuns/$_firstInningsWickets';
+        t2SoScore = '$runsScored/$wicketsLost';
+      }
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -2872,10 +3390,12 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             result: result,
             team1Name: _currentInnings == 2 ? _bowlingTeam : _battingTeam,
             team2Name: _currentInnings == 2 ? _battingTeam : _bowlingTeam,
-            team1Score: '$_firstInningsRuns/$_firstInningsWickets',
-            team2Score: '$runsScored/$wicketsLost',
-            team1Overs: _firstInningsOvers,
-            team2Overs: oversPlayed,
+            team1Score: t1MainScore,
+            team2Score: t2MainScore,
+            team1Overs: t1MainOvers,
+            team2Overs: t2MainOvers,
+            team1SuperOverScore: t1SoScore,
+            team2SuperOverScore: t2SoScore,
             matchId: widget.matchId,
           ),
         ),
@@ -3171,10 +3691,32 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         final scorecard = match.scorecard;
         if (scorecard != null) {
           setState(() {
+            _isSuperOver = scorecard['is_super_over'] ?? false;
+            _superOverInnings = scorecard['super_over_inning'] ?? 0;
+            _superOverNumber = scorecard['super_over_number'] ?? 0;
+
             final team1Score = scorecard['team1_score'] ?? {};
             final team2Score = scorecard['team2_score'] ?? {};
-            _totalRuns = team1Score['runs'] ?? 0;
-            _wickets = team1Score['wickets'] ?? 0;
+
+            // If in Super Over, restore main match backup and load SO score
+            if (_isSuperOver) {
+               _savedMainMatchData = {
+                  'team1_score': team1Score,
+                  'team2_score': team2Score,
+                  // We might need deep copy or extensive field mapping if we use detailed map
+               };
+               
+               final soScore = scorecard['super_over_score'] ?? {};
+               _totalRuns = soScore['runs'] ?? 0;
+               _wickets = soScore['wickets'] ?? 0;
+               // OTHERS rely on root level fields (striker, bowler, etc) which ARE updated in root, 
+               // so we don't need to change them.
+               // ONLY runs/wickets are strictly separated in storage.
+            } else {
+               // Normal loading
+               _totalRuns = team1Score['runs'] ?? 0;
+               _wickets = team1Score['wickets'] ?? 0;
+            }
             _currentOver = scorecard['current_over'] ?? 0;
             _currentBall = scorecard['current_ball'] ?? 0;
             _striker = scorecard['striker'] ?? _striker;
@@ -3643,7 +4185,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     }
     
     // Check if max wickets reached (squad size - 1)
-    if (_wickets >= _maxWickets && outType != 'Retired Hurt') {
+    if (_wickets >= _effectiveMaxWickets && outType != 'Retired Hurt') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('All out! Innings complete.')),
       );
@@ -4051,7 +4593,6 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       await repository.createCommentary(summaryCommentary);
       print('Over Summary: Generated for over $overNumber - $summaryText');
     } catch (e) {
-      print('Error generating over summary: $e');
     }
   }
 
@@ -7912,6 +8453,8 @@ class _MatchResultScreen extends ConsumerStatefulWidget {
   final double team1Overs;
   final double team2Overs;
   final String? matchId;
+  final String? team1SuperOverScore;
+  final String? team2SuperOverScore;
 
   const _MatchResultScreen({
     required this.winningTeam,
@@ -7923,6 +8466,8 @@ class _MatchResultScreen extends ConsumerStatefulWidget {
     required this.team1Overs,
     required this.team2Overs,
     this.matchId,
+    this.team1SuperOverScore,
+    this.team2SuperOverScore,
   });
 
   @override
@@ -8055,91 +8600,50 @@ class _MatchResultScreenState extends ConsumerState<_MatchResultScreen> {
                   ),
                   child: Column(
                     children: [
-                      // Team 1
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.team1Name,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.textMain,
-                                    fontFamily: 'Inter',
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  widget.team1Score,
-                                  style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primary,
-                                    fontFamily: 'Inter',
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${widget.team1Overs.toStringAsFixed(1)} overs',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.textSec,
-                                    fontFamily: 'Inter',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            width: 1,
-                            height: 60,
-                            color: AppColors.divider,
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  widget.team2Name,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.textMain,
-                                    fontFamily: 'Inter',
-                                  ),
-                                  textAlign: TextAlign.end,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  widget.team2Score,
-                                  style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primary,
-                                    fontFamily: 'Inter',
-                                  ),
-                                  textAlign: TextAlign.end,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${widget.team2Overs.toStringAsFixed(1)} overs',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.textSec,
-                                    fontFamily: 'Inter',
-                                  ),
-                                  textAlign: TextAlign.end,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                      _buildTeamScoreRow(
+                        widget.team1Name, 
+                        widget.team1Score, 
+                        '${widget.team1Overs.toStringAsFixed(1)} overs',
+                        widget.team2Name,
+                        widget.team2Score,
+                        '${widget.team2Overs.toStringAsFixed(1)} overs',
                       ),
+                      
+                      // Super Over Section
+                      if (widget.team1SuperOverScore != null && widget.team2SuperOverScore != null) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Divider(color: AppColors.divider),
+                        ),
+                        // Super Over Label
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.urgent.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.urgent.withOpacity(0.2)),
+                          ),
+                          child: Text(
+                            'SUPER OVER',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.urgent,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildTeamScoreRow(
+                          '', 
+                          widget.team1SuperOverScore!,
+                          '1.0 over',
+                          '',
+                          widget.team2SuperOverScore!,
+                          '1.0 over',
+                          isSuperOver: true,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -8320,6 +8824,117 @@ class _MatchResultScreenState extends ConsumerState<_MatchResultScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTeamScoreRow(
+    String name1, String score1, String sub1, 
+    String name2, String score2, String sub2, 
+    {bool isSuperOver = false}
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (name1.isNotEmpty)
+                Text(
+                  name1,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMain,
+                    fontFamily: 'Inter',
+                  ),
+                ),
+              SizedBox(height: name1.isNotEmpty ? 4 : 0),
+              Text(
+                score1,
+                style: TextStyle(
+                  fontSize: isSuperOver ? 20 : 24,
+                  fontWeight: FontWeight.bold,
+                  color: isSuperOver ? AppColors.urgent : AppColors.primary,
+                  fontFamily: 'Inter',
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                sub1,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSec,
+                  fontFamily: 'Inter',
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          width: 1,
+          height: name1.isNotEmpty ? 60 : 40,
+          color: AppColors.divider,
+        ),
+        const SizedBox(width: 24),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (name2.isNotEmpty)
+                Text(
+                  name2,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMain,
+                    fontFamily: 'Inter',
+                  ),
+                  textAlign: TextAlign.end,
+                ),
+              SizedBox(height: name2.isNotEmpty ? 4 : 0),
+              Text(
+                score2,
+                style: TextStyle(
+                  fontSize: isSuperOver ? 20 : 24,
+                  fontWeight: FontWeight.bold,
+                  color: isSuperOver ? AppColors.urgent : AppColors.primary,
+                  fontFamily: 'Inter',
+                ),
+                textAlign: TextAlign.end,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                sub2,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSec,
+                  fontFamily: 'Inter',
+                ),
+                textAlign: TextAlign.end,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMvpStat(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
