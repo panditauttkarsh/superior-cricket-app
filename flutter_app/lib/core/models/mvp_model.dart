@@ -32,6 +32,7 @@ class PlayerMvpModel {
   // Timestamps
   final DateTime calculatedAt;
   final bool isPlayerOfTheMatch;
+  final bool isNotOut; // New field
 
   const PlayerMvpModel({
     required this.playerId,
@@ -58,10 +59,16 @@ class PlayerMvpModel {
     required this.performanceGrade,
     required this.calculatedAt,
     this.isPlayerOfTheMatch = false,
+    this.isNotOut = false,
   });
 
   /// Create from JSON
   factory PlayerMvpModel.fromJson(Map<String, dynamic> json) {
+    // Hack to persist isNotOut without DB schema change
+    final rawGrade = json['performance_grade'] as String;
+    final isNotOutStored = rawGrade.endsWith('::notout');
+    final cleanGrade = isNotOutStored ? rawGrade.replaceAll('::notout', '') : rawGrade;
+    
     return PlayerMvpModel(
       playerId: json['player_id'] as String,
       playerName: json['player_name'] as String,
@@ -88,14 +95,18 @@ class PlayerMvpModel {
       bowlingEconomy: json['bowling_economy'] != null 
           ? (json['bowling_economy'] as num).toDouble() 
           : null,
-      performanceGrade: json['performance_grade'] as String,
+      performanceGrade: cleanGrade,
       calculatedAt: DateTime.parse(json['calculated_at'] as String),
       isPlayerOfTheMatch: json['is_player_of_the_match'] as bool? ?? false,
+      isNotOut: isNotOutStored,
     );
   }
 
   /// Convert to JSON
   Map<String, dynamic> toJson() {
+    // Hack to persist isNotOut via performanceGrade suffix
+    final gradeToSave = isNotOut ? '$performanceGrade::notout' : performanceGrade;
+    
     return {
       'player_id': playerId,
       'player_name': playerName,
@@ -118,7 +129,7 @@ class PlayerMvpModel {
       'batting_order': battingOrder,
       'strike_rate': strikeRate,
       'bowling_economy': bowlingEconomy,
-      'performance_grade': performanceGrade,
+      'performance_grade': gradeToSave,
       'calculated_at': calculatedAt.toIso8601String(),
       'is_player_of_the_match': isPlayerOfTheMatch,
     };
@@ -150,6 +161,7 @@ class PlayerMvpModel {
     String? performanceGrade,
     DateTime? calculatedAt,
     bool? isPlayerOfTheMatch,
+    bool? isNotOut,
   }) {
     return PlayerMvpModel(
       playerId: playerId ?? this.playerId,
@@ -176,6 +188,7 @@ class PlayerMvpModel {
       performanceGrade: performanceGrade ?? this.performanceGrade,
       calculatedAt: calculatedAt ?? this.calculatedAt,
       isPlayerOfTheMatch: isPlayerOfTheMatch ?? this.isPlayerOfTheMatch,
+      isNotOut: isNotOut ?? this.isNotOut,
     );
   }
 

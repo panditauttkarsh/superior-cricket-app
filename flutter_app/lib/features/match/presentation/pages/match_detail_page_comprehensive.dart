@@ -12,6 +12,7 @@ import '../../../../core/theme/app_colors.dart';
 import 'commentary_page.dart';
 import '../../../live/presentation/pages/go_live_screen.dart';
 import '../widgets/assign_scorer_dialog.dart';
+import '../widgets/mvp_award_card.dart';
 import '../../../../core/models/mvp_model.dart';
 
 /// Provider for match data
@@ -26,10 +27,10 @@ final matchPlayersProvider = FutureProvider.autoDispose.family<List<Map<String, 
   return await repository.getMatchPlayers(matchId);
 });
 
-// MVP data provider
-final matchMvpProvider = FutureProvider.autoDispose.family<List<PlayerMvpModel>, String>((ref, matchId) async {
+// MVP data provider - Changed to StreamProvider for real-time updates
+final matchMvpProvider = StreamProvider.autoDispose.family<List<PlayerMvpModel>, String>((ref, matchId) {
   final repository = ref.watch(mvpRepositoryProvider);
-  return await repository.getMatchMvpData(matchId);
+  return repository.streamMatchMvpData(matchId);
 });
 
 class MatchDetailPageComprehensive extends ConsumerStatefulWidget {
@@ -1036,153 +1037,94 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
                       const SizedBox(height: 16),
                       
                       // Player of the Match Card
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              AppColors.primary.withOpacity(0.2),
-                              AppColors.accent.withOpacity(0.1),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.primary, width: 2),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.emoji_events, color: AppColors.primary, size: 32),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Player of the Match',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: AppColors.textMeta,
-                                        ),
-                                      ),
-                                      Text(
-                                        potm.playerName,
-                                        style: const TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.textMain,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: _getGradeColor(potm.performanceGrade),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    potm.performanceGrade,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppColors.elevated,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text('Total MVP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                                      Text(
-                                        potm.totalMvp.toStringAsFixed(2),
-                                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _buildMvpBreakdownRow('🏏 Batting', potm.battingMvp),
-                                  _buildMvpBreakdownRow('⚾ Bowling', potm.bowlingMvp),
-                                  _buildMvpBreakdownRow('🧤 Fielding', potm.fieldingMvp),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                      MvpAwardCard(
+                        mvpData: potm,
+                        isPlayerOfTheMatch: true,
+                        onTap: () {},
                       ),
                       
                       const SizedBox(height: 16),
                       
-                      // Top 5 Performers
-                      ...mvpData.take(5).toList().asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final player = entry.value;
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.elevated,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
+                      // Best Batsman & Best Bowler Cards
+                      Builder(
+                        builder: (context) {
+                          // Filter candidates
+                          final batsmen = mvpData.where((p) => p.runsScored > 0 || p.battingMvp > 0).toList();
+                          final bowlers = mvpData.where((p) => p.ballsBowled > 0 || p.wicketsTaken > 0 || p.bowlingMvp > 0).toList();
+                          
+                          PlayerMvpModel? bestBatsman;
+                          if (batsmen.isNotEmpty) {
+                            batsmen.sort((a, b) {
+                              final mvpComp = b.battingMvp.compareTo(a.battingMvp);
+                              if (mvpComp != 0) return mvpComp;
+                              final runsComp = b.runsScored.compareTo(a.runsScored);
+                              if (runsComp != 0) return runsComp;
+                              return (b.strikeRate ?? 0).compareTo(a.strikeRate ?? 0);
+                            });
+                            bestBatsman = batsmen.first;
+                          }
+                          
+                          PlayerMvpModel? bestBowler;
+                          if (bowlers.isNotEmpty) {
+                            bowlers.sort((a, b) {
+                              final mvpComp = b.bowlingMvp.compareTo(a.bowlingMvp);
+                              if (mvpComp != 0) return mvpComp;
+                              final wicketsComp = b.wicketsTaken.compareTo(a.wicketsTaken);
+                              if (wicketsComp != 0) return wicketsComp;
+                              final ecoA = a.bowlingEconomy ?? 999.0;
+                              final ecoB = b.bowlingEconomy ?? 999.0;
+                              return ecoA.compareTo(ecoB);
+                            });
+                            bestBowler = bowlers.first;
+                          }
+
+                          if (bestBatsman == null && bestBowler == null) {
+                            return const SizedBox.shrink();
+                          }
+
+                          return Column(
                             children: [
-                              Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: index < 3 ? AppColors.primary.withOpacity(0.2) : AppColors.textMeta.withOpacity(0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '${index + 1}',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: index < 3 ? AppColors.primary : AppColors.textMeta,
-                                    ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Slot 1: BEST BATSMAN
+                                  Expanded(
+                                    child: bestBatsman != null
+                                        ? MvpAwardCard(
+                                            mvpData: bestBatsman,
+                                            isPlayerOfTheMatch: false,
+                                            isCompact: true,
+                                            customBadgeText: 'BEST BATSMAN',
+                                            statDisplayMode: MvpStatDisplayMode.battingOnly,
+                                            onTap: () {},
+                                          )
+                                        : const SizedBox.shrink(),
                                   ),
-                                ),
+                                  
+                                  const SizedBox(width: 8),
+                                    
+                                  // Slot 2: BEST BOWLER
+                                  Expanded(
+                                    child: bestBowler != null
+                                        ? MvpAwardCard(
+                                            mvpData: bestBowler,
+                                            isPlayerOfTheMatch: false,
+                                            isCompact: true,
+                                            customBadgeText: 'BEST BOWLER',
+                                            statDisplayMode: MvpStatDisplayMode.bowlingOnly,
+                                            onTap: () {},
+                                          )
+                                        : const SizedBox.shrink(),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      player.playerName,
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                                    ),
-                                    Text(
-                                      'B: ${player.battingMvp.toStringAsFixed(1)} • Bo: ${player.bowlingMvp.toStringAsFixed(1)} • F: ${player.fieldingMvp.toStringAsFixed(1)}',
-                                      style: TextStyle(fontSize: 12, color: AppColors.textSec),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                player.totalMvp.toStringAsFixed(2),
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary),
-                              ),
+                              const SizedBox(height: 16),
                             ],
-                          ),
-                        );
-                      }).toList(),
+                          );
+                        }
+                      ),
+                      
+                      const SizedBox(height: 16),
                     ],
                   );
                 },

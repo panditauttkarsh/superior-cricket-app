@@ -14,7 +14,7 @@ class MvpRepository {
     try {
       final response = await _supabase
           .from('player_mvp')
-          .upsert(mvpData.toJson())
+          .upsert(mvpData.toJson(), onConflict: 'match_id, player_id')
           .select()
           .single();
 
@@ -33,7 +33,7 @@ class MvpRepository {
       
       final response = await _supabase
           .from('player_mvp')
-          .upsert(jsonList)
+          .upsert(jsonList, onConflict: 'match_id, player_id')
           .select();
 
       return (response as List)

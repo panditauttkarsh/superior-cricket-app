@@ -3444,21 +3444,21 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     }
   }
 
-  // Helper function to get player ID from name (creates player if not found)
-  Future<String?> _getPlayerIdFromName(String playerName) async {
+  // Helper function to get player details from name (creates player if not found)
+  Future<Map<String, dynamic>?> _getOrCreatePlayer(String playerName) async {
     try {
       final supabase = Supabase.instance.client;
       
       // Try to find existing player
       var response = await supabase
           .from('players')
-          .select('id')
+          .select('id, profile_image_url')
           .eq('name', playerName)
           .maybeSingle();
       
-      // If player exists, return their ID
+      // If player exists, return details
       if (response != null) {
-        return response['id'] as String;
+        return response;
       }
       
       // Player doesn't exist - create them!
@@ -3469,15 +3469,15 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             'name': playerName,
             'created_at': DateTime.now().toIso8601String(),
           })
-          .select('id')
+          .select('id, profile_image_url')
           .single();
       
       final playerId = newPlayer['id'] as String;
       debugPrint('✅ Created player $playerName with ID: ${playerId.substring(0, 8)}...');
-      return playerId;
+      return newPlayer;
       
     } catch (e) {
-      debugPrint('⚠️ Could not get/create player ID for $playerName: $e');
+      debugPrint('⚠️ Could not get/create player for $playerName: $e');
       return null;
     }
   }
@@ -3511,13 +3511,16 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // Process each player
       for (final playerName in allPlayerNames) {
-        // Look up player ID from database
-        final playerId = await _getPlayerIdFromName(playerName);
+        // Look up player details from database
+        final playerDetails = await _getOrCreatePlayer(playerName);
         
-        if (playerId == null) {
-          debugPrint('⚠️ Skipping $playerName - no player ID found');
+        if (playerDetails == null) {
+          debugPrint('⚠️ Skipping $playerName - no player details found');
           continue;
         }
+        
+        final playerId = playerDetails['id'] as String;
+        final playerAvatar = playerDetails['profile_image_url'] as String?;
         
         // Get batting stats
         final battingStats = _playerStatsMap[playerName];
@@ -3616,14 +3619,15 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         
         final totalMvp = battingMvp + bowlingMvp + fieldingMvp;
         
-        // Only save if player contributed
-        if (totalMvp > 0) {
+        // Only save if player contributed (score, balls, wickets, or just participation)
+        if (totalMvp > 0 || runsScored > 0 || ballsFaced > 0 || wicketsTaken > 0 || ballsBowled > 0) {
           final strikeRate = ballsFaced > 0 ? (runsScored / ballsFaced) * 100 : null;
           final economy = ballsBowled > 0 ? (runsConceded / (ballsBowled / 6)) : null;
           
           final mvpData = PlayerMvpModel(
             playerId: playerId, // NOW USING ACTUAL UUID!
             playerName: playerName,
+            playerAvatar: playerAvatar,
             matchId: widget.matchId!,
             teamId: teamId ?? '',
             teamName: teamName ?? '',
@@ -3644,6 +3648,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             bowlingEconomy: economy,
             performanceGrade: MvpCalculationService.getPerformanceGrade(totalMvp),
             calculatedAt: DateTime.now(),
+            isNotOut: battingStats?.isNotOut ?? false,
           );
           
           allMvpData.add(mvpData);
@@ -8477,6 +8482,8 @@ class _MatchResultScreen extends ConsumerStatefulWidget {
 class _MatchResultScreenState extends ConsumerState<_MatchResultScreen> {
   PlayerMvpModel? _playerOfTheMatch;
   List<PlayerMvpModel> _topPerformers = [];
+  PlayerMvpModel? _bestBatsman;
+  PlayerMvpModel? _bestBowler;
   bool _isLoadingMvp = true;
 
   @override
@@ -8492,11 +8499,58 @@ class _MatchResultScreenState extends ConsumerState<_MatchResultScreen> {
     }
 
     try {
+      debugPrint('🔍 _loadMvpData called');
       final mvpRepo = ref.read(mvpRepositoryProvider);
       
       // Get Player of the Match
       final potm = await mvpRepo.getPlayerOfTheMatch(widget.matchId!);
+      debugPrint('🏆 POTM: ${potm?.playerName}');
       
+      // Get all MVP data for finding best batsman/bowler
+      final allMvpData = await mvpRepo.getMatchMvpData(widget.matchId!);
+      debugPrint('📊 Total MVP Records: ${allMvpData.length}');
+      
+      // Determine Best Batsman (Max Batting MVP -> Max Runs -> Max Strike Rate)
+      PlayerMvpModel? bestBatsman;
+      final batsmen = allMvpData.where((p) => p.runsScored > 0 || p.battingMvp > 0).toList();
+      debugPrint('🏏 Batsmen candidates: ${batsmen.length}');
+      
+      if (batsmen.isNotEmpty) {
+        batsmen.sort((a, b) {
+          final mvpComp = b.battingMvp.compareTo(a.battingMvp);
+          if (mvpComp != 0) return mvpComp;
+          
+          final runsComp = b.runsScored.compareTo(a.runsScored);
+          if (runsComp != 0) return runsComp;
+          
+          return (b.strikeRate ?? 0).compareTo(a.strikeRate ?? 0);
+        });
+        bestBatsman = batsmen.first;
+        debugPrint('🏏 Selected Best Batsman: ${bestBatsman.playerName} (Runs: ${bestBatsman.runsScored}, MVP: ${bestBatsman.battingMvp})');
+      }
+      
+      // Determine Best Bowler (Max Bowling MVP -> Max Wickets -> Best Economy)
+      PlayerMvpModel? bestBowler;
+      final bowlers = allMvpData.where((p) => p.ballsBowled > 0 || p.wicketsTaken > 0 || p.bowlingMvp > 0).toList();
+      debugPrint('⚾ Bowlers candidates: ${bowlers.length}');
+      
+      if (bowlers.isNotEmpty) {
+        bowlers.sort((a, b) {
+          final mvpComp = b.bowlingMvp.compareTo(a.bowlingMvp);
+          if (mvpComp != 0) return mvpComp;
+          
+          final wicketsComp = b.wicketsTaken.compareTo(a.wicketsTaken);
+          if (wicketsComp != 0) return wicketsComp;
+          
+          // Lower economy is better (handle nulls/zeros carefully)
+          final ecoA = a.bowlingEconomy ?? 999.0;
+          final ecoB = b.bowlingEconomy ?? 999.0;
+          return ecoA.compareTo(ecoB);
+        });
+        bestBowler = bowlers.first;
+        debugPrint('⚾ Selected Best Bowler: ${bestBowler.playerName} (Wickets: ${bestBowler.wicketsTaken}, MVP: ${bestBowler.bowlingMvp})');
+      }
+
       // Get top 5 performers
       final topPerformers = await mvpRepo.getTopPerformers(
         widget.matchId!,
@@ -8506,6 +8560,8 @@ class _MatchResultScreenState extends ConsumerState<_MatchResultScreen> {
       if (mounted) {
         setState(() {
           _playerOfTheMatch = potm;
+          _bestBatsman = bestBatsman;
+          _bestBowler = bestBowler;
           _topPerformers = topPerformers;
           _isLoadingMvp = false;
         });
@@ -8684,6 +8740,35 @@ class _MatchResultScreenState extends ConsumerState<_MatchResultScreen> {
                       onTap: () {
                         // Optional: Show detailed stats
                       },
+                    ),
+                  ],
+
+                  // Best Batsman & Best Bowler Section
+                  if (_bestBatsman != null || _bestBowler != null) ...[
+                    const SizedBox(height: 16), // Smaller gap
+                    Row(
+                      children: [
+                        if (_bestBatsman != null) 
+                          Expanded(
+                            child: MvpAwardCard(
+                              mvpData: _bestBatsman!,
+                              isCompact: true,
+                              customBadgeText: 'BEST BATSMAN',
+                              statDisplayMode: MvpStatDisplayMode.battingOnly,
+                            ),
+                          ),
+                        if (_bestBatsman != null && _bestBowler != null)
+                          const SizedBox(width: 8),
+                        if (_bestBowler != null)
+                          Expanded(
+                            child: MvpAwardCard(
+                              mvpData: _bestBowler!,
+                              isCompact: true,
+                              customBadgeText: 'BEST BOWLER',
+                              statDisplayMode: MvpStatDisplayMode.bowlingOnly,
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                   
