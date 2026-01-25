@@ -7,8 +7,9 @@ class ProfileModel {
   final String id; // Internal user ID (hidden from UI)
   final String username; // Public username
   final String? name;
-  final String? email;
+  // final String? email; // Removed for security
   final String? profileImageUrl;
+
   final String? role; // 'player', 'coach', 'admin', etc.
   final String? subscriptionPlan;
 
@@ -16,8 +17,9 @@ class ProfileModel {
     required this.id,
     required this.username,
     this.name,
-    this.email,
+    // this.email,
     this.profileImageUrl,
+
     this.role,
     this.subscriptionPlan,
   });
@@ -30,8 +32,9 @@ class ProfileModel {
       id: json['id'] as String,
       username: json['username'] as String? ?? '',
       name: name,
-      email: json['email'] as String?,
+      // email: json['email'] as String?,
       profileImageUrl: json['avatar_url'] as String? ?? json['profile_image_url'] as String?,
+
       role: json['role'] as String?,
       subscriptionPlan: json['subscription_plan'] as String?,
     );
@@ -42,8 +45,9 @@ class ProfileModel {
       'id': id,
       'username': username,
       'name': name,
-      'email': email,
+      // 'email': email,
       'profile_image_url': profileImageUrl,
+
       'role': role,
       'subscription_plan': subscriptionPlan,
     };
@@ -105,16 +109,9 @@ class ProfileRepository {
         }
       }
  
-      // Try 3: Search by email - skip if exactOnly is true
-      if (response == null && !exactOnly && cleanUsername.contains('@')) {
-        print('Profile: Trying email search...');
-        response = await _supabase
-            .from('profiles')
-            .select()
-            .ilike('email', cleanUsername)
-            .limit(1)
-            .maybeSingle();
-      }
+      // Try 3: Search by email - REMOVED FOR SECURITY
+      // We do not allow searching users by email as the column is private/removed
+
  
       // Try 4: Search by name - skip if exactOnly is true
       if (response == null && !exactOnly) {
@@ -155,7 +152,8 @@ class ProfileRepository {
       }
 
       final profile = ProfileModel.fromJson(response as Map<String, dynamic>);
-      print('Profile: Found user - ${profile.name} (username: ${profile.username}, email: ${profile.email})');
+      print('Profile: Found user - ${profile.name} (username: ${profile.username})');
+
       return profile;
     } catch (e, stackTrace) {
       print('Profile: Error fetching profile by username: $e');

@@ -6,46 +6,15 @@ class AuthRepository {
   final _supabase = SupabaseConfig.client;
 
   // Check if email exists in auth.users (across all providers)
+  // DEPRECATED: We no longer check profiles for email as it is a security risk
   Future<bool> _emailExists(String email) async {
-    try {
-      // Query auth.users via RPC or check profiles table
-      // Note: Direct query to auth.users is restricted, so we check profiles
-      final response = await _supabase
-          .from('profiles')
-          .select('email')
-          .eq('email', email.toLowerCase().trim())
-          .maybeSingle();
-      
-      return response != null;
-    } catch (e) {
-      // If query fails, assume email doesn't exist to allow registration
-      return false;
-    }
+    return false; // Always return false to skip this check and let Supabase Auth handle it
   }
 
   // Check if email is registered via Google
+  // DEPRECATED: Scanning profiles is a security risk
   Future<bool> _isGoogleUser(String email) async {
-    try {
-      // Check auth.users for Google provider
-      // Since we can't directly query auth.users, we check if profile exists
-      // and check the auth metadata if available
-      final response = await _supabase
-          .from('profiles')
-          .select('id, email')
-          .eq('email', email.toLowerCase().trim())
-          .maybeSingle();
-      
-      if (response == null) return false;
-      
-      // Check auth user's provider
-      final userId = response['id'] as String;
-      final authUser = _supabase.auth.admin.getUserById(userId);
-      // Note: Admin API requires server-side, so we'll use a different approach
-      // We'll check during registration/login instead
-      return false;
-    } catch (e) {
-      return false;
-    }
+    return false;
   }
 
   // Generate unique username from name
@@ -151,7 +120,8 @@ class AuthRepository {
           subscriptionPlan: profile['subscription_plan'] as String?,
           role: role,
           avatar: profile['avatar_url'] as String?,
-          phone: null, // Phone not in new schema
+          phone: null,
+
           createdAt: DateTime.parse(profile['created_at'] as String),
           updatedAt: DateTime.parse(profile['updated_at'] as String),
         ),
@@ -166,7 +136,9 @@ class AuthRepository {
         // Check if email exists - if yes, might be Google user
         final emailExists = await _emailExists(email.toLowerCase().trim());
         if (emailExists) {
-          throw Exception('This email is already registered via Google login. Please sign in using Google.');
+          // We can't confirm it's Google without checking profiles (unsafe), 
+          // but "Invalid Login" usually means either wrong password or wrong provider.
+          // We'll let the generic error handle it or hint at Google.
         }
         throw Exception('Invalid email or password. Please check your credentials.');
       }
@@ -313,7 +285,8 @@ class AuthRepository {
           subscriptionPlan: profile['subscription_plan'] as String?,
           role: role,
           avatar: profile['avatar_url'] as String?,
-          phone: profile['phone'] as String?,
+          phone: null,
+
           createdAt: DateTime.parse(profile['created_at'] as String),
           updatedAt: DateTime.parse(profile['updated_at'] as String),
         ),
@@ -412,8 +385,9 @@ class AuthRepository {
         
         final profileData = {
           'id': supabaseUser.id,
-          'email': supabaseUser.email?.toLowerCase().trim(),
+          // 'email': supabaseUser.email?.toLowerCase().trim(), // REMOVED: Email in public profiles is insecure
           'full_name': name,
+
           'username': username,
           'avatar_url': supabaseUser.userMetadata?['avatar_url'],
         };
@@ -438,8 +412,9 @@ class AuthRepository {
       
       return {
         'id': supabaseUser.id,
-        'email': supabaseUser.email?.toLowerCase().trim(),
+        // 'email': supabaseUser.email?.toLowerCase().trim(),
         'full_name': name,
+
         'username': name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), ''),
         'avatar_url': supabaseUser.userMetadata?['avatar_url'],
         'created_at': DateTime.now().toIso8601String(),
