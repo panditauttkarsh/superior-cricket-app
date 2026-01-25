@@ -1,178 +1,277 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../../../../core/models/mvp_model.dart';
 import '../../../../core/theme/app_colors.dart';
+
+enum MvpStatDisplayMode { all, battingOnly, bowlingOnly }
 
 /// Premium MVP Award Card Widget
 class MvpAwardCard extends StatelessWidget {
   final PlayerMvpModel mvpData;
   final bool isPlayerOfTheMatch;
   final VoidCallback? onTap;
+  final bool isCompact;
+  final String? customBadgeText;
+  final MvpStatDisplayMode statDisplayMode;
 
   const MvpAwardCard({
     super.key,
     required this.mvpData,
     this.isPlayerOfTheMatch = false,
     this.onTap,
+    this.isCompact = false,
+    this.customBadgeText,
+    this.statDisplayMode = MvpStatDisplayMode.all,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (!isPlayerOfTheMatch && !isCompact && customBadgeText == null) {
+       // Return compact card for list if it's not a special card
+       return _buildCompactCard();
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        margin: EdgeInsets.symmetric(
+          horizontal: isCompact ? 6 : 12, 
+          vertical: 8
+        ),
         decoration: BoxDecoration(
-          gradient: isPlayerOfTheMatch
-              ? LinearGradient(
-                  colors: [
-                    AppColors.primary,
-                    AppColors.primary.withOpacity(0.8),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : LinearGradient(
-                  colors: [
-                    Colors.white,
-                    Colors.grey.shade50,
-                  ],
-                ),
-          borderRadius: BorderRadius.circular(20),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: isPlayerOfTheMatch
-                  ? AppColors.primary.withOpacity(0.4)
-                  : Colors.black.withOpacity(0.08),
+              color: Colors.black.withOpacity(0.1),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
           ],
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header Section
-            _buildHeader(),
-            
-            // MVP Score Section
-            _buildMvpScore(),
-            
-            // Performance Breakdown
-            _buildPerformanceBreakdown(),
-            
-            // Stats Section
-            _buildStatsSection(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    final textColor = isPlayerOfTheMatch ? Colors.white : Colors.black87;
-    
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          // Player Avatar
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isPlayerOfTheMatch ? Colors.white : AppColors.primary,
-                width: 3,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: mvpData.playerAvatar != null
-                  ? Image.network(
+            // TOP SECTION: Player Image & Badge
+            SizedBox(
+              height: isCompact ? 130 : 180,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // 1. Image Layers (Blurred Background + Sharp Foreground)
+                  if (mvpData.playerAvatar != null) ...[
+                    // Layer 1: Blurred Background (Zoomed to fill)
+                    Image.network(
                       mvpData.playerAvatar!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _buildDefaultAvatar(),
-                    )
-                  : _buildDefaultAvatar(),
-            ),
-          ),
-          
-          const SizedBox(width: 16),
-          
-          // Player Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        mvpData.playerName,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: textColor,
-                          letterSpacing: -0.5,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade200),
+                    ),
+                    ClipRect(
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+                        child: Container(
+                          color: Colors.black.withOpacity(0.05), // Darker subtle overlay to reduce white washout
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (isPlayerOfTheMatch)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
+                    
+                    // Layer 2: Main Image (Contained but scaled up 35%)
+                    Transform.scale(
+                      scale: 1.35,
+                      alignment: Alignment.bottomCenter,
+                      child: Image.network(
+                        mvpData.playerAvatar!,
+                         fit: BoxFit.contain,
+                         alignment: Alignment.bottomCenter,
+                         errorBuilder: (_, __, ___) => _buildDefaultAvatar(),
+                      ),
+                    ),
+                  ] else
+                    _buildDefaultAvatar(),
+                  
+                  // 2. Badge Overlay (Bottom Left of Image)
+                  if (customBadgeText != null || isPlayerOfTheMatch)
+                  Positioned(
+                    bottom: isCompact ? 8 : 12,
+                    left: isCompact ? 8 : 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        customBadgeText ?? 'PLAYER OF THE MATCH',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isCompact ? 8 : 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.25),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.4),
-                            width: 1,
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // BOTTOM SECTION: Content & Stats
+            Container(
+              padding: EdgeInsets.all(isCompact ? 12 : 16),
+              color: Colors.white,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Row: Name + MVP Points
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Player Name & Team
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '👑',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                            SizedBox(width: 4),
+                                mvpData.playerName,
+                                style: TextStyle(
+                                  color: Colors.black87,
+                                  fontSize: isCompact ? 15 : 22, // Reduced from 18 to 15
+                                  fontWeight: FontWeight.w900,
+                                  height: 1.1,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                mvpData.teamName,
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: isCompact ? 11 : 14, // Reduced from 12 to 11
+                                  fontWeight: FontWeight.w500,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // MVP Points (Top Right)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
                             Text(
-                              'POTM',
+                              'MVP',
                               style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.5,
+                                fontSize: isCompact ? 9 : 10, // Reduced from 10 to 9
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                            Text(
+                              mvpData.formattedMvpScore,
+                              style: TextStyle(
+                                fontSize: isCompact ? 14 : 20, // Reduced from 16 to 14
+                                fontWeight: FontWeight.w900,
+                                color: Colors.orange.shade900,
+                                height: 1.0,
                               ),
                             ),
                           ],
                         ),
-                      ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 12),
+                    // Divider
+                    Divider(height: 1, color: Colors.grey.shade200),
+                    const SizedBox(height: 12),
+
+                    // Stats Line
+                    _buildStatsLine(),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  mvpData.teamName,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: textColor.withOpacity(0.7),
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget _buildStatsLine() {
+       String statsText = '';
+
+       final battingStats = '${mvpData.runsScored}${mvpData.isNotOut ? '*' : ''}(${mvpData.ballsFaced})';
+       final bowlingStats = '${(mvpData.ballsBowled ~/ 6)}.${mvpData.ballsBowled % 6} - ${mvpData.runsConceded} - ${mvpData.wicketsTaken}';
+
+       switch (statDisplayMode) {
+         case MvpStatDisplayMode.battingOnly:
+           statsText = '🏏 $battingStats';
+           break;
+         case MvpStatDisplayMode.bowlingOnly:
+           statsText = '⚾ $bowlingStats';
+           break;
+         case MvpStatDisplayMode.all:
+         default:
+           statsText = '$battingStats | $bowlingStats';
+           break;
+       }
+
+        return Text(
+          statsText,
+          style: TextStyle(
+            fontSize: isCompact ? 12 : 16, // Reduced from 14 to 12
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+  }
+
+  // Keep old design for non-POTM cards (Top Performers list) to ensure they fit in the list
+  Widget _buildCompactCard() {
+    return Container(
+      width: 160,
+      height: 220, // Added fixed height to prevent Expanded crash in unbounded vertical lists
+      margin: const EdgeInsets.only(right: 12, bottom: 12), // Added bottom margin for vertical stacking
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+           BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+           )
+        ]
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: mvpData.playerAvatar != null 
+                  ? Image.network(mvpData.playerAvatar!, fit: BoxFit.cover, width: double.infinity)
+                  : Container(color: Colors.grey.shade200, child: const Icon(Icons.person, size: 40, color: Colors.grey)),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(mvpData.playerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text('MVP: ${mvpData.formattedMvpScore}', style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w900)),
+              ],
+            ),
+          )
         ],
       ),
     );
@@ -180,253 +279,14 @@ class MvpAwardCard extends StatelessWidget {
 
   Widget _buildDefaultAvatar() {
     return Container(
-      color: isPlayerOfTheMatch ? Colors.white.withOpacity(0.2) : Colors.grey.shade200,
-      child: Icon(
-        Icons.person,
-        size: 30,
-        color: isPlayerOfTheMatch ? Colors.white : Colors.grey.shade600,
-      ),
-    );
-  }
-
-  Widget _buildMvpScore() {
-    final textColor = isPlayerOfTheMatch ? Colors.white : Colors.black87;
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Column(
-        children: [
-          Text(
-            'MVP SCORE',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: textColor.withOpacity(0.6),
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                mvpData.formattedMvpScore,
-                style: TextStyle(
-                  fontSize: 48,
-                  fontWeight: FontWeight.w900,
-                  color: textColor,
-                  height: 1.0,
-                  letterSpacing: -2,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  mvpData.performanceEmoji,
-                  style: const TextStyle(fontSize: 24),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            mvpData.performanceGrade,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: textColor.withOpacity(0.8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPerformanceBreakdown() {
-    final breakdown = mvpData.getMvpBreakdown();
-    final textColor = isPlayerOfTheMatch ? Colors.white : Colors.black87;
-    
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isPlayerOfTheMatch
-            ? Colors.white.withOpacity(0.15)
-            : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'PERFORMANCE BREAKDOWN',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: textColor.withOpacity(0.6),
-              letterSpacing: 1,
-            ),
-          ),
-          const SizedBox(height: 12),
-          
-          // Batting
-          _buildBreakdownItem(
-            icon: '🏏',
-            label: 'Batting',
-            value: mvpData.battingMvp.toStringAsFixed(2),
-            percentage: breakdown['batting']!,
-            color: const Color(0xFF10B981),
-            textColor: textColor,
-          ),
-          
-          const SizedBox(height: 8),
-          
-          // Bowling
-          _buildBreakdownItem(
-            icon: '⚡',
-            label: 'Bowling',
-            value: mvpData.bowlingMvp.toStringAsFixed(2),
-            percentage: breakdown['bowling']!,
-            color: const Color(0xFF3B82F6),
-            textColor: textColor,
-          ),
-          
-          const SizedBox(height: 8),
-          
-          // Fielding
-          _buildBreakdownItem(
-            icon: '🧤',
-            label: 'Fielding',
-            value: mvpData.fieldingMvp.toStringAsFixed(2),
-            percentage: breakdown['fielding']!,
-            color: const Color(0xFFF59E0B),
-            textColor: textColor,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBreakdownItem({
-    required String icon,
-    required String label,
-    required String value,
-    required double percentage,
-    required Color color,
-    required Color textColor,
-  }) {
-    return Row(
-      children: [
-        Text(
-          icon,
-          style: const TextStyle(fontSize: 16),
+      color: Colors.grey.shade300,
+      child: const Center(
+        child: Icon(
+          Icons.person,
+          size: 64,
+          color: Colors.white,
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: textColor.withOpacity(0.8),
-                    ),
-                  ),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: textColor,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: percentage / 100,
-                  backgroundColor: isPlayerOfTheMatch
-                      ? Colors.white.withOpacity(0.2)
-                      : Colors.grey.shade300,
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                  minHeight: 6,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatsSection() {
-    final textColor = isPlayerOfTheMatch ? Colors.white : Colors.black87;
-    
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildStatItem(
-            label: 'Runs',
-            value: mvpData.runsScored.toString(),
-            textColor: textColor,
-          ),
-          _buildStatItem(
-            label: 'Wickets',
-            value: mvpData.wicketsTaken.toString(),
-            textColor: textColor,
-          ),
-          _buildStatItem(
-            label: 'Catches',
-            value: mvpData.catches.toString(),
-            textColor: textColor,
-          ),
-          if (mvpData.strikeRate != null)
-            _buildStatItem(
-              label: 'SR',
-              value: mvpData.strikeRate!.toStringAsFixed(1),
-              textColor: textColor,
-            ),
-        ],
       ),
-    );
-  }
-
-  Widget _buildStatItem({
-    required String label,
-    required String value,
-    required Color textColor,
-  }) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            color: textColor,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: textColor.withOpacity(0.6),
-          ),
-        ),
-      ],
     );
   }
 }
