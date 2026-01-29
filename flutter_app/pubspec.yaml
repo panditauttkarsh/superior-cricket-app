@@ -105,6 +105,7 @@ flutter:
     - assets/images/home_logo.png
     - assets/images/86AC2243-B5A7-413E-84A3-634401C99C23_4_5005_c.jpeg
     # - assets/images/night cricket.webp
+    - assets/images/out_types/
 
 flutter_launcher_icons:
   android: "launcher_main"

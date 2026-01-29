@@ -2077,7 +2077,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   }
   
   // Show modal to select new batsman after wicket
-  Future<void> _showSelectNewBatsman() async {
+  Future<void> _showSelectNewBatsman({bool isReplacingStriker = true}) async {
     // Get available batsmen (exclude dismissed players and BOTH current batsmen)
     // When a batsman gets out, we need a NEW batsman to replace them
     // So we exclude both the striker and non-striker who are currently on the field
@@ -2097,9 +2097,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     final selectedBatsman = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text(
-          'Select New Batsman',
-          style: TextStyle(
+        title: Text(
+          isReplacingStriker ? 'Select New Striker' : 'Select New Non-Striker',
+          style: const TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             fontFamily: 'Inter',
@@ -2136,10 +2136,17 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       }
       
       setState(() {
-        _striker = selectedBatsman;
-        _strikerRuns = 0;
-        _strikerBalls = 0;
-        _strikerSR = 0.0;
+        if (isReplacingStriker) {
+          _striker = selectedBatsman;
+          _strikerRuns = 0;
+          _strikerBalls = 0;
+          _strikerSR = 0.0;
+        } else {
+          _nonStriker = selectedBatsman;
+          _nonStrikerRuns = 0;
+          _nonStrikerBalls = 0;
+          _nonStrikerSR = 0.0;
+        }
         _batsmenWhoHaveBatted.add(selectedBatsman);
         _trackPlayerStartTime(selectedBatsman);
       });
@@ -3869,7 +3876,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       isScrollControlled: true,
       builder: (context) => Container(
         decoration: const BoxDecoration(
-          color: AppColors.surface,
+          color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: EdgeInsets.only(
@@ -3884,75 +3891,107 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.divider,
+                color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             // Header
             Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'Select Type of Out',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textMain,
-                  fontFamily: 'Inter',
-                ),
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'Select Out Type',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.grey[600],
+                        fontFamily: 'Inter',
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: Divider()),
+                ],
               ),
             ),
             // Out type options
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 30),
               child: GridView.count(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
+                crossAxisCount: 3,
+                mainAxisSpacing: 24,
+                crossAxisSpacing: 20,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 2.5,
+                childAspectRatio: 0.75,
                 children: [
-                  _buildOutTypeButton('LBW', () => _handleOutType('LBW')),
-                  _buildOutTypeButton('Run Out', () => _handleRunOutSelection()),
-                  _buildOutTypeButton('Catch Out', () => _handleOutType('Catch Out')),
-                  _buildOutTypeButton('Bowled', () => _handleOutType('Bowled')),
-                  _buildOutTypeButton('Hit Wicket', () => _handleOutType('Hit Wicket')),
-                  _buildOutTypeButton('Retired Hurt', () => _handleOutType('Retired Hurt')),
+                  _buildOutTypeItem('Bowled', 'assets/images/out_types/bowled.png', () => _handleOutType('Bowled')),
+                  _buildOutTypeItem('LBW', 'assets/images/out_types/lbw.png', () => _handleOutType('LBW')),
+                  _buildOutTypeItem('Run Out', 'assets/images/out_types/run_out.png', () => _handleRunOutSelection()),
+                  _buildOutTypeItem('Catch Out', 'assets/images/out_types/catch_out.png', () => _handleOutType('Catch Out')),
+                  _buildOutTypeItem('Hit Wicket', 'assets/images/out_types/hit_wicket.png', () => _handleOutType('Hit Wicket')),
+                  _buildOutTypeItem('Retired Hurt', 'assets/images/out_types/retired_hurt.jpg', () => _handleOutType('Retired Hurt')),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
   
-  // Build out type button
-  Widget _buildOutTypeButton(String label, VoidCallback onTap) {
+  // Build out type item with icon
+  Widget _buildOutTypeItem(String label, String assetPath, VoidCallback onTap) {
     return InkWell(
       onTap: () {
         Navigator.pop(context);
         onTap();
       },
       borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.elevated,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.borderLight),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textMain,
-              fontFamily: 'Inter',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Image.asset(
+              assetPath,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(Icons.sports_cricket, color: Colors.grey, size: 48);
+              },
             ),
           ),
-        ),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+              fontFamily: 'Inter',
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
@@ -4023,12 +4062,19 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   // Build run out runs button
   Widget _buildRunOutButton(String label, int? runs) {
     return InkWell(
-      onTap: () {
+      onTap: () async {
         Navigator.pop(context);
+        int finalRuns = 0;
         if (runs != null) {
-          _handleOutType('Run Out', runsCompleted: runs);
+          finalRuns = runs;
         } else {
-          _showCustomRunOutInput();
+          finalRuns = await _showCustomRunOutInput() ?? 0;
+        }
+        
+        // Show player selection popup
+        final outPlayer = await _showRunOutPlayerSelectionDialog();
+        if (outPlayer != null) {
+          _handleOutType('Run Out', runsCompleted: finalRuns, dismissedPlayerName: outPlayer);
         }
       },
       borderRadius: BorderRadius.circular(12),
@@ -4052,11 +4098,107 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       ),
     );
   }
+
+  // New helper to show player selection for Run Out
+  Future<String?> _showRunOutPlayerSelectionDialog() async {
+    return await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Who got Run Out?',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textMain,
+                fontFamily: 'Inter',
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildSelectionCard(
+                    title: 'Striker',
+                    playerName: _striker,
+                    onTap: () => Navigator.pop(context, _striker),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildSelectionCard(
+                    title: 'Non-Striker',
+                    playerName: _nonStriker,
+                    onTap: () => Navigator.pop(context, _nonStriker),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionCard({required String title, required String playerName, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.elevated,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderLight),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSec,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              playerName,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textMain,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   
   // Show custom run out input
-  void _showCustomRunOutInput() {
+  Future<int?> _showCustomRunOutInput() async {
     final controller = TextEditingController();
-    showDialog(
+    return await showDialog<int>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Custom Runs'),
@@ -4068,9 +4210,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             TextField(
               controller: controller,
               keyboardType: TextInputType.number,
+              autofocus: true,
               decoration: const InputDecoration(
-                labelText: 'Runs',
-                hintText: '0, 1, 2, 3...',
+                border: OutlineInputBorder(),
+                hintText: 'e.g. 4',
               ),
             ),
           ],
@@ -4082,11 +4225,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
           ),
           ElevatedButton(
             onPressed: () {
-              final runs = int.tryParse(controller.text) ?? 0;
-              Navigator.pop(context);
-              if (runs >= 0) {
-                _handleOutType('Run Out', runsCompleted: runs);
-              }
+              Navigator.pop(context, int.tryParse(controller.text));
             },
             child: const Text('Confirm'),
           ),
@@ -4180,7 +4319,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   }
   
   // Handle out type selection
-  Future<void> _handleOutType(String outType, {int runsCompleted = 0}) async {
+  Future<void> _handleOutType(String outType, {int runsCompleted = 0, String? dismissedPlayerName}) async {
     // ICC Rule: Block all scoring when waiting for bowler selection (end-of-over lock)
     if (_waitingForBowlerSelection) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4209,12 +4348,18 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     final isRetiredHurt = outType == 'Retired Hurt';
     final isRunOut = outType == 'Run Out';
     
-    // Store striker name BEFORE any swaps (for correct commentary attribution)
-    final dismissedStriker = _striker;
+    // Target player for dismissal (default to striker for all types except run out where user specified)
+    final targetPlayer = dismissedPlayerName ?? _striker;
+    final isStrikerOut = targetPlayer == _striker;
+
+    // Store striker and non-striker names BEFORE any changes
+    final originalStriker = _striker;
+    final originalNonStriker = _nonStriker;
     
     // For Run Out, add runs to total
     if (isRunOut && runsCompleted > 0) {
       _totalRuns += runsCompleted;
+      // Runs are credited to the striker in standard scoring systems
       _strikerRuns += runsCompleted;
       
       // Check if target chased in second innings (Match Won)
@@ -4239,15 +4384,15 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       if (!isRetiredHurt) {
         _wickets += 1;
         _bowlerWickets += 1;
-        _dismissedPlayers.add(_striker);
+        _dismissedPlayers.add(targetPlayer);
       } else {
-        _retiredHurtPlayers.add(_striker);
+        _retiredHurtPlayers.add(targetPlayer);
       }
       
       // Save dismissal type
-      _dismissalTypes[_striker] = outType;
+      _dismissalTypes[targetPlayer] = outType;
       if (isRunOut) {
-        _runOutRuns[_striker] = runsCompleted;
+        _runOutRuns[targetPlayer] = runsCompleted;
       }
       
       // Wicket counts as a ball (ICC rule) - but Retired Hurt also counts as a ball
@@ -4275,16 +4420,15 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _previousOverBowler = _bowler;
       }
       
-      // For Run Out: Strike changes based on runs completed
-      // Odd runs → strike changes, Even runs → strike remains same
-      // CRITICAL: Apply swaps SEQUENTIALLY
+      // Handle strike rotation for Run Out
       if (isRunOut) {
-        // Step 1: Run-based swap
+        // Strike changes based on runs completed
         if (runsCompleted % 2 == 1) {
           _swapBatsmen();
         }
         
-        // Step 2: Over-end swap
+        // If it was the end of the over, and strike was swapped due to runs, 
+        // they swap BACK due to end-of-over rule.
         if (overComplete) {
           _swapBatsmen();
         }
@@ -4302,8 +4446,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _recordDelivery(
         over: _currentOver,
         ball: _currentBall,
-        striker: dismissedStriker, // Striker before dismissal
-        nonStriker: _nonStriker,
+        striker: originalStriker,
+        nonStriker: originalNonStriker,
         bowler: _bowler,
         runs: isRunOut ? runsCompleted : 0,
         teamTotal: _totalRuns,
@@ -4333,10 +4477,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _saveScorecardToSupabase();
     
     // STEP 3: Generate commentary for wicket (valid ball) - MUST BE DONE IMMEDIATELY
-    // Use the striker name BEFORE it's changed (stored before setState)
-    // Note: dismissedStriker was already captured before setState, so use it
+    // Use the targetPlayer name BEFORE it's possibly changed (stored as targetPlayer)
     _generateCommentaryWithStriker(
-      strikerName: dismissedStriker,
+      strikerName: targetPlayer,
       ballType: 'wicket',
       runs: isRunOut ? runsCompleted : 0,
       wicketType: outType,
@@ -4377,12 +4520,12 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       // For Retired Hurt, show new batsman selection
       Future.delayed(const Duration(milliseconds: 300), () async {
         if (_retiredHurtPlayers.length + _wickets < _battingTeamPlayers.length - 1) {
-          await _showSelectNewBatsman();
+          await _showSelectNewBatsman(isReplacingStriker: isStrikerOut);
         }
       });
     } else if (_wickets < _maxWickets) {
       Future.delayed(const Duration(milliseconds: 300), () async {
-        await _showSelectNewBatsman();
+        await _showSelectNewBatsman(isReplacingStriker: isStrikerOut);
       });
     }
     
@@ -8447,8 +8590,8 @@ class _BattingScorecardTable extends StatelessWidget {
     );
   }
 }
-
-class _MatchResultScreen extends ConsumerStatefulWidget {
+ 
+ class _MatchResultScreen extends ConsumerStatefulWidget {
   final String winningTeam;
   final String result;
   final String team1Name;
@@ -8656,6 +8799,7 @@ class _MatchResultScreenState extends ConsumerState<_MatchResultScreen> {
                   ),
                   child: Column(
                     children: [
+                      /*
                       _buildTeamScoreRow(
                         widget.team1Name, 
                         widget.team1Score, 
@@ -8700,6 +8844,7 @@ class _MatchResultScreenState extends ConsumerState<_MatchResultScreen> {
                           isSuperOver: true,
                         ),
                       ],
+                      */
                     ],
                   ),
                 ),
