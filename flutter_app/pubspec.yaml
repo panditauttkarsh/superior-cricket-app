@@ -96,6 +96,7 @@ flutter:
   
   assets:
     - assets/images/cricket_stadium_bg.png
+    - assets/images/cricket_ground.png
     - assets/images/DD66A1F5-EBCD-4452-9B72-7E3F5E0C7CA9.jpeg
     - assets/images/icon youtube.webp
     - assets/images/Untitled design-2.png

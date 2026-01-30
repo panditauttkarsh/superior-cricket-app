@@ -20,7 +20,7 @@ final commentaryStreamProvider = StreamProvider.family<List<CommentaryModel>, St
   yield* repository.streamCommentary(matchId);
 });
 
-class CommentaryPage extends ConsumerWidget {
+class CommentaryPage extends ConsumerStatefulWidget {
   final String matchId;
   final bool showAppBar;
 
@@ -31,45 +31,24 @@ class CommentaryPage extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final commentaryAsync = ref.watch(commentaryStreamProvider(matchId));
+  ConsumerState<CommentaryPage> createState() => _CommentaryPageState();
+}
+
+class _CommentaryPageState extends ConsumerState<CommentaryPage> {
+  bool _isInnings1Expanded = false;
+  bool _isInnings2Expanded = true;
+  bool _hasInitializedExpansion = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final commentaryAsync = ref.watch(commentaryStreamProvider(widget.matchId));
 
     final content = commentaryAsync.when(
       data: (commentaryList) {
         if (commentaryList.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.comment_outlined,
-                  size: 64,
-                  color: Colors.grey[400],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No commentary yet',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Commentary will appear here as the match progresses',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[500],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
+          return _buildEmptyState();
         }
 
-        // ... existing sorting and grouping logic ...
         final sortedList = List<CommentaryModel>.from(commentaryList)
           ..sort((a, b) {
             final timeCompare = a.timestamp.compareTo(b.timestamp);
@@ -77,90 +56,212 @@ class CommentaryPage extends ConsumerWidget {
             return a.over.compareTo(b.over);
           });
         
-        var groupedCommentary = _groupCommentaryWithSummaries(sortedList);
-        groupedCommentary = groupedCommentary.reversed.toList();
+        final inningsData = _splitCommentaryByInnings(sortedList);
+        final inn1Grouped = _groupCommentaryWithSummaries(inningsData['inn1']!).reversed.toList();
+        final inn2Grouped = _groupCommentaryWithSummaries(inningsData['inn2']!).reversed.toList();
+
+        // Initialize expansion state once we have data
+        if (!_hasInitializedExpansion) {
+          if (inn2Grouped.isNotEmpty) {
+            _isInnings1Expanded = false;
+            _isInnings2Expanded = true;
+          } else {
+            _isInnings1Expanded = true;
+            _isInnings2Expanded = false;
+          }
+          _hasInitializedExpansion = true;
+        }
+
+        if (widget.showAppBar) {
+          return ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            children: [
+              if (inn2Grouped.isNotEmpty) ...[
+                _buildInningsHeader(
+                  title: 'Second Innings',
+                  isExpanded: _isInnings2Expanded,
+                  onTap: () => setState(() => _isInnings2Expanded = !_isInnings2Expanded),
+                ),
+                if (_isInnings2Expanded)
+                  ...inn2Grouped.map((item) => _buildCommentaryItem(item, item == inn2Grouped.first)),
+                const SizedBox(height: 16),
+              ],
+              _buildInningsHeader(
+                title: 'First Innings',
+                isExpanded: _isInnings1Expanded,
+                onTap: () => setState(() => _isInnings1Expanded = !_isInnings1Expanded),
+              ),
+              if (_isInnings1Expanded)
+                ...inn1Grouped.map((item) => _buildCommentaryItem(item, item == inn1Grouped.first && inn2Grouped.isEmpty)),
+            ],
+          );
+        }
+
+        // Inline view (e.g. in tabs) - show all grouped (latest first)
+        var allGrouped = _groupCommentaryWithSummaries(sortedList);
+        allGrouped = allGrouped.reversed.toList();
         
         return ListView.builder(
-          reverse: true, // Show latest at bottom, but scroll to bottom
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-          itemCount: groupedCommentary.length,
-          itemBuilder: (context, index) {
-            final item = groupedCommentary[index];
-            final isLatest = index == 0;
-            
-            if (item['type'] == 'overSummary') {
-              return OverSummaryCard(
-                summaryText: item['text'] as String,
-                isLatest: isLatest,
-              );
-            } else if (item['type'] == 'inningsBreak') {
-              return const InningsBreakCard();
-            } else {
-              final commentary = item['commentary'] as CommentaryModel;
-              if (commentary.ballType == 'newBatsman') {
-                return NewBatsmanCard(
-                  batsmanName: commentary.strikerName,
-                  isLatest: isLatest,
-                );
-              }
-              return CommentaryCard(
-                commentary: commentary,
-                isLatest: isLatest,
-              );
-            }
-          },
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          itemCount: allGrouped.length,
+          itemBuilder: (context, index) => _buildCommentaryItem(allGrouped[index], index == 0),
         );
       },
-      loading: () => const Center(
-        child: CircularProgressIndicator(),
-      ),
-      error: (error, stack) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Error loading commentary',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey[800],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              error.toString(),
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stack) => _buildErrorState(error),
     );
 
-    if (showAppBar) {
+    if (widget.showAppBar) {
       return Scaffold(
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
-          title: const Text('Ball-by-Ball Commentary'),
+          title: const Text('Match Commentary'),
+          centerTitle: true,
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           elevation: 0,
         ),
         body: content,
       );
+    }
+    return content;
+  }
+
+  Widget _buildInningsHeader({required String title, required bool isExpanded, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 20,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A1A),
+                letterSpacing: 0.5,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+              color: AppColors.primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCommentaryItem(Map<String, dynamic> item, bool isLatest) {
+    if (item['type'] == 'overSummary') {
+      return OverSummaryCard(
+        summaryText: item['text'] as String,
+        isLatest: isLatest,
+      );
+    } else if (item['type'] == 'inningsBreak') {
+      return const InningsBreakCard();
     } else {
-      return content;
+      final commentary = item['commentary'] as CommentaryModel;
+      if (commentary.ballType == 'newBatsman') {
+        return NewBatsmanCard(
+          batsmanName: commentary.strikerName,
+          isLatest: isLatest,
+        );
+      }
+      return CommentaryCard(
+        commentary: commentary,
+        isLatest: isLatest,
+      );
     }
   }
-  
+
+  Map<String, List<CommentaryModel>> _splitCommentaryByInnings(List<CommentaryModel> list) {
+    final List<CommentaryModel> inn1 = [];
+    final List<CommentaryModel> inn2 = [];
+    
+    double? lastOver = -1.0;
+    bool inInnings2 = false;
+
+    for (final item in list) {
+      if (lastOver != -1.0 && item.over < lastOver!) {
+        inInnings2 = true;
+      }
+      
+      if (inInnings2) {
+        inn2.add(item);
+      } else {
+        inn1.add(item);
+      }
+      lastOver = item.over;
+    }
+    
+    return {'inn1': inn1, 'inn2': inn2};
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.comment_outlined, size: 64, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          Text(
+            'No commentary yet',
+            style: TextStyle(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Commentary will appear as the match progresses',
+            style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(dynamic error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+            const SizedBox(height: 16),
+            Text('Couldn\'t load commentary', style: TextStyle(fontSize: 16, color: Colors.grey[800], fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(error.toString(), style: TextStyle(fontSize: 12, color: Colors.grey[500]), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Group commentary entries and insert over summaries and innings breaks
   List<Map<String, dynamic>> _groupCommentaryWithSummaries(List<CommentaryModel> commentaryList) {
     final List<Map<String, dynamic>> grouped = [];
@@ -169,7 +270,6 @@ class CommentaryPage extends ConsumerWidget {
     // First pass: collect over summaries
     for (final commentary in commentaryList) {
       if (commentary.ballType == 'overSummary') {
-        // Extract over number from summary text (e.g., "OVER 16" -> 16)
         final match = RegExp(r'OVER (\d+)').firstMatch(commentary.commentaryText);
         if (match != null) {
           final overNum = int.parse(match.group(1)!);
@@ -183,49 +283,35 @@ class CommentaryPage extends ConsumerWidget {
       }
     }
     
-    // Second pass: add ALL entries, inserting summaries before their over's balls
-    // List is chronological (oldest to newest)
     int? currentOverInt = -1;
     double? lastOverDouble = -1.0;
     
     for (final commentary in commentaryList) {
-      // Skip over summaries in main loop, we'll insert them manually
-      if (commentary.ballType == 'overSummary') {
-        continue;
-      }
+      if (commentary.ballType == 'overSummary') continue;
       
       final overNumInt = commentary.over.toInt();
       final currentOverDouble = commentary.over;
       
-      // Check for Innings Break detection (Current ball is "earlier" than last ball)
-      // e.g. 19.6 -> 0.1 OR 0.5 -> 0.1
       if (lastOverDouble != -1.0 && currentOverDouble < lastOverDouble!) {
-         // Force insert summary for previous over if pending (cleanup)
          if (currentOverInt != -1 && overSummaries.containsKey(currentOverInt)) {
             grouped.add(overSummaries[currentOverInt]!);
             overSummaries.remove(currentOverInt);
          }
-         
          grouped.add({
            'type': 'inningsBreak', 
            'text': 'Innings Break',
            'timestamp': commentary.timestamp,
          });
-         
-         // Reset tracking for new innings
          currentOverInt = -1; 
       }
       
-      // If we've moved to a new over (integer change)
       if (currentOverInt != -1 && overNumInt != currentOverInt) {
-        // Insert summary for the COMPLETED over
         if (overSummaries.containsKey(currentOverInt)) {
           grouped.add(overSummaries[currentOverInt]!);
           overSummaries.remove(currentOverInt);
         }
       }
       
-      // Add regular commentary entry
       grouped.add({
         'type': 'commentary',
         'commentary': commentary,
@@ -236,7 +322,6 @@ class CommentaryPage extends ConsumerWidget {
       lastOverDouble = currentOverDouble;
     }
     
-    // Add summary for the last over if exists
     if (currentOverInt != -1 && overSummaries.containsKey(currentOverInt)) {
       grouped.add(overSummaries[currentOverInt]!);
     }
@@ -251,7 +336,7 @@ class InningsBreakCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 24),
+      margin: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
           const Expanded(child: Divider(color: AppColors.primary, thickness: 1)),
@@ -303,24 +388,24 @@ class NewBatsmanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.green[50],
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: Colors.green[300]!,
-          width: 1.5,
+          width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
             Icon(
@@ -331,13 +416,13 @@ class NewBatsmanCard extends StatelessWidget {
             const SizedBox(width: 14),
             Expanded(
               child: Text(
-                'New batsman: $batsmanName comes to the crease',
+                'New batsman: $batsmanName',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   color: Colors.green[900],
                   fontWeight: FontWeight.w600,
                   fontStyle: FontStyle.italic,
-                  height: 1.5,
+                  height: 1.3,
                 ),
               ),
             ),
@@ -368,24 +453,24 @@ class OverSummaryCard extends StatelessWidget {
     final battingPair = lines.length > 3 ? lines[3] : '';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 20, top: 12),
+      margin: const EdgeInsets.only(bottom: 12, top: 4),
       decoration: BoxDecoration(
         color: isLatest ? AppColors.primary.withOpacity(0.1) : Colors.blue[50],
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isLatest ? AppColors.primary : Colors.blue[300]!,
-          width: isLatest ? 2 : 1.5,
+          width: isLatest ? 1.5 : 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -393,33 +478,33 @@ class OverSummaryCard extends StatelessWidget {
             Text(
               overTitle,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 17,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primary,
-                letterSpacing: 0.5,
+                letterSpacing: 0.3,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             // Ball Runs (6 legal ball outcomes)
             Text(
               ballRuns,
               style: TextStyle(
-                fontSize: 17,
+                fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: Colors.grey[800],
-                letterSpacing: 2.5,
-                height: 1.4,
+                letterSpacing: 1.5,
+                height: 1.2,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             // Summary (Runs | Wickets | Match Score)
             Text(
               summary,
               style: TextStyle(
-                fontSize: 15,
+                fontSize: 13,
                 color: Colors.grey[700],
                 fontWeight: FontWeight.w500,
-                height: 1.5,
+                height: 1.3,
               ),
             ),
             // Batting Pair Stats (after end-of-over strike rotation)
@@ -434,10 +519,10 @@ class OverSummaryCard extends StatelessWidget {
                 child: Text(
                   battingPair,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     color: Colors.grey[800],
                     fontWeight: FontWeight.w500,
-                    height: 1.4,
+                    height: 1.3,
                   ),
                 ),
               ),
@@ -465,7 +550,7 @@ class CommentaryCard extends StatelessWidget {
     final isBoundary = commentary.runs == 4 || commentary.runs == 6;
     
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: isLatest 
             ? AppColors.primary.withOpacity(0.05) 
@@ -474,7 +559,7 @@ class CommentaryCard extends StatelessWidget {
                 : isBoundary
                     ? Colors.blue[50]
                     : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isLatest 
               ? AppColors.primary.withOpacity(0.3) 
@@ -483,18 +568,18 @@ class CommentaryCard extends StatelessWidget {
                   : isBoundary
                       ? Colors.blue[200]!
                       : Colors.grey[300]!,
-          width: isLatest ? 2 : isWicket || isBoundary ? 1.5 : 1,
+          width: isLatest ? 1.5 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -503,22 +588,22 @@ class CommentaryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: _getBallTypeColor(commentary.ballType),
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                   child: Text(
                     commentary.overDisplay,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 15,
+                      fontSize: 13,
                       letterSpacing: 0.5,
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 if (isLatest)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -555,21 +640,21 @@ class CommentaryCard extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             // Commentary Text
             Text(
               commentary.commentaryText,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 color: Colors.grey[900],
                 fontWeight: isLatest || isWicket || isBoundary 
                     ? FontWeight.w600 
                     : FontWeight.w400,
-                height: 1.6,
-                letterSpacing: 0.2,
+                height: 1.4,
+                letterSpacing: 0.1,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             // Runs and Players Info
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -585,20 +670,20 @@ class CommentaryCard extends StatelessWidget {
                       '${commentary.runs} run${commentary.runs > 1 ? 's' : ''}',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 13,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                if (commentary.runs > 0) const SizedBox(width: 10),
+                if (commentary.runs > 0) const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     '${commentary.strikerName} • ${commentary.bowlerName}',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       color: Colors.grey[600],
                       fontWeight: FontWeight.w500,
-                      height: 1.4,
+                      height: 1.3,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -608,7 +693,7 @@ class CommentaryCard extends StatelessWidget {
                 Text(
                   _formatTimestamp(commentary.timestamp),
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: Colors.grey[500],
                     fontWeight: FontWeight.w400,
                   ),
