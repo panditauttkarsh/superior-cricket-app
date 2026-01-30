@@ -682,7 +682,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             team1ScoreData = {
               'runs': _totalRuns,
               'wickets': _wickets,
-              'overs': _currentOver + (_currentBall / 6),
+              'overs': _calculateTotalOvers(), // Use _totalValidBalls for accurate calculation
             };
             team2ScoreData = {
               'runs': 0, 
@@ -699,7 +699,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             team2ScoreData = {
               'runs': _totalRuns,
               'wickets': _wickets,
-              'overs': _currentOver + (_currentBall / 6),
+              'overs': _calculateTotalOvers(), // Use _totalValidBalls for accurate calculation
             };
           }
 
@@ -811,7 +811,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             'super_over_score': _isSuperOver ? {
               'runs': _totalRuns,
               'wickets': _wickets,
-              'overs': _currentOver + (_currentBall / 6),
+              'overs': _calculateTotalOvers(), // Use _totalValidBalls for accurate calculation
             } : null,
           };
         
@@ -913,6 +913,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _totalValidBalls = lastState.totalValidBalls;
       _bowlerLegalBallsMap[_bowler] = lastState.bowlerLegalBalls;
       
+      // Sync current over and ball from _totalValidBalls (single source of truth)
+      _syncCurrentOverAndBall();
+      
       // Recalculate bowler overs from legal balls (ICC rule)
       final bowlerLegalBalls = _bowlerLegalBallsMap[_bowler] ?? 0;
       _bowlerOvers = bowlerLegalBalls / 6.0;
@@ -931,7 +934,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       }
       
       // Update CRR and projected
-      final totalOvers = _currentOver + (_currentBall / 6);
+      final totalOvers = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
       
@@ -1216,6 +1219,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _bowlerStatsMap.clear();
     _extrasMap.clear();
     _bowlerLegalBallsMap.clear(); // Ensure this is also reset to reconstruct from deliveries
+    _totalValidBalls = 0; // Reset total valid balls to recalculate from deliveries
     
     // Temporary helper structures for Maiden calculation
     final overRuns = <int, int>{}; // Over # -> Bowler Runs Conceded
@@ -1224,6 +1228,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     
     // 2. Iterate through ALL deliveries to build up stats
     for (final delivery in _deliveries) {
+      // Count legal balls for total valid balls calculation
+      if (delivery.isLegalBall) {
+        _totalValidBalls++;
+      }
       // --- Player Stats ---
       if (!_playerStatsMap.containsKey(delivery.striker)) {
         _playerStatsMap[delivery.striker] = _PlayerInningsStats();
@@ -1523,7 +1531,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   
   // Build current innings data
   _InningsData _buildCurrentInningsData() {
-    final overs = _currentOver + (_currentBall / 6);
+    final overs = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
     return _InningsData(
       teamName: _battingTeam,
       runs: _totalRuns,
@@ -1538,6 +1546,12 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   
   // Save first innings data when switching to second innings
   void _saveFirstInningsData() {
+    // CRITICAL: Recalculate stats from deliveries one final time before saving
+    // This ensures first innings stats are 100% accurate
+    if (_deliveries.isNotEmpty) {
+      _recalculateStatsFromDeliveries();
+    }
+    
     // Save deliveries
     _firstInningsDeliveries = List<_Delivery>.from(_deliveries);
     
@@ -1628,6 +1642,30 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     );
   }
   
+  // Helper function to calculate over and ball from total valid balls
+  // This is the single source of truth for over/ball calculation
+  Map<String, int> _calculateOverAndBall() {
+    // Calculate from _totalValidBalls (1-based for ball, 0-based for over)
+    // Example: 1 valid ball = over 0, ball 1; 6 valid balls = over 0, ball 6; 7 valid balls = over 1, ball 1
+    final over = (_totalValidBalls - 1) ~/ 6;
+    final ball = ((_totalValidBalls - 1) % 6) + 1;
+    return {'over': over, 'ball': ball};
+  }
+  
+  // Helper function to calculate total overs (decimal) from _totalValidBalls
+  // This is the single source of truth for overs calculation
+  // Example: 1 valid ball = 0.1, 6 valid balls = 1.0, 7 valid balls = 1.1, 19 valid balls = 3.1
+  double _calculateTotalOvers() {
+    return _totalValidBalls / 6.0;
+  }
+  
+  // Helper function to sync _currentOver and _currentBall with _totalValidBalls
+  void _syncCurrentOverAndBall() {
+    final calculated = _calculateOverAndBall();
+    _currentOver = calculated['over']!;
+    _currentBall = calculated['ball']!;
+  }
+
   // Helper function to increment bowler's legal balls and update overs
   void _incrementBowlerLegalBalls() {
     if (_bowler.isEmpty) return;
@@ -2294,14 +2332,14 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         setState(() {
           _firstInningsRuns = _totalRuns;
           _firstInningsWickets = _wickets;
-          _firstInningsOvers = _currentOver + (_currentBall / 6.0);
+          _firstInningsOvers = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
         });
         
         _showInningsSummary(
           teamName: _battingTeam,
           runs: _totalRuns,
           wickets: _wickets,
-          overs: _currentOver + (_currentBall / 6.0),
+          overs: _calculateTotalOvers(), // Use _totalValidBalls for accurate calculation
           isFirstInnings: true,
         );
         return;
@@ -2318,7 +2356,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       setState(() {
         _firstInningsRuns = _totalRuns;
         _firstInningsWickets = _wickets;
-        _firstInningsOvers = _currentOver + (_currentBall / 6);
+        _firstInningsOvers = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
       });
       
       // Show premium innings summary
@@ -2326,7 +2364,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         teamName: _battingTeam,
         runs: _totalRuns,
         wickets: _wickets,
-        overs: _currentOver + (_currentBall / 6),
+        overs: _calculateTotalOvers(), // Use _totalValidBalls for accurate calculation
         isFirstInnings: true,
       );
     } else {
@@ -2366,6 +2404,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       // Reset Scores
       _totalRuns = 0;
       _wickets = 0;
+      _totalValidBalls = 0;
       _currentOver = 0;
       _currentBall = 0;
       _deliveries.clear();
@@ -2622,6 +2661,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       // Reset match state with selected players
       _totalRuns = 0;
       _wickets = 0;
+      _totalValidBalls = 0;
       _currentOver = 0;
       _currentBall = 0;
       _striker = selectedStriker;
@@ -3161,7 +3201,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         'team2_score': {
           'runs': _totalRuns,
           'wickets': _wickets,
-          'overs': _currentOver + (_currentBall / 6.0),
+          'overs': _calculateTotalOvers(), // Use _totalValidBalls for accurate calculation
         },
       };
     }
@@ -3229,6 +3269,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       // Reset Scores
       _totalRuns = 0;
       _wickets = 0;
+      _totalValidBalls = 0;
       _currentOver = 0;
       _currentBall = 0;
       _deliveries.clear();
@@ -3312,7 +3353,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     final target = _firstInningsRuns + 1;
     final runsScored = _totalRuns;
     final wicketsLost = _wickets;
-    final oversPlayed = _currentOver + (_currentBall / 6);
+      final oversPlayed = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
     
     String result;
     String winningTeam;
@@ -3510,7 +3551,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       final team1TotalRuns = _firstInningsRuns;
       final team1TotalBalls = (_firstInningsOvers * 6).toInt();
       final team2TotalRuns = _totalRuns;
-      final team2TotalBalls = (_currentOver * 6 + _currentBall);
+      final team2TotalBalls = _totalValidBalls; // Use _totalValidBalls for accurate calculation
       
       debugPrint('📊 Team 1: $team1TotalRuns runs in $team1TotalBalls balls');
       debugPrint('📊 Team 2: $team2TotalRuns runs in $team2TotalBalls balls');
@@ -3845,11 +3886,17 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             if (_deliveries.isNotEmpty) {
               _recalculateStatsFromDeliveries();
               
+              // Sync current over and ball from _totalValidBalls (single source of truth)
+              _syncCurrentOverAndBall();
+              
               // Force save to persist the corrected stats to Supabase
               // This acts as the actual "repair" step for the database
               Future.delayed(const Duration(milliseconds: 500), () {
                  if (mounted) _saveScorecardToSupabase();
               });
+            } else {
+              // Even if no deliveries, sync from _totalValidBalls for consistency
+              _syncCurrentOverAndBall();
             }
           });
         }
@@ -4353,8 +4400,17 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     final isStrikerOut = targetPlayer == _striker;
 
     // Store striker and non-striker names BEFORE any changes
-    final originalStriker = _striker;
-    final originalNonStriker = _nonStriker;
+    // PRODUCTION FIX: Ensure striker is never empty - use targetPlayer as fallback
+    final originalStriker = _striker.isNotEmpty ? _striker : (targetPlayer.isNotEmpty ? targetPlayer : 'Unknown');
+    final originalNonStriker = _nonStriker.isNotEmpty ? _nonStriker : 'Unknown';
+    
+    // Validate critical fields before recording delivery
+    if (originalStriker.isEmpty || originalStriker == 'Unknown') {
+      debugPrint('ERROR: Cannot record wicket delivery - striker is empty. targetPlayer: $targetPlayer, _striker: $_striker');
+    }
+    if (_bowler.isEmpty) {
+      debugPrint('ERROR: Cannot record wicket delivery - bowler is empty');
+    }
     
     // For Run Out, add runs to total
     if (isRunOut && runsCompleted > 0) {
@@ -4396,9 +4452,15 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       }
       
       // Wicket counts as a ball (ICC rule) - but Retired Hurt also counts as a ball
-      _currentBall += 1;
+      // Increment total valid balls FIRST
+      _totalValidBalls++;
       // Increment bowler's legal balls and update overs (ICC rule)
       _incrementBowlerLegalBalls();
+      
+      // Calculate over and ball from _totalValidBalls (single source of truth)
+      final calculated = _calculateOverAndBall();
+      _currentOver = calculated['over']!;
+      _currentBall = calculated['ball']!;
       
       // Add to current over balls
       String ballNotation = isRetiredHurt ? 'RH' : (isRunOut ? 'RO$runsCompleted' : 'W');
@@ -4406,11 +4468,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // Check if over is complete
       bool overComplete = false;
-      if (_currentBall >= 6) {
+      if (_currentBall == 6) {
         // Save current over to history
         _overHistory.add(List<String>.from(_currentOverBalls));
-        _currentBall = 0;
-        _currentOver += 1;
         overComplete = true;
         // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
         // _currentOverBalls = []; // Moved to bowler selection
@@ -4438,7 +4498,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       }
       
       // Update CRR
-      final totalOvers = _currentOver + (_currentBall / 6);
+      final totalOvers = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
       
@@ -4593,11 +4653,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       double overDecimal;
 
       // Track valid balls (excluding wides/no-balls)
+      // IMPORTANT: Do NOT mutate _totalValidBalls here.
+      // _totalValidBalls is already maintained by the scoring logic + delivery recalculation
+      // and is the single source of truth for overs/balls.
       if (isValidBall) {
-        // Increment valid ball count FIRST
-        _totalValidBalls++;
-
-        // Calculate over and ball using CORRECT formula:
+        // Calculate over and ball using CORRECT formula based on current total valid balls:
         // over = (totalValidBalls - 1) ~/ 6
         // ball = ((totalValidBalls - 1) % 6) + 1
         // This ensures: 1→0.1, 2→0.2, 3→0.3, 4→0.4, 5→0.5, 6→0.6, 7→1.1
@@ -4637,7 +4697,8 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
           _currentOverBallData.clear();
         }
       } else {
-        // For invalid balls (wides/no-balls), use current valid ball position
+        // For invalid balls (wides/no-balls), use CURRENT valid ball position
+        // (i.e., same over.ball as the last legal delivery)
         final over = (_totalValidBalls - 1) ~/ 6;
         final ball = ((_totalValidBalls - 1) % 6) + 1;
         overDecimal = over + (ball / 10.0);
@@ -6704,7 +6765,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       // ICC Rule: Do NOT increment balls faced (wide is not a legal delivery)
       // _strikerBalls is NOT incremented
       
-      // ICC Rule: Wide doesn't count as a legal ball - DO NOT increment _currentBall
+      // ICC Rule: Wide doesn't count as a legal ball - DO NOT increment _totalValidBalls
+      // Sync current over/ball from _totalValidBalls (wide doesn't change valid ball count)
+      _syncCurrentOverAndBall();
+      
       // ICC Rule: Change strike only if runs completed by running (excluding 1 wide) are odd
       // Strike rotation based on runsCompleted, NOT totalRuns
       if (runsCompleted % 2 == 1) {
@@ -6716,11 +6780,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _currentOverBalls.add(ballNotation);
       
       // Update CRR (ball count doesn't change for wide)
-      final totalOvers = _currentOver + (_currentBall / 6);
+      final totalOvers = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
       
-      // Record delivery (single source of truth)
+      // Record delivery (single source of truth) - use calculated over/ball
       _recordDelivery(
         over: _currentOver,
         ball: _currentBall,
@@ -6852,7 +6916,10 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         // Note: Balls faced is NOT incremented for no-ball (not a legal delivery)
       }
       
-      // ICC Rule: No ball doesn't count as a legal ball - DO NOT increment _currentBall
+      // ICC Rule: No ball doesn't count as a legal ball - DO NOT increment _totalValidBalls
+      // Sync current over/ball from _totalValidBalls (no-ball doesn't change valid ball count)
+      _syncCurrentOverAndBall();
+      
       // ICC Rule: Change strike only if runs off the bat (excluding 1 no-ball) are odd
       // Strike rotation based on runsOffBat, NOT totalRuns
       if (runsOffBat % 2 == 1) {
@@ -6864,11 +6931,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _currentOverBalls.add(ballNotation);
       
       // Update CRR (ball count doesn't change for no ball)
-      final totalOvers = _currentOver + (_currentBall / 6);
+      final totalOvers = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
       
-      // Record delivery (single source of truth)
+      // Record delivery (single source of truth) - use calculated over/ball
       _recordDelivery(
         over: _currentOver,
         ball: _currentBall,
@@ -6990,21 +7057,24 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _strikerBalls += 1;
       _strikerSR = _strikerBalls > 0 ? (_strikerRuns / _strikerBalls) * 100 : 0.0;
       
-      // Byes count as a legal delivery (ICC rule)
-      _currentBall += 1;
+      // Byes count as a legal delivery (ICC rule) - increment total valid balls FIRST
+      _totalValidBalls++;
       // Increment bowler's legal balls and update overs (ICC rule)
       _incrementBowlerLegalBalls();
+      
+      // Calculate over and ball from _totalValidBalls (single source of truth)
+      final calculated = _calculateOverAndBall();
+      _currentOver = calculated['over']!;
+      _currentBall = calculated['ball']!;
       
       // Add to current over balls
       _currentOverBalls.add(runs > 0 ? 'B$runs' : 'B');
       
       // Check if over is complete
       bool overComplete = false;
-      if (_currentBall >= 6) {
+      if (_currentBall == 6) {
         // Save current over to history
         _overHistory.add(List<String>.from(_currentOverBalls));
-        _currentBall = 0;
-        _currentOver += 1;
         overComplete = true;
         // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
         // _currentOverBalls = []; // Moved to bowler selection
@@ -7021,11 +7091,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       }
       
       // Update CRR
-      final totalOvers = _currentOver + (_currentBall / 6);
+      final totalOvers = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
       
-      // Record delivery (single source of truth)
+      // Record delivery (single source of truth) - use calculated over/ball
       _recordDelivery(
         over: _currentOver,
         ball: _currentBall,
@@ -7160,21 +7230,24 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _strikerBalls += 1;
       _strikerSR = _strikerBalls > 0 ? (_strikerRuns / _strikerBalls) * 100 : 0.0;
       
-      // Leg Byes count as a legal delivery (ICC rule)
-      _currentBall += 1;
+      // Leg Byes count as a legal delivery (ICC rule) - increment total valid balls FIRST
+      _totalValidBalls++;
       // Increment bowler's legal balls and update overs (ICC rule)
       _incrementBowlerLegalBalls();
+      
+      // Calculate over and ball from _totalValidBalls (single source of truth)
+      final calculated = _calculateOverAndBall();
+      _currentOver = calculated['over']!;
+      _currentBall = calculated['ball']!;
       
       // Add to current over balls
       _currentOverBalls.add(runs > 0 ? 'LB$runs' : 'LB');
       
       // Check if over is complete
       bool overComplete = false;
-      if (_currentBall >= 6) {
+      if (_currentBall == 6) {
         // Save current over to history
         _overHistory.add(List<String>.from(_currentOverBalls));
-        _currentBall = 0;
-        _currentOver += 1;
         overComplete = true;
         // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
         // _currentOverBalls = []; // Moved to bowler selection
@@ -7191,7 +7264,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       }
       
       // Update CRR
-      final totalOvers = _currentOver + (_currentBall / 6);
+      final totalOvers = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
       
@@ -7200,7 +7273,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         _endInnings();
       }
 
-      // Record delivery (single source of truth)
+      // Record delivery (single source of truth) - use calculated over/ball
       _recordDelivery(
         over: _currentOver,
         ball: _currentBall,
@@ -7550,10 +7623,15 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       _strikerSR = _strikerBalls > 0 ? (_strikerRuns / _strikerBalls) * 100 : 0.0;
       _bowlerRuns += actualRuns;
       
-      // Increment ball (legal delivery - ICC rule)
-      _currentBall += 1;
+      // Increment total valid balls FIRST (legal delivery - ICC rule)
+      _totalValidBalls++;
       // Increment bowler's legal balls and update overs (ICC rule)
       _incrementBowlerLegalBalls();
+      
+      // Calculate over and ball from _totalValidBalls (single source of truth)
+      final calculated = _calculateOverAndBall();
+      _currentOver = calculated['over']!;
+      _currentBall = calculated['ball']!;
       
       // Add to current over balls (max 6 legal deliveries)
       String ballNotation = actualRuns.toString();
@@ -7563,12 +7641,9 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       
       // Check if over is complete (ICC rule: 6 legal balls = 1 over)
       bool overComplete = false;
-      if (_currentBall >= 6) {
+      if (_currentBall == 6) {
         // Save current over to history
         _overHistory.add(List<String>.from(_currentOverBalls));
-        // Reset for next over
-        _currentBall = 0;
-        _currentOver += 1;
         overComplete = true;
         // DON'T clear _currentOverBalls here - keep visible until new bowler is selected
         // _currentOverBalls = []; // Moved to bowler selection
@@ -7593,11 +7668,11 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
       }
       
       // Update CRR and projected score
-      final totalOvers = _currentOver + (_currentBall / 6);
+      final totalOvers = _calculateTotalOvers(); // Use _totalValidBalls for accurate calculation
       _crr = totalOvers > 0 ? _totalRuns / totalOvers : 0.0;
       _projected = (_crr * (widget.overs ?? 20)).round();
       
-      // Record delivery (single source of truth)
+      // Record delivery (single source of truth) - use calculated over/ball
       _recordDelivery(
         over: _currentOver,
         ball: _currentBall,
