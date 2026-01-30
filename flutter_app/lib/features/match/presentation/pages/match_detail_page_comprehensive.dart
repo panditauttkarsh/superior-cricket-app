@@ -14,6 +14,10 @@ import '../../../live/presentation/pages/go_live_screen.dart';
 import '../widgets/assign_scorer_dialog.dart';
 import '../widgets/mvp_award_card.dart';
 import '../../../../core/models/mvp_model.dart';
+import '../../../../core/cricket_engine/models/delivery_model.dart';
+import '../../../../core/cricket_engine/models/scorecard_model.dart';
+import '../../../../core/cricket_engine/engine/scorecard_engine.dart';
+import '../../../../core/cricket_engine/adapter/scorecard_adapter.dart';
 
 /// Provider for match data
 final matchDetailProvider = StreamProvider.autoDispose.family<MatchModel?, String>((ref, matchId) {
@@ -54,26 +58,126 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
   Map<String, dynamic> _getBalancedScores(Map<String, dynamic> scorecard) {
     if (scorecard.isEmpty) return {};
     
+    // Initialize with stored values as fallback
     final team1Score = scorecard['team1_score'] ?? {};
     final team2Score = scorecard['team2_score'] ?? {};
     
     int t1Runs = (team1Score['runs'] as num?)?.toInt() ?? 0;
     int t1Wickets = (team1Score['wickets'] as num?)?.toInt() ?? 0;
-    double t1OversRaw = (team1Score['overs'] as num?)?.toDouble() ?? 0.0;
+    double t1OversRaw = 0.0; // Will be recalculated from deliveries
     
     int t2Runs = (team2Score['runs'] as num?)?.toInt() ?? 0;
     int t2Wickets = (team2Score['wickets'] as num?)?.toInt() ?? 0;
-    double t2OversRaw = (team2Score['overs'] as num?)?.toDouble() ?? 0.0;
+    double t2OversRaw = 0.0; // Will be recalculated from deliveries
 
     // SELF-HEALING: If deliveries exist, recalculate from the source of truth
+    final currentInnings = (scorecard['current_innings'] as num?)?.toInt() ?? 1;
+    
+    // Recalculate first innings from first_innings_deliveries (only if second innings has started)
+    if (currentInnings == 2) {
+      final firstInningsDeliveries = scorecard['first_innings_deliveries'] as List<dynamic>?;
+      if (firstInningsDeliveries != null && firstInningsDeliveries.isNotEmpty) {
+        int calcRuns = 0;
+        int calcWickets = 0;
+        int calcLegalBalls = 0;
+        
+        // CRITICAL: Deduplicate deliveries by deliveryNumber to avoid double-counting
+        final seenDeliveryNumbers = <int>{};
+        final validDeliveries = <Map<String, dynamic>>[];
+        
+        for (final json in firstInningsDeliveries) {
+          final d = json as Map<String, dynamic>;
+          final deliveryNumber = (d['deliveryNumber'] as num?)?.toInt();
+          final striker = d['striker'] as String? ?? '';
+          
+          // Skip invalid deliveries
+          if (striker.isEmpty) {
+            debugPrint('WARNING: Found delivery with empty striker in first innings - skipping');
+            continue;
+          }
+          
+          // Skip duplicates (same deliveryNumber)
+          if (deliveryNumber != null) {
+            if (seenDeliveryNumbers.contains(deliveryNumber)) {
+              debugPrint('WARNING: Found duplicate delivery #$deliveryNumber in first innings - skipping');
+              continue;
+            }
+            seenDeliveryNumbers.add(deliveryNumber);
+          }
+          
+          validDeliveries.add(d);
+        }
+        
+        for (final d in validDeliveries) {
+          final striker = d['striker'] as String? ?? '';
+          int ballRuns = 0;
+          final extraType = d['extraType'] as String?;
+          final r = (d['runs'] as num?)?.toInt() ?? 0;
+          final er = (d['extraRuns'] as num?)?.toInt() ?? 0;
+          
+          // Correct team run calculation per delivery
+          if (extraType == 'WD' || extraType == 'NB') {
+            ballRuns = er; // For Wides/NB, extraRuns contains total team runs
+          } else {
+            ballRuns = r + er; // For others (B, LB, regular), it's bat runs + extras
+          }
+          
+          calcRuns += ballRuns;
+          if (d['wicketType'] != null) calcWickets++;
+          // CRITICAL: Only count legal balls with valid striker (matches batting stats calculation)
+          if (d['isLegalBall'] == true && striker.isNotEmpty) calcLegalBalls++;
+        }
+        
+        // Calculate overs correctly: legalBalls / 6.0 (e.g., 17 legal balls = 2.833, displays as 2.5)
+        t1Runs = calcRuns;
+        t1Wickets = calcWickets;
+        t1OversRaw = calcLegalBalls / 6.0;
+      } else {
+        // Fallback to stored values if deliveries not available
+        if (scorecard.containsKey('first_innings_runs')) {
+          t1Runs = (scorecard['first_innings_runs'] as num?)?.toInt() ?? t1Runs;
+          t1Wickets = (scorecard['first_innings_wickets'] as num?)?.toInt() ?? t1Wickets;
+          t1OversRaw = (scorecard['first_innings_overs'] as num?)?.toDouble() ?? t1OversRaw;
+        }
+      }
+    }
+    
+    // Recalculate current innings from deliveries (which only contains current innings deliveries)
     final deliveries = scorecard['deliveries'] as List<dynamic>?;
     if (deliveries != null && deliveries.isNotEmpty) {
+      // CRITICAL: Deduplicate deliveries by deliveryNumber to avoid double-counting
+      final seenDeliveryNumbers = <int>{};
+      final validDeliveries = <Map<String, dynamic>>[];
+      
+      for (final json in deliveries) {
+        final d = json as Map<String, dynamic>;
+        final deliveryNumber = (d['deliveryNumber'] as num?)?.toInt();
+        final striker = d['striker'] as String? ?? '';
+        
+        // Skip invalid deliveries
+        if (striker.isEmpty) {
+          debugPrint('WARNING: Found delivery with empty striker in current innings - skipping');
+          continue;
+        }
+        
+        // Skip duplicates (same deliveryNumber)
+        if (deliveryNumber != null) {
+          if (seenDeliveryNumbers.contains(deliveryNumber)) {
+            debugPrint('WARNING: Found duplicate delivery #$deliveryNumber - skipping');
+            continue;
+          }
+          seenDeliveryNumbers.add(deliveryNumber);
+        }
+        
+        validDeliveries.add(d);
+      }
+      
       int calcRuns = 0;
       int calcWickets = 0;
       int calcLegalBalls = 0;
       
-      for (final json in deliveries) {
-        final d = json as Map<String, dynamic>;
+      for (final d in validDeliveries) {
+        final striker = d['striker'] as String? ?? '';
         int ballRuns = 0;
         final extraType = d['extraType'] as String?;
         final r = (d['runs'] as num?)?.toInt() ?? 0;
@@ -88,24 +192,19 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
         
         calcRuns += ballRuns;
         if (d['wicketType'] != null) calcWickets++;
-        if (d['isLegalBall'] == true) calcLegalBalls++;
+        // CRITICAL: Only count legal balls with valid striker (matches batting stats calculation)
+        if (d['isLegalBall'] == true && striker.isNotEmpty) calcLegalBalls++;
       }
       
-      final currentInnings = (scorecard['current_innings'] as num?)?.toInt() ?? 1;
+      // Calculate overs correctly: legalBalls / 6.0 (e.g., 10 legal balls = 1.667, displays as 1.4)
       if (currentInnings == 1) {
         t1Runs = calcRuns;
         t1Wickets = calcWickets;
-        t1OversRaw = (calcLegalBalls ~/ 6) + (calcLegalBalls % 6) / 6.0;
+        t1OversRaw = calcLegalBalls / 6.0;
       } else {
         t2Runs = calcRuns;
         t2Wickets = calcWickets;
-        t2OversRaw = (calcLegalBalls ~/ 6) + (calcLegalBalls % 6) / 6.0;
-        
-        if (scorecard.containsKey('first_innings_runs')) {
-          t1Runs = (scorecard['first_innings_runs'] as num?)?.toInt() ?? t1Runs;
-          t1Wickets = (scorecard['first_innings_wickets'] as num?)?.toInt() ?? t1Wickets;
-          t1OversRaw = (scorecard['first_innings_overs'] as num?)?.toDouble() ?? t1OversRaw;
-        }
+        t2OversRaw = calcLegalBalls / 6.0;
       }
     }
 
@@ -113,7 +212,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
     // This addresses discrepancies where player stats are updated but deliveries/total might be stale
     final playerStats1 = scorecard['player_stats_map'] as Map<String, dynamic>?;
     final firstInningsPlayerStats = scorecard['first_innings_player_stats'] as Map<String, dynamic>?;
-    final currentInnings = (scorecard['current_innings'] as num?)?.toInt() ?? 1;
+    // Note: currentInnings is already declared above (line 70)
 
     // Check Current Innings (usually team 1 if 1st, team 2 if 2nd)
     final activeStats = playerStats1;
@@ -155,14 +254,18 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
       if (prevTotal > t1Runs) t1Runs = prevTotal;
     }
 
-    // Fix for 0.7/0.8 logic
-    if (t1OversRaw - t1OversRaw.floor() > 0.5) {
-      int totalBalls = (t1OversRaw * 10).round();
-      t1OversRaw = (totalBalls ~/ 6) + (totalBalls % 6) / 6.0;
+    // Fallback: If no deliveries available or recalculation failed, use stored overs (legacy support)
+    if (t1OversRaw == 0.0) {
+      final firstInningsDeliveries = scorecard['first_innings_deliveries'] as List<dynamic>?;
+      if (firstInningsDeliveries == null || firstInningsDeliveries.isEmpty) {
+        t1OversRaw = (team1Score['overs'] as num?)?.toDouble() ?? 0.0;
+      }
     }
-    if (t2OversRaw - t2OversRaw.floor() > 0.5) {
-      int totalBalls = (t2OversRaw * 10).round();
-      t2OversRaw = (totalBalls ~/ 6) + (totalBalls % 6) / 6.0;
+    if (t2OversRaw == 0.0) {
+      final deliveries = scorecard['deliveries'] as List<dynamic>?;
+      if (deliveries == null || deliveries.isEmpty) {
+        t2OversRaw = (team2Score['overs'] as num?)?.toDouble() ?? 0.0;
+      }
     }
 
     return {
@@ -2519,6 +2622,7 @@ List<String> _getDidNotBatPlayers(
   }
 
   // Build batting stats from scorecard data
+  // PRODUCTION: Uses new ScorecardEngine for accurate calculations
   List<_PlayerBattingStat> _buildBattingStatsFromScorecard(
     Map<String, dynamic> scorecard,
     String teamName, {
@@ -2526,49 +2630,170 @@ List<String> _getDidNotBatPlayers(
   }) {
     final stats = <_PlayerBattingStat>[];
     
-    // Determine which stats map to use
-    Map<String, dynamic>? statsMap;
-    // If we're displaying the current innings, use 'player_stats_map'
-    // If we're displaying the first innings (and it's not current), use 'first_innings_player_stats'
-    
-    // Note: The scorecard structure saves 'player_stats_map' for the ACTIVE innings.
-    // So if isCurrent is true, we always look at 'player_stats_map'.
-    // If isCurrent is false, it means we are looking at the prev innings, so we check 'first_innings_player_stats'.
-    
+    // Get deliveries for the appropriate innings (source of truth)
+    List<dynamic> deliveriesJson;
     if (isCurrent) {
-      statsMap = scorecard['player_stats_map'] as Map<String, dynamic>?;
+      deliveriesJson = scorecard['deliveries'] as List<dynamic>? ?? [];
     } else {
-      statsMap = scorecard['first_innings_player_stats'] as Map<String, dynamic>?;
+      deliveriesJson = scorecard['first_innings_deliveries'] as List<dynamic>? ?? [];
     }
     
-    // If stats map exists, use it as the primary source of truth
-    if (statsMap != null && statsMap.isNotEmpty) {
-      final dismissalTypes = scorecard['dismissal_types'] as Map<String, dynamic>? ?? {};
-      final dismissedPlayers = (scorecard['dismissed_players'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    // PRODUCTION: Use new ScorecardEngine if deliveries are available
+    if (deliveriesJson.isNotEmpty) {
+      try {
+        // Convert to DeliveryModel and use engine
+        final deliveries = ScorecardAdapter.deliveriesFromJson(deliveriesJson);
+        if (deliveries.isNotEmpty) {
+          final currentInnings = (scorecard['current_innings'] as num?)?.toInt() ?? 1;
+          final isSuperOver = scorecard['is_super_over'] as bool? ?? false;
+          final superOverNumber = (scorecard['super_over_number'] as num?)?.toInt();
+          
+          final scorecardModel = ScorecardEngine.calculateScorecard(
+            deliveries: deliveries,
+            teamName: teamName,
+            isSuperOver: isSuperOver,
+            superOverNumber: superOverNumber,
+          );
+          
+          // Convert engine output to UI format
+          for (final battingStat in scorecardModel.battingStats) {
+            stats.add(_PlayerBattingStat(
+              playerName: battingStat.playerName,
+              runs: battingStat.runs,
+              balls: battingStat.balls,
+              fours: battingStat.fours,
+              sixes: battingStat.sixes,
+              strikeRate: battingStat.strikeRate,
+              minutes: battingStat.minutes ?? 0,
+              dismissal: battingStat.dismissalType,
+              isNotOut: battingStat.isNotOut,
+            ));
+          }
+          
+          // Return early if engine calculation succeeded
+          return stats;
+        }
+      } catch (e) {
+        debugPrint('WARNING: ScorecardEngine calculation failed, falling back to manual calculation: $e');
+        // Fall through to manual calculation
+      }
+    }
+    
+    // FALLBACK: Manual calculation from deliveries (legacy support)
+    final dismissalTypes = scorecard['dismissal_types'] as Map<String, dynamic>? ?? {};
+    List<String> dismissedPlayers;
+    
+    if (isCurrent) {
+      dismissedPlayers = (scorecard['dismissed_players'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    } else {
+      dismissedPlayers = [];
+      final firstInningsDeliveries = scorecard['first_innings_deliveries'] as List<dynamic>? ?? [];
+      for (final json in firstInningsDeliveries) {
+        final d = json as Map<String, dynamic>;
+        final wicketType = d['wicketType'] as String?;
+        final striker = d['striker'] as String? ?? '';
+        if (wicketType != null && striker.isNotEmpty && !dismissedPlayers.contains(striker)) {
+          dismissedPlayers.add(striker);
+        }
+      }
+      final storedDismissed = (scorecard['dismissed_players'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+      for (final player in storedDismissed) {
+        if (!dismissedPlayers.contains(player)) {
+          dismissedPlayers.add(player);
+        }
+      }
+    }
+    
+    List<dynamic> deliveries;
+    if (isCurrent) {
+      deliveries = scorecard['deliveries'] as List<dynamic>? ?? [];
+    } else {
+      deliveries = scorecard['first_innings_deliveries'] as List<dynamic>? ?? [];
+    }
+    
+    if (deliveries.isNotEmpty) {
+      // CRITICAL: Deduplicate deliveries by deliveryNumber to avoid double-counting
+      final seenDeliveryNumbers = <int>{};
+      final validDeliveries = <Map<String, dynamic>>[];
       
-      // Get all players in the stats map
-      final players = statsMap.keys.toList();
+      for (final json in deliveries) {
+        final d = json as Map<String, dynamic>;
+        final deliveryNumber = (d['deliveryNumber'] as num?)?.toInt();
+        final striker = d['striker'] as String? ?? '';
+        
+        // Skip invalid deliveries
+        if (striker.isEmpty) {
+          final isLegalBall = d['isLegalBall'] as bool? ?? true;
+          if (isLegalBall) {
+            debugPrint('WARNING: Found legal ball delivery with empty striker in ${isCurrent ? "current" : "first"} innings - skipping');
+          }
+          continue;
+        }
+        
+        // Skip duplicates (same deliveryNumber)
+        if (deliveryNumber != null) {
+          if (seenDeliveryNumbers.contains(deliveryNumber)) {
+            debugPrint('WARNING: Found duplicate delivery #$deliveryNumber in ${isCurrent ? "current" : "first"} innings - skipping');
+            continue;
+          }
+          seenDeliveryNumbers.add(deliveryNumber);
+        }
+        
+        validDeliveries.add(d);
+      }
       
-      // Get active players for override (to match Summary tab consistency)
-      final striker = isCurrent ? (scorecard['striker'] as String? ?? '') : '';
-      final nonStriker = isCurrent ? (scorecard['non_striker'] as String? ?? '') : '';
+      // Recalculate player stats from valid deliveries only
+      final playerStatsMap = <String, Map<String, int>>{}; // player -> {runs, balls, fours, sixes}
       
-      for (final player in players) {
-        final playerStats = statsMap[player] as Map<String, dynamic>;
+      for (final d in validDeliveries) {
+        final striker = d['striker'] as String? ?? '';
         
-        // Default values from map
-        int runs = (playerStats['runs'] as num?)?.toInt() ?? 0;
-        int balls = (playerStats['balls'] as num?)?.toInt() ?? 0;
-        int fours = (playerStats['fours'] as num?)?.toInt() ?? 0;
-        int sixes = (playerStats['sixes'] as num?)?.toInt() ?? 0;
+        // Initialize player stats if needed
+        if (!playerStatsMap.containsKey(striker)) {
+          playerStatsMap[striker] = {
+            'runs': 0,
+            'balls': 0,
+            'fours': 0,
+            'sixes': 0,
+          };
+        }
         
-        // Use values from the stats map - the single source of truth recalculated from deliveries
+        final playerStats = playerStatsMap[striker]!;
+        final isLegalBall = d['isLegalBall'] as bool? ?? true;
+        final extraType = d['extraType'] as String?;
+        final runs = (d['runs'] as num?)?.toInt() ?? 0;
         
+        // Count runs (off bat only)
+        if (extraType == null) {
+          playerStats['runs'] = playerStats['runs']! + runs;
+        } else if (extraType == 'NB') {
+          playerStats['runs'] = playerStats['runs']! + runs; // Runs off bat on NB count
+        }
+        
+        // Count balls faced (legal only) - CRITICAL: Only count if striker is valid
+        if (isLegalBall && striker.isNotEmpty) {
+          playerStats['balls'] = playerStats['balls']! + 1;
+        }
+        
+        // Count boundaries (only if runs are off the bat)
+        if (extraType == null || extraType == 'NB') {
+          if (runs == 4) playerStats['fours'] = playerStats['fours']! + 1;
+          if (runs == 6) playerStats['sixes'] = playerStats['sixes']! + 1;
+        }
+      }
+      
+      // Convert to _PlayerBattingStat list
+      for (final entry in playerStatsMap.entries) {
+        final player = entry.key;
+        final playerStats = entry.value;
+        final runs = playerStats['runs']!;
+        final balls = playerStats['balls']!;
+        final fours = playerStats['fours']!;
+        final sixes = playerStats['sixes']!;
         final strikeRate = balls > 0 ? (runs / balls) * 100 : 0.0;
-        // startTime -> minutes calculation omitted for brevity/simplicity in read-only view
         
-        final isDismissed = dismissedPlayers.contains(player) || (playerStats['dismissal'] != null);
-        final dismissal = (playerStats['dismissal'] as String?) ?? (isDismissed ? dismissalTypes[player] as String? : null);
+        final isDismissed = dismissedPlayers.contains(player);
+        final dismissal = isDismissed ? (dismissalTypes[player] as String?) : null;
         
         stats.add(_PlayerBattingStat(
           playerName: player,
@@ -2581,6 +2806,45 @@ List<String> _getDidNotBatPlayers(
           dismissal: dismissal,
           isNotOut: !isDismissed,
         ));
+      }
+    } else {
+      // Fallback: Use stored maps if deliveries are not available (legacy support)
+      Map<String, dynamic>? statsMap;
+      
+      if (isCurrent) {
+        statsMap = scorecard['player_stats_map'] as Map<String, dynamic>?;
+      } else {
+        statsMap = scorecard['first_innings_player_stats'] as Map<String, dynamic>?;
+      }
+      
+      if (statsMap != null && statsMap.isNotEmpty) {
+        final players = statsMap.keys.toList();
+        
+        for (final player in players) {
+          final playerStats = statsMap[player] as Map<String, dynamic>;
+          
+          int runs = (playerStats['runs'] as num?)?.toInt() ?? 0;
+          int balls = (playerStats['balls'] as num?)?.toInt() ?? 0;
+          int fours = (playerStats['fours'] as num?)?.toInt() ?? 0;
+          int sixes = (playerStats['sixes'] as num?)?.toInt() ?? 0;
+          
+          final strikeRate = balls > 0 ? (runs / balls) * 100 : 0.0;
+          
+          final isDismissed = dismissedPlayers.contains(player) || (playerStats['dismissal'] != null);
+          final dismissal = (playerStats['dismissal'] as String?) ?? (isDismissed ? dismissalTypes[player] as String? : null);
+          
+          stats.add(_PlayerBattingStat(
+            playerName: player,
+            runs: runs,
+            balls: balls,
+            fours: fours,
+            sixes: sixes,
+            strikeRate: strikeRate,
+            minutes: 0,
+            dismissal: dismissal,
+            isNotOut: !isDismissed,
+          ));
+        }
       }
       
       // Also add striker/non-striker if they are missing from stats map (shouldn't happen but safe fallback)
@@ -2618,94 +2882,13 @@ List<String> _getDidNotBatPlayers(
         }
       }
       
-      return stats;
-    }
-    
-    // Legacy/Fallback Logic (if map is missing)
-    // Get dismissal types
-    final dismissalTypes = scorecard['dismissal_types'] as Map<String, dynamic>? ?? {};
-    final dismissedPlayers = (scorecard['dismissed_players'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-    
-    // For current innings, get striker and non-striker stats
-    if (isCurrent) {
-      final striker = scorecard['striker'] as String? ?? '';
-      final nonStriker = scorecard['non_striker'] as String? ?? '';
-      final strikerRuns = (scorecard['striker_runs'] as num?)?.toInt() ?? 0;
-      final strikerBalls = (scorecard['striker_balls'] as num?)?.toInt() ?? 0;
-      final nonStrikerRuns = (scorecard['non_striker_runs'] as num?)?.toInt() ?? 0;
-      final nonStrikerBalls = (scorecard['non_striker_balls'] as num?)?.toInt() ?? 0;
-      
-      if (striker.isNotEmpty) {
-        final isDismissed = dismissedPlayers.contains(striker);
-        final strikeRate = strikerBalls > 0 ? (strikerRuns / strikerBalls) * 100 : 0.0;
-        stats.add(_PlayerBattingStat(
-          playerName: striker,
-          runs: strikerRuns,
-          balls: strikerBalls,
-          fours: 0, // Not tracked in current scorecard structure
-          sixes: 0,
-          strikeRate: strikeRate,
-          minutes: 0,
-          dismissal: isDismissed ? (dismissalTypes[striker] as String?) : null,
-          isNotOut: !isDismissed,
-        ));
-      }
-      
-      if (nonStriker.isNotEmpty) {
-        final isDismissed = dismissedPlayers.contains(nonStriker);
-        final strikeRate = nonStrikerBalls > 0 ? (nonStrikerRuns / nonStrikerBalls) * 100 : 0.0;
-        stats.add(_PlayerBattingStat(
-          playerName: nonStriker,
-          runs: nonStrikerRuns,
-          balls: nonStrikerBalls,
-          fours: 0,
-          sixes: 0,
-          strikeRate: strikeRate,
-          minutes: 0,
-          dismissal: isDismissed ? (dismissalTypes[nonStriker] as String?) : null,
-          isNotOut: !isDismissed,
-        ));
-      }
-      
-      // Add dismissed players
-      for (final player in dismissedPlayers) {
-        if (player != striker && player != nonStriker) {
-          final dismissal = dismissalTypes[player] as String?;
-          stats.add(_PlayerBattingStat(
-            playerName: player,
-            runs: 0, // Not available in current structure
-            balls: 0,
-            fours: 0,
-            sixes: 0,
-            strikeRate: 0.0,
-            minutes: 0,
-            dismissal: dismissal,
-            isNotOut: false,
-          ));
-        }
-      }
-    } else {
-      // For first innings, show dismissed players
-      for (final player in dismissedPlayers) {
-        final dismissal = dismissalTypes[player] as String?;
-        stats.add(_PlayerBattingStat(
-          playerName: player,
-          runs: 0,
-          balls: 0,
-          fours: 0,
-          sixes: 0,
-          strikeRate: 0.0,
-          minutes: 0,
-          dismissal: dismissal,
-          isNotOut: false,
-          ));
-      }
     }
     
     return stats;
   }
 
   // Build bowling stats from scorecard data
+  // PRODUCTION: Uses new ScorecardEngine for accurate calculations
   List<_PlayerBowlingStat> _buildBowlingStatsFromScorecard(
     Map<String, dynamic> scorecard,
     String teamName, {
@@ -2713,62 +2896,247 @@ List<String> _getDidNotBatPlayers(
   }) {
     final stats = <_PlayerBowlingStat>[];
     
-    // Determine which stats map to use
-    // For bowling, we need the bowlers from the OPPOSING team's innings
-    // If we are displaying Team A's batting scorecard (isCurrent=true), 
-    // we need Team B's bowlers (from 'bowler_stats_map' if isCurrent is true)
-    
-    // Wait, the scorecard argument structure in _buildScorecardTab passes:
-    // _InningsScorecardWidget(teamName: BattingTeam ...)
-    // So 'teamName' is the Batting Team.
-    // We want the bowlers who bowled AGAINST this team.
-    
-    // In the Summary tab logic:
-    // final bowlerStatsMap = scorecard['bowler_stats_map']
-    // This 'bowler_stats_map' contains bowlers for the CURRENT active innings.
-    
-    Map<String, dynamic>? statsMap;
-    
+    // Get deliveries for the appropriate innings (source of truth)
+    List<dynamic> deliveriesJson;
     if (isCurrent) {
-      // Current innings bowlers (bowling against the current batting team)
-      statsMap = scorecard['bowler_stats_map'] as Map<String, dynamic>?;
+      deliveriesJson = scorecard['deliveries'] as List<dynamic>? ?? [];
     } else {
-      // First innings bowlers (bowled against the first batting team)
-      statsMap = scorecard['first_innings_bowler_stats'] as Map<String, dynamic>?;
+      deliveriesJson = scorecard['first_innings_deliveries'] as List<dynamic>? ?? [];
     }
     
-    if (statsMap != null && statsMap.isNotEmpty) {
-      final bowlers = statsMap.keys.toList();
+    // PRODUCTION: Use new ScorecardEngine if deliveries are available
+    if (deliveriesJson.isNotEmpty) {
+      try {
+        // Convert to DeliveryModel and use engine
+        final deliveries = ScorecardAdapter.deliveriesFromJson(deliveriesJson);
+        if (deliveries.isNotEmpty) {
+          final currentInnings = (scorecard['current_innings'] as num?)?.toInt() ?? 1;
+          final isSuperOver = scorecard['is_super_over'] as bool? ?? false;
+          final superOverNumber = (scorecard['super_over_number'] as num?)?.toInt();
+          
+          final scorecardModel = ScorecardEngine.calculateScorecard(
+            deliveries: deliveries,
+            teamName: teamName,
+            isSuperOver: isSuperOver,
+            superOverNumber: superOverNumber,
+          );
+          
+          // Convert engine output to UI format
+          for (final bowlingStat in scorecardModel.bowlingStats) {
+            stats.add(_PlayerBowlingStat(
+              bowlerName: bowlingStat.bowlerName,
+              overs: bowlingStat.overs,
+              maidens: bowlingStat.maidens,
+              runs: bowlingStat.runs,
+              wickets: bowlingStat.wickets,
+              economy: bowlingStat.economy,
+            ));
+          }
+          
+          // Sort by overs (descending)
+          stats.sort((a, b) => b.overs.compareTo(a.overs));
+          
+          // Return early if engine calculation succeeded
+          return stats;
+        }
+      } catch (e) {
+        debugPrint('WARNING: ScorecardEngine calculation failed, falling back to manual calculation: $e');
+        // Fall through to manual calculation
+      }
+    }
+    
+    // FALLBACK: Manual calculation from deliveries (legacy support)
+    List<dynamic> deliveries;
+    if (isCurrent) {
+      deliveries = scorecard['deliveries'] as List<dynamic>? ?? [];
+    } else {
+      deliveries = scorecard['first_innings_deliveries'] as List<dynamic>? ?? [];
+    }
+    
+    if (deliveries.isNotEmpty) {
+      // CRITICAL: Deduplicate deliveries by deliveryNumber to avoid double-counting
+      final seenDeliveryNumbers = <int>{};
+      final validDeliveries = <Map<String, dynamic>>[];
       
-      // Get active bowler for override
-      final currentBowler = isCurrent ? (scorecard['bowler'] as String? ?? '') : '';
-
-      for (final bowler in bowlers) {
-        final bowlerStats = statsMap[bowler] as Map<String, dynamic>;
+      for (final json in deliveries) {
+        final d = json as Map<String, dynamic>;
+        final deliveryNumber = (d['deliveryNumber'] as num?)?.toInt();
+        final bowler = d['bowler'] as String? ?? '';
+        final striker = d['striker'] as String? ?? '';
         
-        // Calculate overs from legalBalls (the database stores legalBalls, not overs)
-        final legalBalls = (bowlerStats['legalBalls'] as num?)?.toInt() ?? 0;
+        // CRITICAL: For bowler stats, we MUST count legal balls even if striker is empty
+        // The ball was bowled and should count for the bowler regardless of striker
+        // Only skip if bowler is empty (invalid delivery)
+        if (bowler.isEmpty) {
+          debugPrint('WARNING: Found delivery with empty bowler in ${isCurrent ? "current" : "first"} innings bowling stats - skipping');
+          continue;
+        }
+        
+        // If striker is empty but it's a legal ball, we still count it for bowler
+        // This handles edge cases like last wicket where striker might be cleared
+        if (striker.isEmpty) {
+          final isLegalBall = d['isLegalBall'] as bool? ?? true;
+          if (isLegalBall) {
+            debugPrint('WARNING: Found legal ball delivery with empty striker in ${isCurrent ? "current" : "first"} innings - will count for bowler stats');
+          }
+        }
+        
+        // Skip duplicates (same deliveryNumber)
+        if (deliveryNumber != null) {
+          if (seenDeliveryNumbers.contains(deliveryNumber)) {
+            debugPrint('WARNING: Found duplicate delivery #$deliveryNumber in ${isCurrent ? "current" : "first"} innings bowling stats - skipping');
+            continue;
+          }
+          seenDeliveryNumbers.add(deliveryNumber);
+        }
+        
+        validDeliveries.add(d);
+      }
+      
+      // Recalculate bowler stats from valid deliveries only
+      final bowlerStatsMap = <String, Map<String, int>>{}; // bowler -> {legalBalls, runs, wickets, maidens}
+      final overRuns = <int, int>{}; // over -> runs conceded
+      final overLegalBalls = <int, int>{}; // over -> legal balls
+      final overBowler = <int, String>{}; // over -> bowler
+      
+      for (final d in validDeliveries) {
+        final bowler = d['bowler'] as String? ?? '';
+        if (bowler.isEmpty) continue;
+        
+        // Initialize bowler stats if needed
+        if (!bowlerStatsMap.containsKey(bowler)) {
+          bowlerStatsMap[bowler] = {
+            'legalBalls': 0,
+            'runs': 0,
+            'wickets': 0,
+            'maidens': 0,
+          };
+        }
+        
+        final bowlerStats = bowlerStatsMap[bowler]!;
+        final over = (d['over'] as num?)?.toInt() ?? 0;
+        final isLegalBall = d['isLegalBall'] as bool? ?? true;
+        final striker = d['striker'] as String? ?? '';
+        final extraType = d['extraType'] as String?;
+        final runs = (d['runs'] as num?)?.toInt() ?? 0;
+        final extraRuns = (d['extraRuns'] as num?)?.toInt() ?? 0;
+        final wicketType = d['wicketType'] as String?;
+        
+        // CRITICAL: Count legal balls for bowler - the ball was bowled, so it counts
+        // Even if striker is empty (edge case: last wicket), the ball still counts for bowler
+        // This ensures bowler overs match team total overs
+        if (isLegalBall) {
+          bowlerStats['legalBalls'] = bowlerStats['legalBalls']! + 1;
+        }
+        
+        // Count runs conceded
+        if (extraType == 'WD' || extraType == 'NB') {
+          bowlerStats['runs'] = bowlerStats['runs']! + extraRuns;
+        } else {
+          bowlerStats['runs'] = bowlerStats['runs']! + runs;
+        }
+        
+        // Count wickets (only credited wickets)
+        if (wicketType != null) {
+          const creditToBowler = ['Bowled', 'Caught', 'LBW', 'Stumped', 'Hit Wicket'];
+          bool isCredited = false;
+          for (final type in creditToBowler) {
+            if (wicketType.contains(type)) {
+              isCredited = true;
+              break;
+            }
+          }
+          if (isCredited) {
+            bowlerStats['wickets'] = bowlerStats['wickets']! + 1;
+          }
+        }
+        
+        // Track over data for maiden calculation
+        overBowler[over] = bowler;
+        int incrementalRuns = 0;
+        if (extraType == 'WD' || extraType == 'NB') {
+          incrementalRuns = extraRuns;
+        } else {
+          incrementalRuns = runs;
+        }
+        overRuns[over] = (overRuns[over] ?? 0) + incrementalRuns;
+        // CRITICAL: Count legal balls for maiden calculation - ball counts even if striker empty
+        if (isLegalBall) {
+          overLegalBalls[over] = (overLegalBalls[over] ?? 0) + 1;
+        }
+      }
+      
+      // Calculate maidens (6 legal balls, 0 runs)
+      for (final overNum in overBowler.keys) {
+        final bowlerName = overBowler[overNum]!;
+        final runsConceded = overRuns[overNum] ?? 0;
+        final legalBalls = overLegalBalls[overNum] ?? 0;
+        
+        if (legalBalls == 6 && runsConceded == 0 && bowlerStatsMap.containsKey(bowlerName)) {
+          bowlerStatsMap[bowlerName]!['maidens'] = bowlerStatsMap[bowlerName]!['maidens']! + 1;
+        }
+      }
+      
+      // Convert to _PlayerBowlingStat list
+      for (final entry in bowlerStatsMap.entries) {
+        final bowler = entry.key;
+        final bowlerStats = entry.value;
+        final legalBalls = bowlerStats['legalBalls']!;
         final completeOvers = legalBalls ~/ 6;
         final remainingBalls = legalBalls % 6;
         final overs = completeOvers + (remainingBalls / 10.0);
-        
-        int maidens = (bowlerStats['maidens'] as num?)?.toInt() ?? 0;
-        int runs = (bowlerStats['runs'] as num?)?.toInt() ?? 0;
-        int wickets = (bowlerStats['wickets'] as num?)?.toInt() ?? 0;
-        
-        // Calculate economy from legal balls
-        final economy = legalBalls > 0 ? (runs / legalBalls) * 6 : 0.0;
+        final economy = legalBalls > 0 ? (bowlerStats['runs']! / legalBalls) * 6 : 0.0;
         
         stats.add(_PlayerBowlingStat(
           bowlerName: bowler,
           overs: overs,
-          maidens: maidens,
-          runs: runs,
-          wickets: wickets,
+          maidens: bowlerStats['maidens']!,
+          runs: bowlerStats['runs']!,
+          wickets: bowlerStats['wickets']!,
           economy: economy,
         ));
       }
+    } else {
+      // Fallback: Use stored maps if deliveries are not available (legacy support)
+      Map<String, dynamic>? statsMap;
+      
+      if (isCurrent) {
+        statsMap = scorecard['bowler_stats_map'] as Map<String, dynamic>?;
+      } else {
+        statsMap = scorecard['first_innings_bowler_stats'] as Map<String, dynamic>?;
+      }
+      
+      if (statsMap != null && statsMap.isNotEmpty) {
+        final bowlers = statsMap.keys.toList();
+        
+        for (final bowler in bowlers) {
+          final bowlerStats = statsMap[bowler] as Map<String, dynamic>;
+          
+          final legalBalls = (bowlerStats['legalBalls'] as num?)?.toInt() ?? 0;
+          final completeOvers = legalBalls ~/ 6;
+          final remainingBalls = legalBalls % 6;
+          final overs = completeOvers + (remainingBalls / 10.0);
+          
+          int maidens = (bowlerStats['maidens'] as num?)?.toInt() ?? 0;
+          int runs = (bowlerStats['runs'] as num?)?.toInt() ?? 0;
+          int wickets = (bowlerStats['wickets'] as num?)?.toInt() ?? 0;
+          
+          final economy = legalBalls > 0 ? (runs / legalBalls) * 6 : 0.0;
+          
+          stats.add(_PlayerBowlingStat(
+            bowlerName: bowler,
+            overs: overs,
+            maidens: maidens,
+            runs: runs,
+            wickets: wickets,
+            economy: economy,
+          ));
+        }
+      }
     }
+    
+    // Sort by overs (descending)
+    stats.sort((a, b) => b.overs.compareTo(a.overs));
     
     return stats;
   }
