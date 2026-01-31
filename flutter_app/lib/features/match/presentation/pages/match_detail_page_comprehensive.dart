@@ -13,6 +13,7 @@ import 'commentary_page.dart';
 import '../../../live/presentation/pages/go_live_screen.dart';
 import '../widgets/assign_scorer_dialog.dart';
 import '../widgets/mvp_award_card.dart';
+import '../widgets/match_analytics_widgets.dart';
 import '../../../../core/models/mvp_model.dart';
 import '../../../../core/cricket_engine/models/delivery_model.dart';
 import '../../../../core/cricket_engine/models/scorecard_model.dart';
@@ -77,16 +78,16 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
     if (currentInnings == 2) {
       final firstInningsDeliveries = scorecard['first_innings_deliveries'] as List<dynamic>?;
       if (firstInningsDeliveries != null && firstInningsDeliveries.isNotEmpty) {
-        int calcRuns = 0;
-        int calcWickets = 0;
-        int calcLegalBalls = 0;
-        
+      int calcRuns = 0;
+      int calcWickets = 0;
+      int calcLegalBalls = 0;
+      
         // CRITICAL: Deduplicate deliveries by deliveryNumber to avoid double-counting
         final seenDeliveryNumbers = <int>{};
         final validDeliveries = <Map<String, dynamic>>[];
         
         for (final json in firstInningsDeliveries) {
-          final d = json as Map<String, dynamic>;
+        final d = json as Map<String, dynamic>;
           final deliveryNumber = (d['deliveryNumber'] as num?)?.toInt();
           final striker = d['striker'] as String? ?? '';
           
@@ -110,24 +111,24 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
         
         for (final d in validDeliveries) {
           final striker = d['striker'] as String? ?? '';
-          int ballRuns = 0;
-          final extraType = d['extraType'] as String?;
-          final r = (d['runs'] as num?)?.toInt() ?? 0;
-          final er = (d['extraRuns'] as num?)?.toInt() ?? 0;
-          
-          // Correct team run calculation per delivery
-          if (extraType == 'WD' || extraType == 'NB') {
-            ballRuns = er; // For Wides/NB, extraRuns contains total team runs
-          } else {
-            ballRuns = r + er; // For others (B, LB, regular), it's bat runs + extras
-          }
-          
-          calcRuns += ballRuns;
-          if (d['wicketType'] != null) calcWickets++;
-          // CRITICAL: Only count legal balls with valid striker (matches batting stats calculation)
-          if (d['isLegalBall'] == true && striker.isNotEmpty) calcLegalBalls++;
+        int ballRuns = 0;
+        final extraType = d['extraType'] as String?;
+        final r = (d['runs'] as num?)?.toInt() ?? 0;
+        final er = (d['extraRuns'] as num?)?.toInt() ?? 0;
+        
+        // Correct team run calculation per delivery
+        if (extraType == 'WD' || extraType == 'NB') {
+          ballRuns = er; // For Wides/NB, extraRuns contains total team runs
+        } else {
+          ballRuns = r + er; // For others (B, LB, regular), it's bat runs + extras
         }
         
+        calcRuns += ballRuns;
+        if (d['wicketType'] != null) calcWickets++;
+          // CRITICAL: Only count legal balls with valid striker (matches batting stats calculation)
+          if (d['isLegalBall'] == true && striker.isNotEmpty) calcLegalBalls++;
+      }
+      
         // Calculate overs correctly: legalBalls / 6.0 (e.g., 17 legal balls = 2.833, displays as 2.5)
         t1Runs = calcRuns;
         t1Wickets = calcWickets;
@@ -281,7 +282,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this); // Added Analytics tab
   }
 
   @override
@@ -508,6 +509,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
                         Tab(text: 'Squads'),
                         Tab(text: 'Scorecard'),
                         Tab(text: 'Comms'),
+                        Tab(text: 'Analytics'),
                         Tab(text: 'MVP'),
                       ],
                     ),
@@ -523,6 +525,7 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
                 _buildSquadsTab(match, playersAsync),
                 _buildScorecardTab(match, playersAsync),
                 _buildCommentaryTab(match),
+                _buildAnalyticsTab(match),
                 _buildMvpTab(match),
               ],
             ),
@@ -1185,43 +1188,37 @@ class _MatchDetailPageComprehensiveState extends ConsumerState<MatchDetailPageCo
                             return const SizedBox.shrink();
                           }
 
-                          return Column(
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Slot 1: BEST BATSMAN
-                                  Expanded(
-                                    child: bestBatsman != null
-                                        ? MvpAwardCard(
-                                            mvpData: bestBatsman,
-                                            isPlayerOfTheMatch: false,
-                                            isCompact: true,
-                                            customBadgeText: 'BEST BATSMAN',
-                                            statDisplayMode: MvpStatDisplayMode.battingOnly,
-                                            onTap: () {},
-                                          )
-                                        : const SizedBox.shrink(),
+                              // Slot 1: BEST BATSMAN
+                              if (bestBatsman != null)
+                                Expanded(
+                                  child: MvpAwardCard(
+                                    mvpData: bestBatsman,
+                                    isPlayerOfTheMatch: false,
+                                    isCompact: true,
+                                    customBadgeText: 'BEST BATSMAN',
+                                    statDisplayMode: MvpStatDisplayMode.battingOnly,
+                                    onTap: () {},
                                   ),
-                                  
-                                  const SizedBox(width: 8),
+                                ),
+                              
+                              if (bestBatsman != null && bestBowler != null)
+                                const SizedBox(width: 8),
                                     
-                                  // Slot 2: BEST BOWLER
-                                  Expanded(
-                                    child: bestBowler != null
-                                        ? MvpAwardCard(
-                                            mvpData: bestBowler,
-                                            isPlayerOfTheMatch: false,
-                                            isCompact: true,
-                                            customBadgeText: 'BEST BOWLER',
-                                            statDisplayMode: MvpStatDisplayMode.bowlingOnly,
-                                            onTap: () {},
-                                          )
-                                        : const SizedBox.shrink(),
+                              // Slot 2: BEST BOWLER
+                              if (bestBowler != null)
+                                Expanded(
+                                  child: MvpAwardCard(
+                                    mvpData: bestBowler,
+                                    isPlayerOfTheMatch: false,
+                                    isCompact: true,
+                                    customBadgeText: 'BEST BOWLER',
+                                    statDisplayMode: MvpStatDisplayMode.bowlingOnly,
+                                    onTap: () {},
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
+                                ),
                             ],
                           );
                         }
@@ -1773,6 +1770,128 @@ List<String> _getDidNotBatPlayers(
     );
   }
 
+  Widget _buildAnalyticsTab(MatchModel match) {
+    final scorecard = match.scorecard ?? {};
+    final deliveriesJson = scorecard['deliveries'] as List<dynamic>? ?? [];
+    final firstInningsDeliveriesJson = scorecard['first_innings_deliveries'] as List<dynamic>? ?? [];
+    
+    // Convert to DeliveryModel
+    final team1Deliveries = ScorecardAdapter.deliveriesFromJson(firstInningsDeliveriesJson);
+    final team2Deliveries = ScorecardAdapter.deliveriesFromJson(deliveriesJson);
+    
+    // Get team names
+    final team1Name = match.team1Name ?? 'Team 1';
+    final team2Name = match.team2Name ?? 'Team 2';
+    final maxOvers = match.overs?.toInt() ?? 20;
+    
+    if (team1Deliveries.isEmpty && team2Deliveries.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: Text(
+            'No analytics data available for this match',
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+        ),
+      );
+    }
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Manhattan Chart
+          MatchAnalyticsWidgets.buildManhattanChart(
+            team1Deliveries: team1Deliveries,
+            team2Deliveries: team2Deliveries,
+            team1Name: team1Name,
+            team2Name: team2Name,
+            maxOvers: maxOvers,
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Wagon Wheel - Team 1
+          if (team1Deliveries.isNotEmpty)
+            MatchAnalyticsWidgets.buildWagonWheel(
+              deliveries: team1Deliveries,
+              teamName: team1Name,
+            ),
+          
+          if (team1Deliveries.isNotEmpty) const SizedBox(height: 24),
+          
+          // Wagon Wheel - Team 2
+          if (team2Deliveries.isNotEmpty)
+            MatchAnalyticsWidgets.buildWagonWheel(
+              deliveries: team2Deliveries,
+              teamName: team2Name,
+            ),
+          
+          if (team2Deliveries.isNotEmpty) const SizedBox(height: 24),
+          
+          // Worm Chart
+          MatchAnalyticsWidgets.buildWormChart(
+            team1Deliveries: team1Deliveries,
+            team2Deliveries: team2Deliveries,
+            team1Name: team1Name,
+            team2Name: team2Name,
+            maxOvers: maxOvers,
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Run Rate Chart
+          MatchAnalyticsWidgets.buildRunRateChart(
+            team1Deliveries: team1Deliveries,
+            team2Deliveries: team2Deliveries,
+            team1Name: team1Name,
+            team2Name: team2Name,
+            maxOvers: maxOvers,
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Partnership Chart - Team 1
+          if (team1Deliveries.isNotEmpty)
+            MatchAnalyticsWidgets.buildPartnershipChart(
+              deliveries: team1Deliveries,
+              teamName: team1Name,
+            ),
+          
+          if (team1Deliveries.isNotEmpty) const SizedBox(height: 24),
+          
+          // Partnership Chart - Team 2
+          if (team2Deliveries.isNotEmpty)
+            MatchAnalyticsWidgets.buildPartnershipChart(
+              deliveries: team2Deliveries,
+              teamName: team2Name,
+            ),
+          
+          if (team2Deliveries.isNotEmpty) const SizedBox(height: 24),
+          
+          // Types of Runs Chart
+          MatchAnalyticsWidgets.buildTypesOfRunsChart(
+            team1Deliveries: team1Deliveries,
+            team2Deliveries: team2Deliveries,
+            team1Name: team1Name,
+            team2Name: team2Name,
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Wickets Chart
+          MatchAnalyticsWidgets.buildWicketsChart(
+            team1Deliveries: team1Deliveries,
+            team2Deliveries: team2Deliveries,
+          ),
+          
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMvpTab(MatchModel match) {
     final mvpAsync = ref.watch(matchMvpProvider(match.id));
 
@@ -1793,6 +1912,37 @@ List<String> _getDidNotBatPlayers(
             ),
           );
         }
+
+        // Find Player of the Match
+        final potm = players.firstWhere(
+          (p) => p.isPlayerOfTheMatch == true,
+          orElse: () => players.first,
+        );
+
+        // Find Best Batsman and Best Bowler
+        final batsmen = players.where((p) => p.runsScored > 0 || p.battingMvp > 0).toList();
+        final bowlers = players.where((p) => p.ballsBowled > 0 || p.wicketsTaken > 0 || p.bowlingMvp > 0).toList();
+        
+        batsmen.sort((a, b) {
+          final mvpComp = b.battingMvp.compareTo(a.battingMvp);
+          if (mvpComp != 0) return mvpComp;
+          final runsComp = b.runsScored.compareTo(a.runsScored);
+          if (runsComp != 0) return runsComp;
+          return (b.strikeRate ?? 0).compareTo(a.strikeRate ?? 0);
+        });
+        
+        bowlers.sort((a, b) {
+          final mvpComp = b.bowlingMvp.compareTo(a.bowlingMvp);
+          if (mvpComp != 0) return mvpComp;
+          final wicketsComp = b.wicketsTaken.compareTo(a.wicketsTaken);
+          if (wicketsComp != 0) return wicketsComp;
+          final ecoA = a.bowlingEconomy ?? 999.0;
+          final ecoB = b.bowlingEconomy ?? 999.0;
+          return ecoA.compareTo(ecoB);
+        });
+
+        final bestBatsman = batsmen.isNotEmpty ? batsmen.first : null;
+        final bestBowler = bowlers.isNotEmpty ? bowlers.first : null;
 
         return Column(
           children: [
@@ -2810,40 +2960,40 @@ List<String> _getDidNotBatPlayers(
     } else {
       // Fallback: Use stored maps if deliveries are not available (legacy support)
       Map<String, dynamic>? statsMap;
+    
+    if (isCurrent) {
+      statsMap = scorecard['player_stats_map'] as Map<String, dynamic>?;
+    } else {
+      statsMap = scorecard['first_innings_player_stats'] as Map<String, dynamic>?;
+    }
+    
+    if (statsMap != null && statsMap.isNotEmpty) {
+      final players = statsMap.keys.toList();
       
-      if (isCurrent) {
-        statsMap = scorecard['player_stats_map'] as Map<String, dynamic>?;
-      } else {
-        statsMap = scorecard['first_innings_player_stats'] as Map<String, dynamic>?;
-      }
-      
-      if (statsMap != null && statsMap.isNotEmpty) {
-        final players = statsMap.keys.toList();
+      for (final player in players) {
+        final playerStats = statsMap[player] as Map<String, dynamic>;
         
-        for (final player in players) {
-          final playerStats = statsMap[player] as Map<String, dynamic>;
-          
-          int runs = (playerStats['runs'] as num?)?.toInt() ?? 0;
-          int balls = (playerStats['balls'] as num?)?.toInt() ?? 0;
-          int fours = (playerStats['fours'] as num?)?.toInt() ?? 0;
-          int sixes = (playerStats['sixes'] as num?)?.toInt() ?? 0;
-          
-          final strikeRate = balls > 0 ? (runs / balls) * 100 : 0.0;
-          
-          final isDismissed = dismissedPlayers.contains(player) || (playerStats['dismissal'] != null);
-          final dismissal = (playerStats['dismissal'] as String?) ?? (isDismissed ? dismissalTypes[player] as String? : null);
-          
-          stats.add(_PlayerBattingStat(
-            playerName: player,
-            runs: runs,
-            balls: balls,
-            fours: fours,
-            sixes: sixes,
-            strikeRate: strikeRate,
-            minutes: 0,
-            dismissal: dismissal,
-            isNotOut: !isDismissed,
-          ));
+        int runs = (playerStats['runs'] as num?)?.toInt() ?? 0;
+        int balls = (playerStats['balls'] as num?)?.toInt() ?? 0;
+        int fours = (playerStats['fours'] as num?)?.toInt() ?? 0;
+        int sixes = (playerStats['sixes'] as num?)?.toInt() ?? 0;
+        
+        final strikeRate = balls > 0 ? (runs / balls) * 100 : 0.0;
+        
+        final isDismissed = dismissedPlayers.contains(player) || (playerStats['dismissal'] != null);
+        final dismissal = (playerStats['dismissal'] as String?) ?? (isDismissed ? dismissalTypes[player] as String? : null);
+        
+        stats.add(_PlayerBattingStat(
+          playerName: player,
+          runs: runs,
+          balls: balls,
+          fours: fours,
+          sixes: sixes,
+          strikeRate: strikeRate,
+          minutes: 0,
+          dismissal: dismissal,
+          isNotOut: !isDismissed,
+        ));
         }
       }
       
@@ -2882,11 +3032,11 @@ List<String> _getDidNotBatPlayers(
         }
       }
       
+      }
+      
+      return stats;
     }
     
-    return stats;
-  }
-
   // Build bowling stats from scorecard data
   // PRODUCTION: Uses new ScorecardEngine for accurate calculations
   List<_PlayerBowlingStat> _buildBowlingStatsFromScorecard(
@@ -3098,39 +3248,39 @@ List<String> _getDidNotBatPlayers(
       }
     } else {
       // Fallback: Use stored maps if deliveries are not available (legacy support)
-      Map<String, dynamic>? statsMap;
-      
-      if (isCurrent) {
-        statsMap = scorecard['bowler_stats_map'] as Map<String, dynamic>?;
-      } else {
-        statsMap = scorecard['first_innings_bowler_stats'] as Map<String, dynamic>?;
-      }
-      
-      if (statsMap != null && statsMap.isNotEmpty) {
-        final bowlers = statsMap.keys.toList();
+    Map<String, dynamic>? statsMap;
+    
+    if (isCurrent) {
+      statsMap = scorecard['bowler_stats_map'] as Map<String, dynamic>?;
+    } else {
+      statsMap = scorecard['first_innings_bowler_stats'] as Map<String, dynamic>?;
+    }
+    
+    if (statsMap != null && statsMap.isNotEmpty) {
+      final bowlers = statsMap.keys.toList();
+
+      for (final bowler in bowlers) {
+        final bowlerStats = statsMap[bowler] as Map<String, dynamic>;
         
-        for (final bowler in bowlers) {
-          final bowlerStats = statsMap[bowler] as Map<String, dynamic>;
-          
-          final legalBalls = (bowlerStats['legalBalls'] as num?)?.toInt() ?? 0;
-          final completeOvers = legalBalls ~/ 6;
-          final remainingBalls = legalBalls % 6;
-          final overs = completeOvers + (remainingBalls / 10.0);
-          
-          int maidens = (bowlerStats['maidens'] as num?)?.toInt() ?? 0;
-          int runs = (bowlerStats['runs'] as num?)?.toInt() ?? 0;
-          int wickets = (bowlerStats['wickets'] as num?)?.toInt() ?? 0;
-          
-          final economy = legalBalls > 0 ? (runs / legalBalls) * 6 : 0.0;
-          
-          stats.add(_PlayerBowlingStat(
-            bowlerName: bowler,
-            overs: overs,
-            maidens: maidens,
-            runs: runs,
-            wickets: wickets,
-            economy: economy,
-          ));
+        final legalBalls = (bowlerStats['legalBalls'] as num?)?.toInt() ?? 0;
+        final completeOvers = legalBalls ~/ 6;
+        final remainingBalls = legalBalls % 6;
+        final overs = completeOvers + (remainingBalls / 10.0);
+        
+        int maidens = (bowlerStats['maidens'] as num?)?.toInt() ?? 0;
+        int runs = (bowlerStats['runs'] as num?)?.toInt() ?? 0;
+        int wickets = (bowlerStats['wickets'] as num?)?.toInt() ?? 0;
+        
+        final economy = legalBalls > 0 ? (runs / legalBalls) * 6 : 0.0;
+        
+        stats.add(_PlayerBowlingStat(
+          bowlerName: bowler,
+          overs: overs,
+          maidens: maidens,
+          runs: runs,
+          wickets: wickets,
+          economy: economy,
+        ));
         }
       }
     }

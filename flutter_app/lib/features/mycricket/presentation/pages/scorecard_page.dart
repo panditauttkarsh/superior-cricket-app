@@ -11,11 +11,14 @@ import '../../../../core/services/commentary_service.dart';
 import '../../../../core/repositories/commentary_repository.dart';
 import 'dart:async';
 import 'package:uuid/uuid.dart';
-import '../../../../core/services/mvp_calculation_service.dart';
+import '../../../../core/services/cricheroes_mvp_service.dart';
 import '../../../../core/models/mvp_model.dart';
-import '../../../match/presentation/widgets/mvp_award_card.dart';
+import '../../../../core/cricket_engine/engine/scorecard_engine.dart';
+import '../../../../core/cricket_engine/models/delivery_model.dart';
+import '../../../../core/cricket_engine/models/scorecard_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/wagon_wheel_selector.dart';
+import '../../../match/presentation/widgets/mvp_award_card.dart';
 
 class ScorecardPage extends ConsumerStatefulWidget {
   final String? matchId;
@@ -1665,7 +1668,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
     _currentOver = calculated['over']!;
     _currentBall = calculated['ball']!;
   }
-
+  
   // Helper function to increment bowler's legal balls and update overs
   void _incrementBowlerLegalBalls() {
     if (_bowler.isEmpty) return;
@@ -3531,31 +3534,124 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
   }
 
   // Calculate and save MVP for all players
+  /// Get performance grade based on MVP points
+  String _getPerformanceGrade(double mvpPoints) {
+    if (mvpPoints >= 15.0) return 'Outstanding 🌟';
+    if (mvpPoints >= 10.0) return 'Excellent 💎';
+    if (mvpPoints >= 7.0) return 'Very Good 🔥';
+    if (mvpPoints >= 5.0) return 'Good ⭐';
+    if (mvpPoints >= 3.0) return 'Average 👍';
+    return 'Below Average 📊';
+  }
+
+  /// Convert _Delivery to DeliveryModel for ScorecardEngine
+  DeliveryModel _deliveryToModel(_Delivery d) {
+    // Map extra type
+    ExtraType? extraType;
+    if (d.extraType == 'WD') {
+      extraType = ExtraType.wide;
+    } else if (d.extraType == 'NB') {
+      extraType = ExtraType.noBall;
+    } else if (d.extraType == 'B') {
+      extraType = ExtraType.bye;
+    } else if (d.extraType == 'LB') {
+      extraType = ExtraType.legBye;
+    } else if (d.extraType == 'P' || d.extraType == 'PENALTY') {
+      extraType = ExtraType.penalty;
+    }
+    
+    return DeliveryModel(
+      deliveryNumber: d.deliveryNumber,
+      over: d.over,
+      ball: d.ball,
+      striker: d.striker,
+      nonStriker: d.nonStriker,
+      bowler: d.bowler,
+      runs: d.runs,
+      teamTotal: d.teamTotal,
+      wicketType: d.wicketType,
+      dismissedPlayer: d.wicketType != null ? d.striker : null, // When wicket occurs, striker is dismissed
+      fielder: d.fielder,
+      assistFielder: d.assistFielder,
+      extraType: extraType,
+      extraRuns: d.extraRuns,
+      isLegalBall: d.isLegalBall,
+      isShortRun: d.isShortRun,
+      timestamp: d.timestamp,
+    );
+  }
+
   Future<void> _calculateAndSaveMvp(String? winnerId) async {
     if (widget.matchId == null) return;
     
     try {
-      debugPrint('🏆 Starting MVP calculation for match ${widget.matchId}');
+      debugPrint('🏆 Starting MVP calculation using ScorecardEngine for match ${widget.matchId}');
       
       final mvpRepo = ref.read(mvpRepositoryProvider);
       final List<PlayerMvpModel> allMvpData = [];
       
-      // Get all unique players who participated
+      // ========== USE SCORECARD ENGINE FOR BOTH INNINGS ==========
+      // Check if we have first innings data
+      final hasFirstInnings = _firstInningsDeliveries.isNotEmpty;
+      
+      // Convert deliveries to DeliveryModel and calculate scorecards using engine
+      ScorecardModel? firstInningsScorecard;
+      ScorecardModel? secondInningsScorecard;
+      
+      // Calculate first innings scorecard
+      if (hasFirstInnings && _firstInningsDeliveries.isNotEmpty) {
+        final firstInningsDeliveries = _firstInningsDeliveries.map(_deliveryToModel).toList();
+        final firstInningsTeamName = _currentInnings == 2 ? _bowlingTeam : _battingTeam;
+        firstInningsScorecard = ScorecardEngine.calculateScorecard(
+          deliveries: firstInningsDeliveries,
+          teamName: firstInningsTeamName,
+        );
+        debugPrint('📊 First innings: ${firstInningsScorecard.totalRuns}/${firstInningsScorecard.totalWickets} in ${firstInningsScorecard.formattedOvers} overs');
+      }
+      
+      // Calculate second innings scorecard
+      if (_deliveries.isNotEmpty) {
+        final secondInningsDeliveries = _deliveries.map(_deliveryToModel).toList();
+        final secondInningsTeamName = hasFirstInnings ? _battingTeam : _bowlingTeam;
+        secondInningsScorecard = ScorecardEngine.calculateScorecard(
+          deliveries: secondInningsDeliveries,
+          teamName: secondInningsTeamName,
+        );
+        debugPrint('📊 Second innings: ${secondInningsScorecard.totalRuns}/${secondInningsScorecard.totalWickets} in ${secondInningsScorecard.formattedOvers} overs');
+      }
+      
+      // Get all unique players from both innings
       final allPlayerNames = <String>{};
-      allPlayerNames.addAll(_playerStatsMap.keys);
-      allPlayerNames.addAll(_bowlerStatsMap.keys);
+      if (firstInningsScorecard != null) {
+        allPlayerNames.addAll(firstInningsScorecard.battingStats.map((s) => s.playerName));
+        allPlayerNames.addAll(firstInningsScorecard.bowlingStats.map((s) => s.bowlerName));
+      }
+      if (secondInningsScorecard != null) {
+        allPlayerNames.addAll(secondInningsScorecard.battingStats.map((s) => s.playerName));
+        allPlayerNames.addAll(secondInningsScorecard.bowlingStats.map((s) => s.bowlerName));
+      }
       
-      debugPrint('📋 Found ${allPlayerNames.length} unique players');
+      debugPrint('📋 Found ${allPlayerNames.length} unique players across ${hasFirstInnings ? "both" : "one"} innings');
       
-      // Calculate team totals for both innings
-      final team1TotalRuns = _firstInningsRuns;
-      final team1TotalBalls = (_firstInningsOvers * 6).toInt();
-      final team2TotalRuns = _totalRuns;
-      final team2TotalBalls = _totalValidBalls; // Use _totalValidBalls for accurate calculation
+      // Combine all deliveries for fielding calculations
+      final allDeliveries = <DeliveryModel>[];
+      if (firstInningsScorecard != null) {
+        allDeliveries.addAll(_firstInningsDeliveries.map(_deliveryToModel));
+      }
+      if (secondInningsScorecard != null) {
+        allDeliveries.addAll(_deliveries.map(_deliveryToModel));
+      }
       
-      debugPrint('📊 Team 1: $team1TotalRuns runs in $team1TotalBalls balls');
-      debugPrint('📊 Team 2: $team2TotalRuns runs in $team2TotalBalls balls');
+      // Determine team names and totals
+      final team1Name = hasFirstInnings ? _bowlingTeam : _battingTeam;
+      final team2Name = hasFirstInnings ? _battingTeam : _bowlingTeam;
+      final team1TotalRuns = firstInningsScorecard?.totalRuns ?? 0;
+      final team1TotalBalls = firstInningsScorecard?.totalLegalBalls ?? 0;
+      final team2TotalRuns = secondInningsScorecard?.totalRuns ?? 0;
+      final team2TotalBalls = secondInningsScorecard?.totalLegalBalls ?? 0;
       
+      debugPrint('📊 Team 1 ($team1Name): $team1TotalRuns runs in $team1TotalBalls balls');
+      debugPrint('📊 Team 2 ($team2Name): $team2TotalRuns runs in $team2TotalBalls balls');
       
       // Process each player
       for (final playerName in allPlayerNames) {
@@ -3570,96 +3666,289 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
         final playerId = playerDetails['id'] as String;
         final playerAvatar = playerDetails['profile_image_url'] as String?;
         
-        // Get batting stats
-        final battingStats = _playerStatsMap[playerName];
-        final runsScored = battingStats?.runs ?? 0;
-        final ballsFaced = battingStats?.balls ?? 0;
+        // ========== COMBINE BATTING STATS FROM BOTH INNINGS (using ScorecardEngine) ==========
+        int runsScored = 0;
+        int ballsFaced = 0;
+        bool isNotOut = true;
         
-        // Get bowling stats
-        final bowlingStats = _bowlerStatsMap[playerName];
-        final ballsBowled = bowlingStats?.legalBalls ?? 0;
-        final runsConceded = bowlingStats?.runs ?? 0;
-        final wicketsTaken = bowlingStats?.wickets ?? 0;
+        // First innings batting stats
+        if (firstInningsScorecard != null) {
+          final firstInningsBattingList = firstInningsScorecard.battingStats
+              .where((s) => s.playerName == playerName)
+              .toList();
+          if (firstInningsBattingList.isNotEmpty) {
+            final firstInningsBatting = firstInningsBattingList.first;
+            runsScored += firstInningsBatting.runs;
+            ballsFaced += firstInningsBatting.balls;
+            if (!firstInningsBatting.isNotOut) {
+              isNotOut = false;
+            }
+          }
+        }
         
-        // Determine which team this player belongs to
-        final isTeam1Player = _battingTeamPlayers.contains(playerName) && _currentInnings == 2;
+        // Second innings batting stats
+        if (secondInningsScorecard != null) {
+          final secondInningsBattingList = secondInningsScorecard.battingStats
+              .where((s) => s.playerName == playerName)
+              .toList();
+          if (secondInningsBattingList.isNotEmpty) {
+            final secondInningsBatting = secondInningsBattingList.first;
+            runsScored += secondInningsBatting.runs;
+            ballsFaced += secondInningsBatting.balls;
+            if (!secondInningsBatting.isNotOut) {
+              isNotOut = false;
+            }
+          }
+        }
+        
+        // ========== COMBINE BOWLING STATS FROM BOTH INNINGS (using ScorecardEngine) ==========
+        int ballsBowled = 0;
+        int runsConceded = 0;
+        int wicketsTaken = 0;
+        int maidenOvers = 0;
+        
+        // First innings bowling stats
+        if (firstInningsScorecard != null) {
+          final firstInningsBowlingList = firstInningsScorecard.bowlingStats
+              .where((s) => s.bowlerName == playerName)
+              .toList();
+          if (firstInningsBowlingList.isNotEmpty) {
+            final firstInningsBowling = firstInningsBowlingList.first;
+            ballsBowled += firstInningsBowling.legalBalls;
+            runsConceded += firstInningsBowling.runs;
+            wicketsTaken += firstInningsBowling.wickets;
+            maidenOvers += firstInningsBowling.maidens;
+          }
+        }
+        
+        // Second innings bowling stats
+        if (secondInningsScorecard != null) {
+          final secondInningsBowlingList = secondInningsScorecard.bowlingStats
+              .where((s) => s.bowlerName == playerName)
+              .toList();
+          if (secondInningsBowlingList.isNotEmpty) {
+            final secondInningsBowling = secondInningsBowlingList.first;
+            ballsBowled += secondInningsBowling.legalBalls;
+            runsConceded += secondInningsBowling.runs;
+            wicketsTaken += secondInningsBowling.wickets;
+            maidenOvers += secondInningsBowling.maidens;
+          }
+        }
+        
+        // ========== DETERMINE PLAYER'S TEAM ==========
+        // Check which team this player belongs to by checking both innings
+        bool isTeam1Player = false;
+        if (hasFirstInnings) {
+          // Match has both innings: check if player batted/bowled in first innings (team1) or second innings (team2)
+          final playedInFirst = (firstInningsScorecard != null && 
+              (firstInningsScorecard.battingStats.any((s) => s.playerName == playerName) ||
+               firstInningsScorecard.bowlingStats.any((s) => s.bowlerName == playerName)));
+          final playedInSecond = (secondInningsScorecard != null && 
+              (secondInningsScorecard.battingStats.any((s) => s.playerName == playerName) ||
+               secondInningsScorecard.bowlingStats.any((s) => s.bowlerName == playerName)));
+          
+          if (playedInFirst && !playedInSecond) {
+            isTeam1Player = true;
+          } else if (playedInSecond && !playedInFirst) {
+            isTeam1Player = false;
+          } else {
+            // Player played in both or neither - use first innings as default
+            isTeam1Player = playedInFirst;
+          }
+        } else {
+          // Only one innings: player is from batting team
+          isTeam1Player = _battingTeamPlayers.contains(playerName);
+        }
         
         // Use team IDs or generate placeholder UUIDs if not available
         final teamId = isTeam1Player 
             ? (_team1Id?.isNotEmpty == true ? _team1Id! : const Uuid().v4())
             : (_team2Id?.isNotEmpty == true ? _team2Id! : const Uuid().v4());
             
-        final teamName = isTeam1Player ? 
-          (_currentInnings == 2 ? _bowlingTeam : _battingTeam) : 
-          (_currentInnings == 2 ? _battingTeam : _bowlingTeam);
+        final teamName = isTeam1Player ? team1Name : team2Name;
         final teamTotalRuns = isTeam1Player ? team1TotalRuns : team2TotalRuns;
         final teamTotalBalls = isTeam1Player ? team1TotalBalls : team2TotalBalls;
         
-        // Calculate batting MVP
+        debugPrint('👤 $playerName: Team=${isTeam1Player ? "1" : "2"} ($teamName), Batting: $runsScored($ballsFaced), Bowling: $wicketsTaken-$runsConceded($ballsBowled)');
+        
+        // ========== CALCULATE BATTING MVP ==========
         double battingMvp = 0.0;
         if (runsScored > 0) {
-          final battingOrder = _playerStatsMap.keys.toList().indexOf(playerName) + 1;
+          final totalOvers = (widget.overs ?? 20);
           
-          battingMvp = MvpCalculationService.calculateBattingMvp(
+          battingMvp = CricHeroesMvpService.calculateBattingMvp(
             runsScored: runsScored,
             ballsFaced: ballsFaced,
-            battingOrder: battingOrder,
             teamTotalRuns: teamTotalRuns,
             teamTotalBalls: teamTotalBalls,
+            totalOvers: totalOvers,
           );
         }
         
-        // Calculate bowling MVP
+        // ========== CALCULATE BOWLING MVP ==========
         double bowlingMvp = 0.0;
         if (wicketsTaken > 0 || ballsBowled > 0) {
-          final wickets = _deliveries
-              .where((d) => d.bowler == playerName && d.wicketType != null)
-              .map((d) => {
-                    'battingOrder': 5,
-                    'dismissalType': d.wicketType ?? 'caught',
-                    'runsScored': _playerStatsMap[d.striker]?.runs ?? 0,
-                  })
+          // Get wickets from ALL deliveries (both innings) using ScorecardEngine data
+          final wickets = <Map<String, dynamic>>[];
+          for (final d in allDeliveries.where((d) => 
+            d.bowler == playerName && d.wicketType != null
+          )) {
+            // Find batting order of dismissed player using scorecard data
+            final dismissedPlayer = d.dismissedPlayer ?? d.striker;
+            if (dismissedPlayer.isEmpty) continue;
+            
+            int battingOrder = 5; // Default
+            
+            // Check first innings scorecard
+            if (firstInningsScorecard != null) {
+              final firstInningsBatting = firstInningsScorecard.battingStats
+                  .where((s) => s.playerName == dismissedPlayer)
               .toList();
+              if (firstInningsBatting.isNotEmpty) {
+                final firstInningsKeys = firstInningsScorecard.battingStats.map((s) => s.playerName).toList();
+                battingOrder = firstInningsKeys.indexOf(dismissedPlayer) + 1;
+              }
+            }
+            
+            // Check second innings scorecard if not found
+            if (battingOrder == 5 && secondInningsScorecard != null) {
+              final secondInningsBatting = secondInningsScorecard.battingStats
+                  .where((s) => s.playerName == dismissedPlayer)
+                  .toList();
+              if (secondInningsBatting.isNotEmpty) {
+                final secondInningsKeys = secondInningsScorecard.battingStats.map((s) => s.playerName).toList();
+                battingOrder = secondInningsKeys.indexOf(dismissedPlayer) + 1;
+              }
+            }
+            
+            if (battingOrder == 0) battingOrder = 5; // Ensure valid order
+            
+            wickets.add({
+              'battingOrder': battingOrder,
+              'dismissalType': d.wicketType ?? 'caught',
+              'runsScored': 0, // Not used in current algorithm
+            });
+          }
           
-          final maidenOvers = bowlingStats?.maidens ?? 0;
+          final totalOvers = (widget.overs ?? 20);
           
-          bowlingMvp = MvpCalculationService.calculateBowlingMvp(
+          bowlingMvp = CricHeroesMvpService.calculateBowlingMvp(
             wickets: wickets,
             runsConceded: runsConceded,
             ballsBowled: ballsBowled,
             maidenOvers: maidenOvers,
             teamTotalRuns: teamTotalRuns,
             teamTotalBalls: teamTotalBalls,
-            totalOvers: 20,
+            totalOvers: totalOvers,
           );
         }
         
-        // Calculate fielding MVP using actual catches and run-outs
+        // ========== CALCULATE FIELDING MVP FROM BOTH INNINGS ==========
         double fieldingMvp = 0.0;
         
-        // Count catches for this player
-        final catches = _deliveries
+        // Count catches, run-outs, and stumpings from ALL deliveries
+        final catches = allDeliveries
             .where((d) => d.fielder == playerName && d.wicketType == 'Catch Out')
             .length;
         
-        // Count run-outs
-        final runOuts = _deliveries
-            .where((d) => d.fielder == playerName && d.wicketType == 'Run Out')
+        final runOuts = allDeliveries
+            .where((d) => d.fielder == playerName && d.wicketType == 'Run Out' && d.assistFielder == null)
             .length;
         
-        // Count stumpings (if wicket keeper)
-        final stumpings = _deliveries
+        final stumpings = allDeliveries
             .where((d) => d.fielder == playerName && d.wicketType == 'Stumped')
             .length;
         
         if (catches > 0 || runOuts > 0 || stumpings > 0) {
-          final assists = List.generate(catches + stumpings, (_) => {'battingOrder': 5});
-          final runOutsList = List.generate(runOuts, (_) => {'battingOrder': 5});
+          // Get assists (catches and stumpings) with actual batting order from ALL deliveries
+          final assists = <Map<String, dynamic>>[];
+          for (final d in allDeliveries.where((d) => 
+            d.fielder == playerName && 
+            (d.wicketType == 'Catch Out' || d.wicketType == 'Stumped')
+          )) {
+            final dismissedPlayer = d.dismissedPlayer ?? d.striker;
+            if (dismissedPlayer.isEmpty) continue;
+            
+            int battingOrder = 5; // Default
+            
+            // Check first innings scorecard
+            if (firstInningsScorecard != null) {
+              final firstInningsBatting = firstInningsScorecard.battingStats
+                  .where((s) => s.playerName == dismissedPlayer)
+                  .toList();
+              if (firstInningsBatting.isNotEmpty) {
+                final firstInningsKeys = firstInningsScorecard.battingStats.map((s) => s.playerName).toList();
+                battingOrder = firstInningsKeys.indexOf(dismissedPlayer) + 1;
+              }
+            }
+            
+            // Check second innings scorecard if not found
+            if (battingOrder == 5 && secondInningsScorecard != null) {
+              final secondInningsBatting = secondInningsScorecard.battingStats
+                  .where((s) => s.playerName == dismissedPlayer)
+                  .toList();
+              if (secondInningsBatting.isNotEmpty) {
+                final secondInningsKeys = secondInningsScorecard.battingStats.map((s) => s.playerName).toList();
+                battingOrder = secondInningsKeys.indexOf(dismissedPlayer) + 1;
+              }
+            }
+            
+            if (battingOrder == 0) battingOrder = 5;
+            
+            assists.add({
+              'battingOrder': battingOrder,
+              'dismissalType': d.wicketType,
+              'runsScored': 0, // Not used in current algorithm
+            });
+          }
           
-          fieldingMvp = MvpCalculationService.calculateFieldingMvp(
+          // Get run outs with actual batting order from ALL deliveries
+          final runOutsList = <Map<String, dynamic>>[];
+          for (final d in allDeliveries.where((d) => 
+            d.fielder == playerName && d.wicketType == 'Run Out' && d.assistFielder == null
+          )) {
+            final dismissedPlayer = d.dismissedPlayer ?? d.striker;
+            if (dismissedPlayer.isEmpty) continue;
+            
+            int battingOrder = 5; // Default
+            
+            // Check first innings scorecard
+            if (firstInningsScorecard != null) {
+              final firstInningsBatting = firstInningsScorecard.battingStats
+                  .where((s) => s.playerName == dismissedPlayer)
+                  .toList();
+              if (firstInningsBatting.isNotEmpty) {
+                final firstInningsKeys = firstInningsScorecard.battingStats.map((s) => s.playerName).toList();
+                battingOrder = firstInningsKeys.indexOf(dismissedPlayer) + 1;
+              }
+            }
+            
+            // Check second innings scorecard if not found
+            if (battingOrder == 5 && secondInningsScorecard != null) {
+              final secondInningsBatting = secondInningsScorecard.battingStats
+                  .where((s) => s.playerName == dismissedPlayer)
+                  .toList();
+              if (secondInningsBatting.isNotEmpty) {
+                final secondInningsKeys = secondInningsScorecard.battingStats.map((s) => s.playerName).toList();
+                battingOrder = secondInningsKeys.indexOf(dismissedPlayer) + 1;
+              }
+            }
+            
+            if (battingOrder == 0) battingOrder = 5;
+            
+            runOutsList.add({
+              'battingOrder': battingOrder,
+              'dismissalType': d.wicketType,
+              'runsScored': 0, // Not used in current algorithm
+            });
+          }
+          
+          final totalOvers = (widget.overs ?? 20);
+          
+          fieldingMvp = CricHeroesMvpService.calculateFieldingMvp(
             assists: assists,
             runOuts: runOutsList,
-            totalOvers: 20,
+            totalOvers: totalOvers,
           );
           
           debugPrint('🧤 $playerName fielding: $catches catches, $runOuts run-outs, $stumpings stumpings');
@@ -3673,7 +3962,7 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
           final economy = ballsBowled > 0 ? (runsConceded / (ballsBowled / 6)) : null;
           
           final mvpData = PlayerMvpModel(
-            playerId: playerId, // NOW USING ACTUAL UUID!
+            playerId: playerId,
             playerName: playerName,
             playerAvatar: playerAvatar,
             matchId: widget.matchId!,
@@ -3691,12 +3980,12 @@ class _ScorecardPageState extends ConsumerState<ScorecardPage> {
             catches: catches,
             runOuts: runOuts,
             stumpings: stumpings,
-            battingOrder: _playerStatsMap.keys.toList().indexOf(playerName) + 1,
+            battingOrder: 1, // Not critical for MVP display
             strikeRate: strikeRate,
             bowlingEconomy: economy,
-            performanceGrade: MvpCalculationService.getPerformanceGrade(totalMvp),
+            performanceGrade: _getPerformanceGrade(totalMvp),
             calculatedAt: DateTime.now(),
-            isNotOut: battingStats?.isNotOut ?? false,
+            isNotOut: isNotOut,
           );
           
           allMvpData.add(mvpData);
